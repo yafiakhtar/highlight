@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 200px;
+      padding: 15px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+    }
+    
+    h3 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+      color: #333;
+    }
+    
+    .info {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    
+    .shortcut {
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 11px;
+    }
+    
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    button:hover {
+      background: #d32f2f;
+    }
+  </style>
+</head>
+<body>
+  <h3>Text Highlighter</h3>
+  <div class="info">
+    Select text and use <span class="shortcut">Ctrl+Shift+H</span> or right-click to highlight.
+    <br><br>
+    Click on any highlight to remove it.
+  </div>
+  <button id="clearAll">Clear All Highlights</button>
+  <script src="popup.js"></script>
+</body>
+</html>
