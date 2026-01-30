@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Text Highlighter",
+  "name": "highlight",
   "version": "1.0",
   "description": "Highlight text on any webpage with persistence",
   "permissions": [
@@ -20,7 +20,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Text Highlighter"
+    "default_title": "highlight"
   },
   "commands": {
     "highlight-selection": {
