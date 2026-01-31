@@ -75,6 +75,16 @@ function getTextOffset(mark) {
   return offset;
 }
 
+// Detect if page has dark or light background
+function getPageTheme() {
+  const bg = getComputedStyle(document.body).backgroundColor;
+  const rgb = bg.match(/\d+/g);
+  if (!rgb || rgb.length < 3) return 'light'; // fallback
+  const [r, g, b] = rgb.map(Number);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance < 0.25 ? 'dark' : 'light';
+}
+
 // Highlight the current selection
 function highlightSelection() {
   const selection = window.getSelection();
@@ -95,10 +105,12 @@ function highlightSelection() {
   }
   
   const highlightId = generateId();
+  const theme = getPageTheme();
+  const themeClass = theme === 'dark' ? 'hl-dark' : 'hl-light';
   
   try {
     const mark = document.createElement('mark');
-    mark.className = 'text-highlighter-mark';
+    mark.className = 'text-highlighter-mark ' + themeClass;
     mark.dataset.highlightId = highlightId;
     
     // Use surroundContents for simple selections
@@ -129,7 +141,7 @@ function highlightSelection() {
         nodeRange.setEnd(node, end);
         
         const mark = document.createElement('mark');
-        mark.className = 'text-highlighter-mark';
+        mark.className = 'text-highlighter-mark ' + themeClass;
         mark.dataset.highlightId = highlightId;
         mark.dataset.highlightPart = index;
         
@@ -293,6 +305,9 @@ function restoreHighlights() {
     const highlights = result[key];
     if (!highlights || !highlights.length) return;
     
+    const theme = getPageTheme();
+    const themeClass = theme === 'dark' ? 'hl-dark' : 'hl-light';
+    
     highlights.forEach(highlight => {
       try {
         // Find the element using XPath
@@ -334,7 +349,7 @@ function restoreHighlights() {
               range.setEnd(node, idx + highlight.text.length);
               
               const mark = document.createElement('mark');
-              mark.className = 'text-highlighter-mark';
+              mark.className = 'text-highlighter-mark ' + themeClass;
               mark.dataset.highlightId = highlight.id;
               
               try {

@@ -1,7 +1,5 @@
 /* Highlight marker style - minimal to avoid layout disruption */
 .text-highlighter-mark {
-  background-color: #FFEB3B !important;
-  color: inherit !important;
   cursor: pointer;
   /* Preserve all original styling */
   font: inherit !important;
@@ -13,6 +11,20 @@
   border-radius: 2px;
 }
 
-.text-highlighter-mark:hover {
-  background-color: #FDD835 !important;
+/* Light mode (default) */
+.text-highlighter-mark.hl-light {
+  background-color: #FFEA99 !important;
+  color: #1a1a1a !important;  /* dark text for contrast */
+}
+.text-highlighter-mark.hl-light:hover {
+  background-color: #ffe066 !important;
+}
+
+/* Dark mode */
+.text-highlighter-mark.hl-dark {
+  background-color: #7C6129 !important;
+  color: #fff !important;  /* light text for contrast */
+}
+.text-highlighter-mark.hl-dark:hover {
+  background-color: #8d7030 !important;
 }
