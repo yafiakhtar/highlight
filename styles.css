@@ -28,3 +28,35 @@
 .text-highlighter-mark.hl-dark:hover {
   background-color: #8d7030 !important;
 }
+
+/* Floating action button for highlighting */
+.text-highlighter-fab {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 2147483647;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  transition: transform 0.1s ease, background 0.1s ease;
+  display: none;
+}
+.text-highlighter-fab:hover {
+  transform: scale(1.1);
+}
+
+/* FAB light mode */
+.text-highlighter-fab.fab-light {
+  background: #FFEA99;
+}
+.text-highlighter-fab.fab-light:hover {
+  background: #ffe066;
+}
+
+/* FAB dark mode */
+.text-highlighter-fab.fab-dark {
+  background: #7C6129;
+}
+.text-highlighter-fab.fab-dark:hover {
+  background: #8d7030;
+}

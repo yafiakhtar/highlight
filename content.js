@@ -372,11 +372,116 @@ function restoreHighlights() {
   });
 }
 
+// ============================================
+// Floating Action Button (FAB) for highlighting
+// ============================================
+
+// Create the FAB element once
+let highlightFab = null;
+
+function createHighlightFab() {
+  if (highlightFab) return highlightFab;
+  
+  highlightFab = document.createElement('div');
+  highlightFab.className = 'text-highlighter-fab';
+  highlightFab.title = 'Highlight selection';
+  document.body.appendChild(highlightFab);
+  
+  // Click handler - highlight and hide
+  highlightFab.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    highlightSelection();
+    hideHighlightFab();
+  });
+  
+  // Prevent mousedown from clearing selection
+  highlightFab.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  
+  return highlightFab;
+}
+
+function showHighlightFab(x, y) {
+  if (!highlightFab) createHighlightFab();
+  
+  // Apply theme-appropriate color
+  const theme = getPageTheme();
+  highlightFab.classList.remove('fab-light', 'fab-dark');
+  highlightFab.classList.add(theme === 'dark' ? 'fab-dark' : 'fab-light');
+  
+  highlightFab.style.left = x + 'px';
+  highlightFab.style.top = y + 'px';
+  highlightFab.style.display = 'block';
+}
+
+function hideHighlightFab() {
+  if (highlightFab) {
+    highlightFab.style.display = 'none';
+  }
+}
+
+// Show FAB when text is selected
+document.addEventListener('mouseup', (e) => {
+  // Ignore if clicking on the FAB itself
+  if (highlightFab && highlightFab.contains(e.target)) {
+    return;
+  }
+  
+  // Small delay to let selection finalize
+  setTimeout(() => {
+    const selection = window.getSelection();
+    
+    if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+      hideHighlightFab();
+      return;
+    }
+    
+    // Check if selection is already highlighted
+    const range = selection.getRangeAt(0);
+    const ancestor = range.commonAncestorContainer;
+    if (ancestor.nodeType === Node.ELEMENT_NODE && ancestor.classList?.contains('text-highlighter-mark')) {
+      hideHighlightFab();
+      return;
+    }
+    if (ancestor.parentNode?.classList?.contains('text-highlighter-mark')) {
+      hideHighlightFab();
+      return;
+    }
+    
+    // Get position to the right of selection
+    const rect = range.getBoundingClientRect();
+    const x = rect.right + window.scrollX + 8;
+    const y = rect.top + window.scrollY + (rect.height / 2) - 12; // Center vertically
+    
+    showHighlightFab(x, y);
+  }, 10);
+});
+
+// Hide FAB when clicking elsewhere
+document.addEventListener('mousedown', (e) => {
+  if (highlightFab && !highlightFab.contains(e.target)) {
+    hideHighlightFab();
+  }
+});
+
+// Hide FAB on scroll to avoid orphan button
+document.addEventListener('scroll', () => {
+  hideHighlightFab();
+}, true);
+
+// ============================================
+// Message listener and initialization
+// ============================================
+
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.action) {
     case 'highlight':
       highlightSelection();
+      hideHighlightFab();
       break;
     case 'removeSelected':
       removeSelectedHighlight();
