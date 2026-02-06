@@ -19,13 +19,42 @@ function loadUserSettings() {
   });
 }
 
-// Listen for settings changes in real time
+// Listen for storage changes in real time
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.highlightSettings) {
+  if (area !== 'local') return;
+
+  // Settings changed (colors, FAB toggle)
+  if (changes.highlightSettings) {
     const newVal = changes.highlightSettings.newValue;
     userSettings = { ...DEFAULT_SETTINGS, ...newVal };
     applyCustomColors();
     updateFabVisibility();
+  }
+
+  // Highlight data for this page changed (e.g. deleted from options page)
+  const key = getStorageKey();
+  if (changes[key]) {
+    const newHighlights = changes[key].newValue;
+    if (!newHighlights) {
+      // Key was deleted — remove all marks
+      document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
+        const parent = mark.parentNode;
+        while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+        parent.removeChild(mark);
+        parent.normalize();
+      });
+    } else {
+      // Compare: remove marks whose IDs no longer exist
+      const activeIds = new Set(newHighlights.map(h => h.id));
+      document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
+        if (!activeIds.has(mark.dataset.highlightId)) {
+          const parent = mark.parentNode;
+          while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+          parent.removeChild(mark);
+          parent.normalize();
+        }
+      });
+    }
   }
 });
 
