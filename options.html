@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Highlight — Settings</title>
+  <title>Highlight</title>
   <style>
     * {
       margin: 0;
@@ -19,13 +19,18 @@
     }
 
     .container {
-      max-width: 560px;
+      max-width: 600px;
       margin: 0 auto;
-      padding: 60px 24px 80px;
+      padding: 52px 24px 80px;
     }
 
+    /* ---- Header ---- */
+
     header {
-      margin-bottom: 48px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 32px;
     }
 
     header h1 {
@@ -33,13 +38,54 @@
       font-weight: 600;
       letter-spacing: 0.5px;
       text-transform: uppercase;
-      margin-bottom: 6px;
     }
 
-    header p {
-      color: #888;
-      font-size: 13px;
+    .highlight-count {
+      font-size: 12px;
+      color: #bbb;
+      font-weight: 400;
     }
+
+    /* ---- Tabs ---- */
+
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .tab-btn {
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #999;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: color 0.15s ease, border-color 0.15s ease;
+      letter-spacing: 0.2px;
+    }
+
+    .tab-btn:hover {
+      color: #666;
+    }
+
+    .tab-btn.active {
+      color: #1a1a1a;
+      border-bottom-color: #1a1a1a;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    /* ---- Shared section card ---- */
 
     .section {
       background: #fff;
@@ -85,7 +131,8 @@
       color: #999;
     }
 
-    /* Color picker */
+    /* ---- Color picker ---- */
+
     .color-input-wrap {
       display: flex;
       align-items: center;
@@ -93,9 +140,9 @@
     }
 
     .color-swatch {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
       border: 2px solid #e0e0e0;
       cursor: pointer;
       padding: 0;
@@ -109,7 +156,7 @@
 
     .color-swatch::-webkit-color-swatch {
       border: none;
-      border-radius: 6px;
+      border-radius: 50%;
     }
 
     .color-hex {
@@ -125,7 +172,8 @@
       text-transform: uppercase;
     }
 
-    /* Toggle switch */
+    /* ---- Toggle switch ---- */
+
     .toggle {
       position: relative;
       width: 44px;
@@ -169,7 +217,8 @@
       transform: translateX(20px);
     }
 
-    /* Shortcut badge */
+    /* ---- Shortcut badge ---- */
+
     .shortcut {
       display: inline-block;
       background: #f5f5f5;
@@ -181,7 +230,8 @@
       border: 1px solid #e0e0e0;
     }
 
-    /* Preview */
+    /* ---- Preview ---- */
+
     .preview-area {
       margin-top: 16px;
       padding: 16px;
@@ -207,7 +257,8 @@
       cursor: default;
     }
 
-    /* Buttons */
+    /* ---- Buttons ---- */
+
     .btn-row {
       display: flex;
       gap: 10px;
@@ -240,7 +291,8 @@
       border: 1px solid #e0e0e0;
     }
 
-    /* Toast notification */
+    /* ---- Toast ---- */
+
     .toast {
       position: fixed;
       bottom: 32px;
@@ -263,26 +315,11 @@
       transform: translateX(-50%) translateY(0);
     }
 
-    /* Reset link */
-    .reset-link {
-      display: inline-block;
-      margin-top: 12px;
-      font-size: 12px;
-      color: #999;
-      cursor: pointer;
-      text-decoration: none;
-      transition: color 0.15s ease;
-    }
-
-    .reset-link:hover {
-      color: #666;
-    }
-
     /* ---- Highlights list ---- */
 
     .empty-state {
       text-align: center;
-      padding: 32px 16px;
+      padding: 40px 16px;
       color: #999;
       font-size: 13px;
       line-height: 1.6;
@@ -423,25 +460,25 @@
       border-top: 1px solid #f0f0f0;
       padding-top: 20px;
     }
-
-    .highlight-count {
-      font-size: 12px;
-      color: #bbb;
-      font-weight: 400;
-      margin-left: 6px;
-    }
   </style>
 </head>
 <body>
   <div class="container">
+
+    <!-- Header -->
     <header>
       <h1>Highlight</h1>
-      <p>Customize your highlighting experience</p>
+      <span class="highlight-count" id="highlightCount"></span>
     </header>
 
-    <!-- Saved Highlights -->
-    <div class="section" id="highlightsSection">
-      <div class="section-title">Your Highlights <span class="highlight-count" id="highlightCount"></span></div>
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button type="button" class="tab-btn active" data-tab="saved">Saved</button>
+      <button type="button" class="tab-btn" data-tab="settings">Settings</button>
+    </div>
+
+    <!-- ==================== SAVED TAB ==================== -->
+    <div class="tab-panel active" id="tab-saved">
       <div id="highlightsContainer">
         <div class="empty-state">
           <div class="empty-state-title">No highlights yet</div>
@@ -450,88 +487,93 @@
       </div>
     </div>
 
-    <!-- Colors -->
-    <div class="section">
-      <div class="section-title">Highlight Colors</div>
+    <!-- ==================== SETTINGS TAB ==================== -->
+    <div class="tab-panel" id="tab-settings">
 
-      <div class="setting-row">
-        <div class="setting-label">
-          <span>Light mode</span>
-          <small>Used on light backgrounds</small>
+      <!-- Colors -->
+      <div class="section">
+        <div class="section-title">Highlight Colors</div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>Light mode</span>
+            <small>Used on light backgrounds</small>
+          </div>
+          <div class="color-input-wrap">
+            <input type="color" id="colorLight" class="color-swatch" value="#FFEA99">
+            <input type="text" id="colorLightHex" class="color-hex" value="#FFEA99" maxlength="7">
+          </div>
         </div>
-        <div class="color-input-wrap">
-          <input type="color" id="colorLight" class="color-swatch" value="#FFEA99">
-          <input type="text" id="colorLightHex" class="color-hex" value="#FFEA99" maxlength="7">
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>Dark mode</span>
+            <small>Used on dark backgrounds</small>
+          </div>
+          <div class="color-input-wrap">
+            <input type="color" id="colorDark" class="color-swatch" value="#7C6129">
+            <input type="text" id="colorDarkHex" class="color-hex" value="#7C6129" maxlength="7">
+          </div>
+        </div>
+
+        <!-- Preview -->
+        <div class="preview-area preview-light" id="previewLight">
+          The quick brown fox <span class="preview-mark" id="previewMarkLight">jumps over</span> the lazy dog.
+        </div>
+        <div class="preview-area preview-dark" id="previewDark">
+          The quick brown fox <span class="preview-mark" id="previewMarkDark">jumps over</span> the lazy dog.
         </div>
       </div>
 
-      <div class="setting-row">
-        <div class="setting-label">
-          <span>Dark mode</span>
-          <small>Used on dark backgrounds</small>
-        </div>
-        <div class="color-input-wrap">
-          <input type="color" id="colorDark" class="color-swatch" value="#7C6129">
-          <input type="text" id="colorDarkHex" class="color-hex" value="#7C6129" maxlength="7">
+      <!-- Behavior -->
+      <div class="section">
+        <div class="section-title">Behavior</div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>Show highlight button</span>
+            <small>Floating button appears when text is selected</small>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="showFab" checked>
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </div>
 
-      <!-- Preview -->
-      <div class="preview-area preview-light" id="previewLight">
-        The quick brown fox <span class="preview-mark" id="previewMarkLight">jumps over</span> the lazy dog.
+      <!-- Shortcuts -->
+      <div class="section">
+        <div class="section-title">Keyboard Shortcuts</div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>Highlight selection</span>
+          </div>
+          <span class="shortcut" id="shortcutDisplay">Ctrl+Shift+H</span>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label">
+            <span>Change shortcuts</span>
+            <small>Managed by your browser</small>
+          </div>
+          <button type="button" id="openShortcuts" class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px;">
+            Open settings
+          </button>
+        </div>
       </div>
-      <div class="preview-area preview-dark" id="previewDark">
-        The quick brown fox <span class="preview-mark" id="previewMarkDark">jumps over</span> the lazy dog.
+
+      <!-- Actions -->
+      <div class="section">
+        <div class="section-title">Actions</div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="saveBtn">Save settings</button>
+          <button class="btn btn-secondary" id="resetBtn">Reset to defaults</button>
+        </div>
       </div>
     </div>
 
-    <!-- Behavior -->
-    <div class="section">
-      <div class="section-title">Behavior</div>
-
-      <div class="setting-row">
-        <div class="setting-label">
-          <span>Show highlight button</span>
-          <small>Floating button appears when text is selected</small>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="showFab" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Shortcuts -->
-    <div class="section">
-      <div class="section-title">Keyboard Shortcuts</div>
-
-      <div class="setting-row">
-        <div class="setting-label">
-          <span>Highlight selection</span>
-        </div>
-        <span class="shortcut" id="shortcutDisplay">Ctrl+Shift+H</span>
-      </div>
-
-      <div class="setting-row">
-        <div class="setting-label">
-          <span>Change shortcuts</span>
-          <small>Managed by your browser</small>
-        </div>
-        <button type="button" id="openShortcuts" class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px;">
-          Open settings
-        </button>
-      </div>
-    </div>
-
-    <!-- Actions -->
-    <div class="section">
-      <div class="section-title">Actions</div>
-
-      <div class="btn-row">
-        <button class="btn btn-primary" id="saveBtn">Save settings</button>
-        <button class="btn btn-secondary" id="resetBtn">Reset to defaults</button>
-      </div>
-    </div>
   </div>
 
   <div class="toast" id="toast">Settings saved</div>
