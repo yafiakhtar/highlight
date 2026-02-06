@@ -126,6 +126,9 @@ function resetSettings() {
 saveBtn.addEventListener('click', saveSettings);
 resetBtn.addEventListener('click', resetSettings);
 
+// Auto-save when the FAB toggle changes (toggles should be instant)
+showFabToggle.addEventListener('change', saveSettings);
+
 openShortcuts.addEventListener('click', () => {
   // chrome:// URLs can't be opened directly; copy the URL for the user instead
   try {

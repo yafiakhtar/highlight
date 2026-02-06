@@ -76,9 +76,10 @@ function applyCustomColors() {
   }
 }
 
-// Show or hide FAB based on user setting
+// Hide FAB immediately when setting is turned off
+// (When turned back on, it will appear naturally on the next text selection)
 function updateFabVisibility() {
-  if (!userSettings.showFab && highlightFab) {
+  if (highlightFab && !userSettings.showFab) {
     highlightFab.style.display = 'none';
   }
 }
@@ -612,6 +613,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'clearAll':
       clearAllHighlights();
       break;
+  }
+});
+
+// Re-read settings when tab becomes visible (catches changes made on options page)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    loadUserSettings().then(() => {
+      updateFabVisibility();
+      applyCustomColors();
+    });
   }
 });
 
