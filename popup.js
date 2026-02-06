@@ -6,3 +6,7 @@ document.getElementById('clearAll').addEventListener('click', async () => {
     window.close();
   }
 });
+
+document.getElementById('openOptions').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
+});

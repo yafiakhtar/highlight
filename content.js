@@ -1,3 +1,59 @@
+// Default settings
+const DEFAULT_SETTINGS = {
+  colorLight: '#FFEA99',
+  colorDark: '#7C6129',
+  showFab: true
+};
+
+let userSettings = { ...DEFAULT_SETTINGS };
+
+// Load user settings from storage
+function loadUserSettings() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('highlightSettings', (result) => {
+      if (result.highlightSettings) {
+        userSettings = { ...DEFAULT_SETTINGS, ...result.highlightSettings };
+      }
+      resolve(userSettings);
+    });
+  });
+}
+
+// Listen for settings changes in real time
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.highlightSettings) {
+    const newVal = changes.highlightSettings.newValue;
+    userSettings = { ...DEFAULT_SETTINGS, ...newVal };
+    applyCustomColors();
+    updateFabVisibility();
+  }
+});
+
+// Apply custom highlight colors to existing marks
+function applyCustomColors() {
+  document.querySelectorAll('.text-highlighter-mark.hl-light').forEach(mark => {
+    mark.style.backgroundColor = userSettings.colorLight;
+  });
+  document.querySelectorAll('.text-highlighter-mark.hl-dark').forEach(mark => {
+    mark.style.backgroundColor = userSettings.colorDark;
+  });
+  // Update FAB colors too
+  if (highlightFab) {
+    if (highlightFab.classList.contains('fab-light')) {
+      highlightFab.style.backgroundColor = userSettings.colorLight;
+    } else if (highlightFab.classList.contains('fab-dark')) {
+      highlightFab.style.backgroundColor = userSettings.colorDark;
+    }
+  }
+}
+
+// Show or hide FAB based on user setting
+function updateFabVisibility() {
+  if (!userSettings.showFab && highlightFab) {
+    highlightFab.style.display = 'none';
+  }
+}
+
 // Get storage key for current URL
 function getStorageKey() {
   return 'highlights_' + window.location.href;
@@ -8,20 +64,49 @@ function generateId() {
   return 'hl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
 }
 
-// Save highlights to storage
+// Save highlights to storage and update the global index
 function saveHighlights() {
+  const key = getStorageKey();
+  const url = window.location.href;
+
+  // Gather current highlights from the DOM first (synchronous)
   const highlights = [];
   document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
+    const id = mark.dataset.highlightId;
     highlights.push({
-      id: mark.dataset.highlightId,
+      id,
       text: mark.textContent,
       xpath: getXPath(mark.parentNode),
       offset: getTextOffset(mark)
     });
   });
-  
-  const key = getStorageKey();
-  chrome.storage.local.set({ [key]: highlights });
+
+  // Read existing data to preserve createdAt timestamps, then write
+  chrome.storage.local.get([key, 'highlightIndex'], (result) => {
+    // Preserve existing createdAt timestamps
+    const oldHighlights = result[key] || [];
+    const oldTimestamps = {};
+    oldHighlights.forEach(h => { oldTimestamps[h.id] = h.createdAt; });
+
+    highlights.forEach(h => {
+      h.createdAt = oldTimestamps[h.id] || Date.now();
+    });
+
+    const index = result.highlightIndex || {};
+
+    if (highlights.length > 0) {
+      index[url] = {
+        title: document.title || url,
+        lastUpdated: Date.now()
+      };
+      chrome.storage.local.set({ [key]: highlights, highlightIndex: index });
+    } else {
+      // No highlights left — clean up
+      delete index[url];
+      chrome.storage.local.remove(key);
+      chrome.storage.local.set({ highlightIndex: index });
+    }
+  });
 }
 
 // Get XPath for an element
@@ -110,6 +195,7 @@ function highlightSelection() {
     const mark = document.createElement('mark');
     mark.className = 'text-highlighter-mark ' + themeClass;
     mark.dataset.highlightId = highlightId;
+    mark.style.backgroundColor = theme === 'dark' ? userSettings.colorDark : userSettings.colorLight;
     
     // Use surroundContents for simple selections
     range.surroundContents(mark);
@@ -140,6 +226,7 @@ function highlightSelection() {
         const mark = document.createElement('mark');
         mark.className = 'text-highlighter-mark ' + themeClass;
         mark.dataset.highlightId = highlightId;
+        mark.style.backgroundColor = theme === 'dark' ? userSettings.colorDark : userSettings.colorLight;
         
         try {
           nodeRange.surroundContents(mark);
@@ -290,7 +377,15 @@ function clearAllHighlights() {
   });
   
   const key = getStorageKey();
+  const url = window.location.href;
   chrome.storage.local.remove(key);
+
+  // Remove this page from the global index
+  chrome.storage.local.get('highlightIndex', (result) => {
+    const index = result.highlightIndex || {};
+    delete index[url];
+    chrome.storage.local.set({ highlightIndex: index });
+  });
 }
 
 // Restore highlights from storage
@@ -347,6 +442,7 @@ function restoreHighlights() {
               const mark = document.createElement('mark');
               mark.className = 'text-highlighter-mark ' + themeClass;
               mark.dataset.highlightId = highlight.id;
+              mark.style.backgroundColor = theme === 'dark' ? userSettings.colorDark : userSettings.colorLight;
               
               try {
                 range.surroundContents(mark);
@@ -401,12 +497,14 @@ function createHighlightFab() {
 }
 
 function showHighlightFab(x, y) {
+  if (!userSettings.showFab) return;
   if (!highlightFab) createHighlightFab();
   
   // Apply theme-appropriate color
   const theme = getPageTheme();
   highlightFab.classList.remove('fab-light', 'fab-dark');
   highlightFab.classList.add(theme === 'dark' ? 'fab-dark' : 'fab-light');
+  highlightFab.style.backgroundColor = theme === 'dark' ? userSettings.colorDark : userSettings.colorLight;
   
   highlightFab.style.left = x + 'px';
   highlightFab.style.top = y + 'px';
@@ -488,9 +586,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Restore highlights when page loads
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', restoreHighlights);
-} else {
+// Load settings then restore highlights when page loads
+async function init() {
+  await loadUserSettings();
   restoreHighlights();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
 }

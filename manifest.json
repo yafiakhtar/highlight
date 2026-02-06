@@ -34,6 +34,10 @@
     "default_popup": "popup.html",
     "default_title": "highlight"
   },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "commands": {
     "highlight-selection": {
       "suggested_key": {
