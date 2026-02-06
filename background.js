@@ -5,12 +5,11 @@ chrome.runtime.onInstalled.addListener(() => {
       id: "highlight-text",
       title: "Highlight",
       contexts: ["selection"]
-    });
-
-    chrome.contextMenus.create({
-      id: "remove-highlight",
-      title: "Remove Highlight",
-      contexts: ["selection"]
+      });
+  chrome.contextMenus.create({
+    id: "remove-highlight",
+    title: "Remove Highlight",
+    contexts: ["selection"]
     });
   });
 });

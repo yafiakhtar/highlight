@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
   "name": "highlight",
-  "version": "1.0",
+  "version": "1.0.1",
   "description": "glorified highlighter",
+  "icons": {
+    "16": "assets/highlight16.png",
+    "32": "assets/highlight32.png",
+    "48": "assets/highlight48.png",
+    "128": "assets/highlight128.png"
+  },
   "permissions": [
     "storage",
     "contextMenus",
@@ -19,6 +25,12 @@
     }
   ],
   "action": {
+    "default_icon": {
+      "16": "assets/highlight16.png",
+      "32": "assets/highlight32.png",
+      "48": "assets/highlight48.png",
+      "128": "assets/highlight128.png"
+    },
     "default_popup": "popup.html",
     "default_title": "highlight"
   },

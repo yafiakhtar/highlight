@@ -5,7 +5,7 @@ function getStorageKey() {
 
 // Generate unique ID for highlights
 function generateId() {
-  return 'hl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  return 'hl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
 }
 
 // Save highlights to storage
@@ -65,9 +65,7 @@ function getTextOffset(mark) {
     if (child === mark) {
       break;
     }
-    if (child.nodeType === Node.TEXT_NODE) {
-      offset += child.textContent.length;
-    } else if (child.nodeType === Node.ELEMENT_NODE) {
+    if (child.nodeType === Node.TEXT_NODE || child.nodeType === Node.ELEMENT_NODE) {
       offset += child.textContent.length;
     }
   }
@@ -131,9 +129,8 @@ function highlightSelection() {
         return;
       }
       
-      textNodes.forEach((nodeInfo, index) => {
+      textNodes.forEach((nodeInfo) => {
         const { node, start, end } = nodeInfo;
-        const text = node.textContent;
         
         // Create a range for just this portion of text
         const nodeRange = document.createRange();
@@ -143,7 +140,6 @@ function highlightSelection() {
         const mark = document.createElement('mark');
         mark.className = 'text-highlighter-mark ' + themeClass;
         mark.dataset.highlightId = highlightId;
-        mark.dataset.highlightPart = index;
         
         try {
           nodeRange.surroundContents(mark);
@@ -341,7 +337,7 @@ function restoreHighlights() {
             const localOffset = highlight.offset - currentOffset;
             const text = node.textContent;
             
-            // Find the highlight text in this node
+            // Search slightly before expected offset to tolerate minor DOM changes
             const idx = text.indexOf(highlight.text, localOffset > 0 ? localOffset - 5 : 0);
             if (idx !== -1) {
               const range = document.createRange();
