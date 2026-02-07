@@ -81,9 +81,18 @@
       opacity: 0.7;
     }
 
-    .toolbar-btn svg {
+    .toolbar-btn svg,
+    .toolbar-btn img.toolbar-icon {
       width: 18px;
       height: 18px;
+    }
+
+    .toolbar-btn img.toolbar-icon {
+      filter: brightness(0) saturate(100%) invert(54%) sepia(10%) saturate(0%) hue-rotate(160deg) brightness(95%) contrast(92%);
+    }
+
+    .toolbar-btn:hover img.toolbar-icon {
+      filter: brightness(0) saturate(100%) invert(33%) sepia(8%) saturate(0%) hue-rotate(160deg) brightness(95%) contrast(95%);
     }
 
     .toolbar-btn.dragging {
@@ -106,13 +115,10 @@
   </div>
   <div class="toolbar" id="toolbar">
     <button type="button" class="toolbar-btn" id="trash" draggable="true" title="Clear page highlights">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="3 6 5 6 21 6"></polyline>
-        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-        <path d="M10 11v6"></path>
-        <path d="M14 11v6"></path>
-        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
-      </svg>
+      <img src="assets/icons/trash.svg" alt="Clear highlights" class="toolbar-icon">
+    </button>
+    <button type="button" class="toolbar-btn" id="settings" draggable="true" title="Settings">
+      <img src="assets/icons/settings.svg" alt="Settings" class="toolbar-icon">
     </button>
     <button type="button" class="toolbar-btn" id="home" draggable="true" title="Open options">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

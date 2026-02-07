@@ -16,6 +16,11 @@ document.getElementById('home').addEventListener('click', () => {
   chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
 });
 
+// Settings button: open options page with settings tab
+document.getElementById('settings').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('options.html?tab=settings') });
+});
+
 // --- Drag and drop reordering ---
 const toolbar = document.getElementById('toolbar');
 let draggedBtn = null;

@@ -8,6 +8,24 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
+// ---- URL parameter handling ----
+function switchToTab(tabName) {
+  const tabBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  if (tabBtn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tabBtn.classList.add('active');
+    document.getElementById('tab-' + tabName).classList.add('active');
+  }
+}
+
+// Check for tab parameter in URL on load
+const urlParams = new URLSearchParams(window.location.search);
+const tabParam = urlParams.get('tab');
+if (tabParam) {
+  switchToTab(tabParam);
+}
+
 // Default settings
 const DEFAULTS = {
   colorLight: '#FFEA99',
