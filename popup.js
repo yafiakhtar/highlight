@@ -2,6 +2,20 @@
 const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 document.getElementById('modifierKey').textContent = isMac ? '⌘' : 'Ctrl';
 
+// Theme: load saved preference
+chrome.storage.local.get('popupTheme', (data) => {
+  if (data.popupTheme === 'dark') {
+    document.body.classList.add('dark');
+  }
+});
+
+// Theme toggle
+document.getElementById('theme').addEventListener('click', () => {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  chrome.storage.local.set({ popupTheme: isDark ? 'dark' : 'light' });
+});
+
 // Trash button: clear highlights for current page
 document.getElementById('trash').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -43,8 +57,14 @@ function restoreOrder(order) {
 
 // Load saved order on startup
 chrome.storage.local.get('popupButtonOrder', (data) => {
-  if (data.popupButtonOrder && Array.isArray(data.popupButtonOrder)) {
-    restoreOrder(data.popupButtonOrder);
+  let order = data.popupButtonOrder;
+  if (order && Array.isArray(order)) {
+    // Merge in theme button if missing (from older saves)
+    if (!order.includes('theme')) {
+      order = [...order, 'theme'];
+      chrome.storage.local.set({ popupButtonOrder: order });
+    }
+    restoreOrder(order);
   }
 });
 

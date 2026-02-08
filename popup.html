@@ -2,59 +2,110 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #fafafa;
+      --text: #1a1a1a;
+      --text-muted: #5c5c5c;
+      --kbd-bg: #fff;
+      --kbd-border: #d8d8d8;
+      --kbd-text: #1a1a1a;
+      --plus: #999;
+      --btn-color: #888;
+      --btn-color-hover: #555;
+      --btn-hover: rgba(0, 0, 0, 0.05);
+      --btn-hover-strong: rgba(0, 0, 0, 0.08);
+      --icon-filter: brightness(0) saturate(100%) invert(54%) sepia(10%) saturate(0%) hue-rotate(160deg) brightness(95%) contrast(92%);
+      --icon-filter-hover: brightness(0) saturate(100%) invert(33%) sepia(8%) saturate(0%) hue-rotate(160deg) brightness(95%) contrast(95%);
+    }
+
+    body.dark {
+      --bg: #1a1a1a;
+      --text: #e8e8e8;
+      --text-muted: #a0a0a0;
+      --kbd-bg: #2a2a2a;
+      --kbd-border: #404040;
+      --kbd-text: #e8e8e8;
+      --plus: #808080;
+      --btn-color: #a0a0a0;
+      --btn-color-hover: #d0d0d0;
+      --btn-hover: rgba(255, 255, 255, 0.06);
+      --btn-hover-strong: rgba(255, 255, 255, 0.1);
+      --icon-filter: brightness(0) saturate(100%) invert(90%) sepia(5%) saturate(0%) hue-rotate(160deg) brightness(95%) contrast(92%);
+      --icon-filter-hover: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%);
+    }
+
     body {
-      width: 240px;
-      padding: 20px;
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+      width: 320px;
+      margin: 0;
+      padding: 14px 18px 14px;
+      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
       font-size: 13px;
-      background: #fafafa;
-      color: #1a1a1a;
+      font-weight: 300;
+      background: var(--bg);
+      color: var(--text);
+      letter-spacing: 0.02em;
+      transition: background 0.2s ease, color 0.2s ease;
     }
 
     h3 {
-      margin: 0 0 14px 0;
+      margin: 0 0 8px 0;
+      padding: 0;
       font-size: 14px;
-      font-weight: 500;
-      color: #1a1a1a;
-      letter-spacing: 0.3px;
+      font-weight: 400;
+      color: var(--text);
+      letter-spacing: 0.04em;
       text-transform: uppercase;
     }
 
     .info {
-      color: #6b6b6b;
+      color: var(--text-muted);
       font-size: 12.5px;
-      margin-bottom: 20px;
-      line-height: 1.8;
+      font-weight: 300;
+      margin: 0 0 12px 0;
+      padding: 0;
+      line-height: 1.55;
+    }
+
+    .info-line {
+      margin: 0 0 1px 0;
+      padding: 0;
     }
 
     kbd {
       display: inline-block;
-      padding: 2px 6px;
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
-      font-size: 10.5px;
-      color: #1a1a1a;
-      background: linear-gradient(180deg, #fff 0%, #f0f0f0 100%);
-      border: 1px solid #d1d1d1;
-      border-bottom-width: 2px;
-      border-radius: 4px;
-      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06);
-      line-height: 1.4;
-      vertical-align: middle;
+      padding: 1px 5px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--kbd-text);
+      background: var(--kbd-bg);
+      border: 1px solid var(--kbd-border);
+      border-radius: 3px;
+      line-height: 1.3;
+      letter-spacing: 0.02em;
     }
 
     .kbd-plus {
       font-size: 10px;
-      color: #999;
-      margin: 0 1px;
+      color: var(--plus);
+      margin: 0 2px;
+      font-weight: 300;
     }
 
     .toolbar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-top: 14px;
-      border-top: 1px solid #eee;
+      margin: 10px -18px 0 -18px;
+      padding: 0 18px;
     }
 
     .toolbar-btn {
@@ -69,12 +120,12 @@
       cursor: pointer;
       border-radius: 6px;
       transition: background 0.15s ease, opacity 0.15s ease;
-      color: #888;
+      color: var(--btn-color);
     }
 
     .toolbar-btn:hover {
-      background: rgba(0, 0, 0, 0.05);
-      color: #555;
+      background: var(--btn-hover);
+      color: var(--btn-color-hover);
     }
 
     .toolbar-btn:active {
@@ -88,34 +139,49 @@
     }
 
     .toolbar-btn img.toolbar-icon {
-      filter: brightness(0) saturate(100%) invert(54%) sepia(10%) saturate(0%) hue-rotate(160deg) brightness(95%) contrast(92%);
+      filter: var(--icon-filter);
     }
 
     .toolbar-btn:hover img.toolbar-icon {
-      filter: brightness(0) saturate(100%) invert(33%) sepia(8%) saturate(0%) hue-rotate(160deg) brightness(95%) contrast(95%);
+      filter: var(--icon-filter-hover);
     }
+
+    .theme-icon {
+      display: none;
+      width: 18px;
+      height: 18px;
+      filter: var(--icon-filter);
+    }
+
+    .toolbar-btn:hover .theme-icon {
+      filter: var(--icon-filter-hover);
+    }
+
+    body:not(.dark) .theme-icon.moon { display: block; }
+    body.dark .theme-icon.sun { display: block; }
 
     .toolbar-btn.dragging {
       opacity: 0.4;
     }
 
     .toolbar-btn.drag-over {
-      background: rgba(0, 0, 0, 0.08);
+      background: var(--btn-hover-strong);
     }
   </style>
 </head>
 <body>
   <h3>Highlight</h3>
   <div class="info">
-    Select text and use
-    <kbd id="modifierKey">Ctrl</kbd><span class="kbd-plus">+</span><kbd>Shift</kbd><span class="kbd-plus">+</span><kbd>H</kbd>
-    or right-click to highlight.
-    <br><br>
-    Click on any highlight to remove it.
+    <p class="info-line">Select text and use <kbd id="modifierKey">Ctrl</kbd><span class="kbd-plus">+</span><kbd>Shift</kbd><span class="kbd-plus">+</span><kbd>H</kbd> or right-click to highlight.</p>
+    <p class="info-line">Click any highlight to remove it.</p>
   </div>
   <div class="toolbar" id="toolbar">
     <button type="button" class="toolbar-btn" id="trash" draggable="true" title="Clear page highlights">
       <img src="assets/icons/trash.svg" alt="Clear highlights" class="toolbar-icon">
+    </button>
+    <button type="button" class="toolbar-btn" id="theme" draggable="true" title="Toggle dark mode">
+      <img src="assets/icons/moon.svg" alt="Dark mode" class="theme-icon moon">
+      <img src="assets/icons/sun.svg" alt="Light mode" class="theme-icon sun">
     </button>
     <button type="button" class="toolbar-btn" id="settings" draggable="true" title="Settings">
       <img src="assets/icons/settings.svg" alt="Settings" class="toolbar-icon">
