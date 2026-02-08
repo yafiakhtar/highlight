@@ -4,10 +4,10 @@
   "version": "1.0.1",
   "description": "glorified highlighter",
   "icons": {
-    "16": "assets/highlight16.png",
-    "32": "assets/highlight32.png",
-    "48": "assets/highlight48.png",
-    "128": "assets/highlight128.png"
+    "16": "assets/logo/highlight16.png",
+    "32": "assets/logo/highlight32.png",
+    "48": "assets/logo/highlight48.png",
+    "128": "assets/logo/highlight128.png"
   },
   "permissions": [
     "storage",
@@ -26,10 +26,10 @@
   ],
   "action": {
     "default_icon": {
-      "16": "assets/highlight16.png",
-      "32": "assets/highlight32.png",
-      "48": "assets/highlight48.png",
-      "128": "assets/highlight128.png"
+      "16": "assets/logo/highlight16.png",
+      "32": "assets/logo/highlight32.png",
+      "48": "assets/logo/highlight48.png",
+      "128": "assets/logo/highlight128.png"
     },
     "default_popup": "popup.html",
     "default_title": "highlight"
