@@ -167,6 +167,24 @@
     .toolbar-btn.drag-over {
       background: var(--btn-hover-strong);
     }
+
+    .fab-icon {
+      width: 24px;
+      height: 24px;
+    }
+
+    .fab-icon circle {
+      stroke: var(--btn-color);
+      stroke-width: 1.5;
+    }
+
+    .toolbar-btn:hover .fab-icon circle {
+      stroke: var(--btn-color-hover);
+    }
+
+    .toolbar-btn.fab-disabled .fab-icon {
+      opacity: 0.4;
+    }
   </style>
 </head>
 <body>
@@ -185,6 +203,20 @@
     </button>
     <button type="button" class="toolbar-btn" id="settings" draggable="true" title="Settings">
       <img src="assets/icons/settings.svg" alt="Settings" class="toolbar-icon">
+    </button>
+    <button type="button" class="toolbar-btn" id="fab-toggle" draggable="true" title="Toggle FAB">
+      <svg class="fab-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <clipPath id="fabClipLeft">
+            <polygon points="0,0 24,0 0,24"/>
+          </clipPath>
+          <clipPath id="fabClipRight">
+            <polygon points="24,0 24,24 0,24"/>
+          </clipPath>
+        </defs>
+        <circle cx="12" cy="12" r="10" fill="#FFEA99" clip-path="url(#fabClipLeft)"/>
+        <circle cx="12" cy="12" r="10" fill="#7C6129" clip-path="url(#fabClipRight)"/>
+      </svg>
     </button>
     <button type="button" class="toolbar-btn" id="home" draggable="true" title="Open options">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

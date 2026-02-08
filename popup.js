@@ -35,6 +35,36 @@ document.getElementById('settings').addEventListener('click', () => {
   chrome.tabs.create({ url: chrome.runtime.getURL('options.html?tab=settings') });
 });
 
+// FAB toggle button: enable/disable the floating action button
+const fabToggleBtn = document.getElementById('fab-toggle');
+
+// Load saved FAB preference
+chrome.storage.local.get('highlightSettings', (data) => {
+  const settings = data.highlightSettings || {};
+  if (settings.showFab === false) {
+    fabToggleBtn.classList.add('fab-disabled');
+    fabToggleBtn.title = 'Enable FAB';
+  }
+});
+
+fabToggleBtn.addEventListener('click', () => {
+  chrome.storage.local.get('highlightSettings', (data) => {
+    const settings = data.highlightSettings || {};
+    const newFabState = settings.showFab !== false ? false : true;
+    
+    settings.showFab = newFabState;
+    chrome.storage.local.set({ highlightSettings: settings });
+    
+    if (newFabState) {
+      fabToggleBtn.classList.remove('fab-disabled');
+      fabToggleBtn.title = 'Disable FAB';
+    } else {
+      fabToggleBtn.classList.add('fab-disabled');
+      fabToggleBtn.title = 'Enable FAB';
+    }
+  });
+});
+
 // --- Drag and drop reordering ---
 const toolbar = document.getElementById('toolbar');
 let draggedBtn = null;
@@ -55,15 +85,23 @@ function restoreOrder(order) {
   });
 }
 
+// Merge in FAB button if missing (from older saves)
+function mergeNewButtons(order) {
+  const defaultOrder = ['trash', 'theme', 'settings', 'fab-toggle', 'home'];
+  const hasAllButtons = defaultOrder.every(id => order.includes(id));
+  if (!hasAllButtons) {
+    const missingButtons = defaultOrder.filter(id => !order.includes(id));
+    order = [...order, ...missingButtons];
+    chrome.storage.local.set({ popupButtonOrder: order });
+  }
+  return order;
+}
+
 // Load saved order on startup
 chrome.storage.local.get('popupButtonOrder', (data) => {
   let order = data.popupButtonOrder;
   if (order && Array.isArray(order)) {
-    // Merge in theme button if missing (from older saves)
-    if (!order.includes('theme')) {
-      order = [...order, 'theme'];
-      chrome.storage.local.set({ popupButtonOrder: order });
-    }
+    order = mergeNewButtons(order);
     restoreOrder(order);
   }
 });
