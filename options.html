@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Highlight</title>
+  <title>HIGHLIGHT</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -16,39 +16,62 @@
     body {
       font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
       font-size: 14px;
-      background: #f5f5f5;
-      color: #1a1a1a;
+      background: #1a1a1a;
+      color: #cccccc;
       min-height: 100vh;
     }
 
     .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 24px;
+      padding: 0 0 24px 0;
     }
 
-    /* ---- Header ---- */
+    /* ---- Navbar ---- */
 
-    header {
+    header.navbar {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 24px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #e0e0e0;
+      margin-bottom: 0;
+      padding: 12px 24px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
     }
 
-    header h1 {
-      font-size: 22px;
+    .navbar-left {
+      flex: 1;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+    }
+
+    .navbar-brand {
+      font-size: 18px;
       font-weight: 600;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      margin: 0;
+      letter-spacing: 0.3px;
+      color: #ffffff;
+    }
+
+    .navbar-center {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .navbar-tabs {
+      display: flex;
+      gap: 4px;
+    }
+
+    .navbar-right {
+      flex: 1;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
     }
 
     .highlight-count {
       font-size: 12px;
-      color: #bbb;
+      color: #858585;
       font-weight: 400;
     }
 
@@ -56,8 +79,8 @@
 
     .main-layout {
       display: flex;
-      gap: 24px;
-      min-height: calc(100vh - 120px);
+      gap: 0;
+      min-height: calc(100vh - 56px);
     }
 
     /* ---- Sidebar ---- */
@@ -65,13 +88,105 @@
     .sidebar {
       width: 240px;
       flex-shrink: 0;
-      background: #fff;
-      border-radius: 12px;
-      border: 1px solid #e8e8e8;
+      background: #1a1a1a;
+      border-radius: 0;
+      border: none;
+      padding: 0;
+      display: flex;
+      flex-direction: row;
+      transition: width 0.2s ease;
+      position: relative;
+    }
+
+    .sidebar-inner {
       padding: 16px;
       display: flex;
       flex-direction: column;
       gap: 16px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .sidebar-resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 8px;
+      cursor: col-resize;
+      background: transparent;
+      transition: background 0.15s ease;
+    }
+
+    .sidebar-resize-handle:hover {
+      background: #2a2a2a;
+    }
+
+    .sidebar.collapsed {
+      width: 56px;
+    }
+
+    .sidebar.collapsed .sidebar-inner {
+      padding: 12px 8px;
+    }
+
+    .sidebar.collapsed .search-bar {
+      display: none;
+    }
+
+    .sidebar.collapsed .sidebar-item {
+      justify-content: center;
+      padding: 10px;
+    }
+
+    .sidebar.collapsed .sidebar-item .sidebar-label {
+      display: none;
+    }
+
+    .sidebar.collapsed .sidebar-toggle-label {
+      display: none;
+    }
+
+    .sidebar-toggle {
+      margin-top: auto;
+      padding: 8px 12px;
+      border: none;
+      background: #2a2a2a;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #cccccc;
+      font-family: inherit;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .sidebar-toggle:hover {
+      background: #333333;
+      color: #ffffff;
+    }
+
+    .sidebar-toggle svg {
+      flex-shrink: 0;
+    }
+
+    .sidebar.collapsed .sidebar-toggle {
+      padding: 8px;
+    }
+
+    .sidebar-toggle .sidebar-chevron-expand {
+      display: none;
+    }
+
+    .sidebar.collapsed .sidebar-toggle .sidebar-chevron-collapse {
+      display: none;
+    }
+
+    .sidebar.collapsed .sidebar-toggle .sidebar-chevron-expand {
+      display: block;
     }
 
     .search-bar {
@@ -80,23 +195,39 @@
 
     .search-bar input {
       width: 100%;
-      padding: 8px 12px;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
+      padding: 8px 12px 8px 32px;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
       font-size: 13px;
       font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #fafafa;
+      background: #2a2a2a;
+      color: #cccccc;
       transition: border-color 0.15s ease, background 0.15s ease;
     }
 
     .search-bar input:focus {
       outline: none;
-      border-color: #1a1a1a;
-      background: #fff;
+      border-color: #007acc;
+      background: #2a2a2a;
     }
 
     .search-bar input::placeholder {
-      color: #999;
+      color: #858585;
+    }
+
+    .search-bar-wrap {
+      position: relative;
+    }
+
+    .search-bar-wrap .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      color: #858585;
+      pointer-events: none;
     }
 
     .sidebar-nav {
@@ -106,27 +237,58 @@
     }
 
     .sidebar-item {
-      padding: 10px 12px;
+      padding: 8px 12px;
       border: none;
       background: none;
       text-align: left;
-      font-size: 14px;
-      font-weight: 500;
-      color: #666;
+      font-size: 13px;
+      font-weight: 400;
+      color: #cccccc;
       cursor: pointer;
-      border-radius: 8px;
+      border-radius: 0 6px 6px 0;
       transition: background 0.15s ease, color 0.15s ease;
       font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: relative;
+      border-left: 3px solid transparent;
     }
 
     .sidebar-item:hover {
-      background: #f5f5f5;
-      color: #1a1a1a;
+      background: #2a2a2a;
+      color: #ffffff;
     }
 
     .sidebar-item.active {
-      background: #1a1a1a;
-      color: #fff;
+      background: #2a2a2a;
+      color: #ffffff;
+      border-left-color: #cccccc;
+    }
+
+    .sidebar-icon {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sidebar-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .sidebar-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     /* ---- Content Area ---- */
@@ -134,6 +296,44 @@
     .content-area {
       flex: 1;
       min-width: 0;
+      padding: 24px 32px 24px 24px;
+      background: #1a1a1a;
+    }
+
+    .tab-panel#tab-library .content-area {
+      background: #222222;
+    }
+
+    .about-content {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+    }
+
+    .about-inner {
+      text-align: center;
+      max-width: 360px;
+    }
+
+    .about-title {
+      font-size: 22px;
+      font-weight: 600;
+      color: #ffffff;
+      margin: 0 0 8px 0;
+    }
+
+    .about-tagline {
+      font-size: 14px;
+      color: #cccccc;
+      line-height: 1.5;
+      margin: 0 0 16px 0;
+    }
+
+    .about-meta {
+      font-size: 12px;
+      color: #858585;
+      margin: 0;
     }
 
     /* Responsive: collapse sidebar on narrow screens */
@@ -142,8 +342,12 @@
         flex-direction: column;
       }
 
-      .sidebar {
+      .sidebar:not(.collapsed) {
         width: 100%;
+      }
+
+      .sidebar.collapsed {
+        width: 56px;
       }
 
       .sidebar-nav {
@@ -168,33 +372,26 @@
 
     /* ---- Tabs ---- */
 
-    .tab-bar {
-      display: flex;
-      gap: 0;
-      margin-bottom: 24px;
-      border-bottom: 1px solid #e0e0e0;
-    }
-
     .tab-btn {
-      padding: 10px 20px;
+      padding: 10px 16px;
       font-size: 13px;
       font-weight: 500;
-      color: #999;
+      color: #858585;
       background: none;
       border: none;
-      border-bottom: 2px solid transparent;
+      border-radius: 6px;
       cursor: pointer;
-      transition: color 0.15s ease, border-color 0.15s ease;
+      transition: color 0.15s ease, background 0.15s ease;
       letter-spacing: 0.2px;
     }
 
     .tab-btn:hover {
-      color: #666;
+      color: #cccccc;
     }
 
     .tab-btn.active {
-      color: #1a1a1a;
-      border-bottom-color: #1a1a1a;
+      color: #ffffff;
+      background: #2a2a2a;
     }
 
     .tab-panel {
@@ -203,17 +400,17 @@
 
     .tab-panel.active {
       display: flex;
-      gap: 24px;
+      gap: 0;
     }
 
     /* ---- Shared section card ---- */
 
     .section {
-      background: #fff;
-      border-radius: 12px;
+      background: #1f1f1f;
+      border-radius: 8px;
       padding: 24px;
       margin-bottom: 16px;
-      border: 1px solid #e8e8e8;
+      border: 1px solid #252525;
     }
 
     .section-title {
@@ -221,7 +418,7 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.8px;
-      color: #999;
+      color: #858585;
       margin-bottom: 20px;
     }
 
@@ -233,7 +430,7 @@
     }
 
     .setting-row + .setting-row {
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid #2a2a2a;
     }
 
     .setting-label {
@@ -245,11 +442,12 @@
     .setting-label span {
       font-size: 14px;
       font-weight: 500;
+      color: #cccccc;
     }
 
     .setting-label small {
       font-size: 12px;
-      color: #999;
+      color: #858585;
     }
 
     /* ---- Color picker ---- */
@@ -264,7 +462,7 @@
       width: 24px;
       height: 24px;
       border-radius: 50%;
-      border: 2px solid #e0e0e0;
+      border: 2px solid #2a2a2a;
       cursor: pointer;
       padding: 0;
       overflow: hidden;
@@ -282,13 +480,13 @@
 
     .color-hex {
       font-size: 12px;
-      color: #666;
+      color: #cccccc;
       width: 72px;
       text-align: center;
       padding: 5px 8px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid #2a2a2a;
       border-radius: 6px;
-      background: #fafafa;
+      background: #2a2a2a;
       text-transform: uppercase;
     }
 
@@ -310,7 +508,7 @@
     .toggle-slider {
       position: absolute;
       inset: 0;
-      background: #ddd;
+      background: #2a2a2a;
       border-radius: 12px;
       cursor: pointer;
       transition: background 0.2s ease;
@@ -323,14 +521,18 @@
       height: 18px;
       left: 3px;
       top: 3px;
-      background: #fff;
+      background: #cccccc;
       border-radius: 50%;
       transition: transform 0.2s ease;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     }
 
     .toggle input:checked + .toggle-slider {
-      background: #1a1a1a;
+      background: #007acc;
+    }
+
+    .toggle input:checked + .toggle-slider::before {
+      background: #ffffff;
     }
 
     .toggle input:checked + .toggle-slider::before {
@@ -341,12 +543,12 @@
 
     .shortcut {
       display: inline-block;
-      background: #f5f5f5;
+      background: #2a2a2a;
       padding: 4px 10px;
       border-radius: 6px;
       font-size: 11px;
-      color: #1a1a1a;
-      border: 1px solid #e0e0e0;
+      color: #cccccc;
+      border: 1px solid #333333;
     }
 
     /* ---- Preview ---- */
@@ -357,17 +559,17 @@
       border-radius: 8px;
       font-size: 13px;
       line-height: 1.7;
-      color: #444;
+      color: #cccccc;
+      border: 1px solid #2a2a2a;
     }
 
     .preview-area.preview-light {
-      background: #fff;
-      border: 1px solid #e8e8e8;
+      background: #2a2a2a;
     }
 
     .preview-area.preview-dark {
       background: #1a1a1a;
-      color: #ccc;
+      color: #cccccc;
     }
 
     .preview-mark {
@@ -400,14 +602,23 @@
     }
 
     .btn-primary {
-      background: #1a1a1a;
-      color: #fff;
+      background: #007acc;
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
     }
 
     .btn-secondary {
-      background: #fff;
-      color: #1a1a1a;
-      border: 1px solid #e0e0e0;
+      background: #2a2a2a;
+      color: #cccccc;
+      border: 1px solid #333333;
+    }
+
+    .btn-secondary:hover {
+      background: #333333;
+      color: #ffffff;
     }
 
     /* ---- Toast ---- */
@@ -418,11 +629,12 @@
       left: 50%;
       transform: translateX(-50%) translateY(20px);
       background: #1a1a1a;
-      color: #fff;
+      color: #ffffff;
       padding: 10px 24px;
-      border-radius: 8px;
+      border-radius: 6px;
       font-size: 13px;
       font-weight: 500;
+      border: 1px solid #2a2a2a;
       opacity: 0;
       transition: opacity 0.2s ease, transform 0.2s ease;
       pointer-events: none;
@@ -439,7 +651,7 @@
     .empty-state {
       text-align: center;
       padding: 40px 16px;
-      color: #999;
+      color: #858585;
       font-size: 13px;
       line-height: 1.6;
     }
@@ -447,7 +659,7 @@
     .empty-state-title {
       font-size: 14px;
       font-weight: 500;
-      color: #bbb;
+      color: #cccccc;
       margin-bottom: 6px;
     }
 
@@ -475,7 +687,7 @@
     .page-title {
       font-size: 14px;
       font-weight: 500;
-      color: #1a1a1a;
+      color: #cccccc;
       text-decoration: none;
       display: block;
       white-space: nowrap;
@@ -485,12 +697,12 @@
     }
 
     .page-title:hover {
-      color: #555;
+      color: #ffffff;
     }
 
     .page-url {
       font-size: 11px;
-      color: #bbb;
+      color: #858585;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -501,19 +713,18 @@
     .page-clear-btn {
       flex-shrink: 0;
       background: none;
-      border: 1px solid #e0e0e0;
+      border: none;
       border-radius: 6px;
       padding: 4px 10px;
       font-size: 11px;
-      color: #999;
+      color: #858585;
       cursor: pointer;
-      transition: color 0.15s ease, border-color 0.15s ease;
+      transition: color 0.15s ease, opacity 0.15s ease;
       width: auto;
     }
 
     .page-clear-btn:hover {
-      color: #e44;
-      border-color: #e44;
+      color: #f14c4c;
       opacity: 1;
     }
 
@@ -529,26 +740,21 @@
     }
 
     .snippet-item + .snippet-item {
-      border-top: 1px solid #f5f5f5;
+      margin-top: 6px;
     }
 
     .snippet-text {
       flex: 1;
       font-size: 13px;
-      color: #444;
+      color: #cccccc;
       line-height: 1.55;
       min-width: 0;
       word-break: break-word;
     }
 
-    .snippet-text::before {
-      content: '\201C';
-      color: #ccc;
-    }
-
+    .snippet-text::before,
     .snippet-text::after {
-      content: '\201D';
-      color: #ccc;
+      content: none;
     }
 
     .snippet-delete {
@@ -557,58 +763,90 @@
       height: 20px;
       border: none;
       background: none;
-      color: #ccc;
+      color: #858585;
       font-size: 15px;
       cursor: pointer;
       border-radius: 4px;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: color 0.15s ease, background 0.15s ease;
+      transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
       margin-top: 1px;
       padding: 0;
+      opacity: 0.5;
     }
 
     .snippet-delete:hover {
-      color: #e44;
-      background: #fef0f0;
+      color: #f14c4c;
+      background: rgba(241, 76, 76, 0.15);
       opacity: 1;
     }
 
     .page-group + .page-group {
-      border-top: 1px solid #f0f0f0;
-      padding-top: 20px;
+      margin-top: 28px;
+      padding-top: 0;
     }
   </style>
 </head>
 <body>
   <div class="container">
 
-    <!-- Header -->
-    <header>
-      <h1>Highlight</h1>
-      <span class="highlight-count" id="highlightCount"></span>
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="navbar-left">
+        <span class="navbar-brand">Highlight</span>
+      </div>
+      <div class="navbar-center">
+        <div class="navbar-tabs">
+          <button type="button" class="tab-btn active" data-tab="library">Library</button>
+          <button type="button" class="tab-btn" data-tab="settings">Settings</button>
+          <button type="button" class="tab-btn" data-tab="about">About</button>
+        </div>
+      </div>
+      <div class="navbar-right">
+        <span class="highlight-count" id="highlightCount"></span>
+      </div>
     </header>
-
-    <!-- Tab bar -->
-    <div class="tab-bar">
-      <button type="button" class="tab-btn active" data-tab="library">Library</button>
-      <button type="button" class="tab-btn" data-tab="settings">Settings</button>
-    </div>
 
     <!-- ==================== LIBRARY TAB ==================== -->
     <div class="tab-panel active" id="tab-library">
-      <aside class="sidebar">
-        <div class="search-bar">
-          <input type="text" placeholder="Search highlights..." id="librarySearch">
+      <aside class="sidebar" id="sidebar-library">
+        <div class="sidebar-inner">
+          <div class="search-bar">
+            <div class="search-bar-wrap">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input type="text" placeholder="Search highlights..." id="librarySearch">
+            </div>
+          </div>
+          <nav class="sidebar-nav">
+            <button type="button" class="sidebar-item active" data-view="all" title="All">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+              <span class="sidebar-label">All</span>
+            </button>
+            <button type="button" class="sidebar-item" data-view="favorites" title="Favorites">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
+              <span class="sidebar-label">Favorites</span>
+            </button>
+            <button type="button" class="sidebar-item" data-view="tags" title="Tags">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+              <span class="sidebar-label">Tags</span>
+            </button>
+            <button type="button" class="sidebar-item" data-view="history" title="History">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+              <span class="sidebar-label">History</span>
+            </button>
+            <button type="button" class="sidebar-item" data-view="recently-deleted" title="Recently Deleted">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+              <span class="sidebar-label">Recently Deleted</span>
+            </button>
+          </nav>
+          <button type="button" class="sidebar-toggle" id="sidebarToggleLibrary" title="Collapse sidebar">
+            <svg class="sidebar-chevron-collapse" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg class="sidebar-chevron-expand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            <span class="sidebar-toggle-label">Collapse</span>
+          </button>
         </div>
-        <nav class="sidebar-nav">
-          <button type="button" class="sidebar-item active" data-view="all">All</button>
-          <button type="button" class="sidebar-item" data-view="favorites">Favorites</button>
-          <button type="button" class="sidebar-item" data-view="tags">Tags</button>
-          <button type="button" class="sidebar-item" data-view="history">History</button>
-          <button type="button" class="sidebar-item" data-view="recently-deleted">Recently Deleted</button>
-        </nav>
+        <div class="sidebar-resize-handle" id="sidebarResizeLibrary"></div>
       </aside>
       <main class="content-area">
         <div id="highlightsContainer">
@@ -622,17 +860,43 @@
 
     <!-- ==================== SETTINGS TAB ==================== -->
     <div class="tab-panel" id="tab-settings">
-      <aside class="sidebar">
-        <div class="search-bar">
-          <input type="text" placeholder="Search settings..." id="settingsSearch">
+      <aside class="sidebar" id="sidebar-settings">
+        <div class="sidebar-inner">
+          <div class="search-bar">
+            <div class="search-bar-wrap">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input type="text" placeholder="Search settings..." id="settingsSearch">
+            </div>
+          </div>
+          <nav class="sidebar-nav">
+            <button type="button" class="sidebar-item active" data-view="appearance" title="Appearance">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></span>
+              <span class="sidebar-label">Appearance</span>
+            </button>
+            <button type="button" class="sidebar-item" data-view="behaviour" title="Behaviour">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><rect x="1" y="5" width="22" height="14" rx="7" ry="7"/><circle cx="16" cy="12" r="3"/></svg></span>
+              <span class="sidebar-label">Behaviour</span>
+            </button>
+            <button type="button" class="sidebar-item" data-view="shortcuts" title="Shortcuts">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M6 16h12"/></svg></span>
+              <span class="sidebar-label">Shortcuts</span>
+            </button>
+            <button type="button" class="sidebar-item" data-view="data" title="Data">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></span>
+              <span class="sidebar-label">Data</span>
+            </button>
+            <button type="button" class="sidebar-item" data-view="sync" title="Sync">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span>
+              <span class="sidebar-label">Sync</span>
+            </button>
+          </nav>
+          <button type="button" class="sidebar-toggle" id="sidebarToggleSettings" title="Collapse sidebar">
+            <svg class="sidebar-chevron-collapse" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg class="sidebar-chevron-expand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            <span class="sidebar-toggle-label">Collapse</span>
+          </button>
         </div>
-        <nav class="sidebar-nav">
-          <button type="button" class="sidebar-item active" data-view="appearance">Appearance</button>
-          <button type="button" class="sidebar-item" data-view="behaviour">Behaviour</button>
-          <button type="button" class="sidebar-item" data-view="shortcuts">Shortcuts</button>
-          <button type="button" class="sidebar-item" data-view="data">Data</button>
-          <button type="button" class="sidebar-item" data-view="sync">Sync</button>
-        </nav>
+        <div class="sidebar-resize-handle" id="sidebarResizeSettings"></div>
       </aside>
       <main class="content-area">
         <!-- Appearance View -->
@@ -735,6 +999,17 @@
               Sync your highlights across devices will be available in a future update.
             </div>
           </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- ==================== ABOUT TAB ==================== -->
+    <div class="tab-panel" id="tab-about">
+      <main class="content-area about-content">
+        <div class="about-inner">
+          <h2 class="about-title">Highlight</h2>
+          <p class="about-tagline">Save and organize highlights from the web.</p>
+          <p class="about-meta">Version 1.0.1</p>
         </div>
       </main>
     </div>

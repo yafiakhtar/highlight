@@ -442,10 +442,93 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// ---- Sidebar collapse (icon-only) ----
+
+const SIDEBAR_COLLAPSED_KEY = 'optionsSidebarCollapsed';
+
+function getAllSidebars() {
+  return document.querySelectorAll('.sidebar');
+}
+
+function setSidebarCollapsed(collapsed) {
+  getAllSidebars().forEach(sidebar => {
+    sidebar.classList.toggle('collapsed', collapsed);
+  });
+  document.querySelectorAll('.sidebar-toggle').forEach(btn => {
+    btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+  });
+}
+
+function getSidebarCollapsed() {
+  const sidebar = document.querySelector('.sidebar');
+  return sidebar ? sidebar.classList.contains('collapsed') : false;
+}
+
+function loadSidebarCollapsedState() {
+  chrome.storage.local.get(SIDEBAR_COLLAPSED_KEY, (result) => {
+    const collapsed = result[SIDEBAR_COLLAPSED_KEY] === true;
+    setSidebarCollapsed(collapsed);
+  });
+}
+
+function saveSidebarCollapsedState(collapsed) {
+  chrome.storage.local.set({ [SIDEBAR_COLLAPSED_KEY]: collapsed });
+}
+
+function initSidebarCollapseToggle() {
+  document.querySelectorAll('.sidebar-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const collapsed = !getSidebarCollapsed();
+      setSidebarCollapsed(collapsed);
+      saveSidebarCollapsedState(collapsed);
+    });
+  });
+}
+
+function initSidebarResizeHandle() {
+  document.querySelectorAll('.sidebar-resize-handle').forEach(handle => {
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startCollapsed = getSidebarCollapsed();
+
+      function onMouseMove(e) {
+        const dx = e.clientX - startX;
+        if (startCollapsed) {
+          if (dx > 15) {
+            setSidebarCollapsed(false);
+            saveSidebarCollapsedState(false);
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+          }
+        } else {
+          if (dx < -15) {
+            setSidebarCollapsed(true);
+            saveSidebarCollapsedState(true);
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+          }
+        }
+      }
+
+      function onMouseUp() {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      }
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+  });
+}
+
 // ---- Init ----
 loadSettings();
 loadAllHighlights();
 initSidebarNavigation();
+loadSidebarCollapsedState();
+initSidebarCollapseToggle();
+initSidebarResizeHandle();
 
 // Initialize sidebar state for active tab on load
 const activeTab = document.querySelector('.tab-btn.active');
