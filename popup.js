@@ -16,6 +16,18 @@ document.getElementById('theme').addEventListener('click', () => {
   chrome.storage.local.set({ popupTheme: isDark ? 'dark' : 'light' });
 });
 
+// Live sync when theme is changed from options page
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.popupTheme) {
+    const theme = changes.popupTheme.newValue;
+    if (theme === 'dark') {
+      document.body.classList.add('dark');
+    } else {
+      document.body.classList.remove('dark');
+    }
+  }
+});
+
 // Trash button: clear highlights for current page
 document.getElementById('trash').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

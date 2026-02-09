@@ -1,3 +1,29 @@
+// ---- Theme (sync with popup via popupTheme) ----
+chrome.storage.local.get('popupTheme', (data) => {
+  if (data.popupTheme === 'dark') {
+    document.body.classList.add('dark');
+  } else {
+    document.body.classList.remove('dark');
+  }
+});
+
+document.getElementById('optionsThemeToggle').addEventListener('click', () => {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  chrome.storage.local.set({ popupTheme: isDark ? 'dark' : 'light' });
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.popupTheme) {
+    const theme = changes.popupTheme.newValue;
+    if (theme === 'dark') {
+      document.body.classList.add('dark');
+    } else {
+      document.body.classList.remove('dark');
+    }
+  }
+});
+
 // ---- Tab switching ----
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
