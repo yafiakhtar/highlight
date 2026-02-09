@@ -511,39 +511,16 @@ function initSidebarCollapseToggle() {
   });
 }
 
-function initSidebarResizeHandle() {
-  document.querySelectorAll('.sidebar-resize-handle').forEach(handle => {
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startCollapsed = getSidebarCollapsed();
-
-      function onMouseMove(e) {
-        const dx = e.clientX - startX;
-        if (startCollapsed) {
-          if (dx > 15) {
-            setSidebarCollapsed(false);
-            saveSidebarCollapsedState(false);
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-          }
-        } else {
-          if (dx < -15) {
-            setSidebarCollapsed(true);
-            saveSidebarCollapsedState(true);
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-          }
-        }
+function initSearchCollapsedBtn() {
+  document.querySelectorAll('.search-bar-collapsed-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setSidebarCollapsed(false);
+      saveSidebarCollapsedState(false);
+      const sidebar = btn.closest('.sidebar');
+      const input = sidebar ? sidebar.querySelector('.search-bar-wrap input') : null;
+      if (input) {
+        input.focus();
       }
-
-      function onMouseUp() {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-      }
-
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
     });
   });
 }
@@ -554,7 +531,7 @@ loadAllHighlights();
 initSidebarNavigation();
 loadSidebarCollapsedState();
 initSidebarCollapseToggle();
-initSidebarResizeHandle();
+initSearchCollapsedBtn();
 
 // Initialize sidebar state for active tab on load
 const activeTab = document.querySelector('.tab-btn.active');

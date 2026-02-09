@@ -168,6 +168,7 @@
       flex-direction: row;
       transition: width 0.2s ease;
       position: relative;
+      overflow: visible;
     }
 
     .sidebar-inner {
@@ -179,21 +180,6 @@
       min-width: 0;
     }
 
-    .sidebar-resize-handle {
-      position: absolute;
-      right: 0;
-      top: 0;
-      bottom: 0;
-      width: 8px;
-      cursor: col-resize;
-      background: transparent;
-      transition: background 0.15s ease;
-    }
-
-    .sidebar-resize-handle:hover {
-      background: var(--opt-border);
-    }
-
     .sidebar.collapsed {
       width: 56px;
     }
@@ -202,8 +188,37 @@
       padding: 12px 8px;
     }
 
-    .sidebar.collapsed .search-bar {
+    .sidebar.collapsed .search-bar .search-bar-wrap {
       display: none;
+    }
+
+    .search-bar-collapsed-btn {
+      display: none;
+      width: 100%;
+      padding: 10px;
+      border: none;
+      background: none;
+      border-radius: 0 6px 6px 0;
+      cursor: pointer;
+      color: var(--opt-text);
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .search-bar-collapsed-btn:hover {
+      background: var(--opt-surface-alt);
+      color: var(--opt-text-strong);
+    }
+
+    .sidebar.collapsed .search-bar .search-bar-collapsed-btn {
+      display: flex;
+    }
+
+    .search-bar-collapsed-btn svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
     }
 
     .sidebar.collapsed .sidebar-item {
@@ -220,8 +235,14 @@
     }
 
     .sidebar-toggle {
-      margin-top: auto;
-      padding: 8px 12px;
+      position: absolute;
+      right: -14px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 1;
+      padding: 8px;
+      width: 28px;
+      height: 28px;
       border: none;
       background: var(--opt-surface-alt);
       border-radius: 6px;
@@ -229,8 +250,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      font-size: 13px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
       color: var(--opt-text);
       font-family: inherit;
       transition: background 0.15s ease, color 0.15s ease;
@@ -247,6 +267,12 @@
 
     .sidebar.collapsed .sidebar-toggle {
       padding: 8px;
+      width: 28px;
+      height: 28px;
+    }
+
+    .sidebar-toggle .sidebar-toggle-label {
+      display: none;
     }
 
     .sidebar-toggle .sidebar-chevron-expand {
@@ -893,6 +919,9 @@
               <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input type="text" placeholder="Search highlights..." id="librarySearch">
             </div>
+            <button type="button" class="search-bar-collapsed-btn" title="Search" aria-label="Search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </button>
           </div>
           <nav class="sidebar-nav">
             <button type="button" class="sidebar-item active" data-view="all" title="All">
@@ -916,13 +945,12 @@
               <span class="sidebar-label">Recently Deleted</span>
             </button>
           </nav>
-          <button type="button" class="sidebar-toggle" id="sidebarToggleLibrary" title="Collapse sidebar">
-            <svg class="sidebar-chevron-collapse" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-            <svg class="sidebar-chevron-expand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            <span class="sidebar-toggle-label">Collapse</span>
-          </button>
         </div>
-        <div class="sidebar-resize-handle" id="sidebarResizeLibrary"></div>
+        <button type="button" class="sidebar-toggle" id="sidebarToggleLibrary" title="Collapse sidebar">
+          <svg class="sidebar-chevron-collapse" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg class="sidebar-chevron-expand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="sidebar-toggle-label">Collapse</span>
+        </button>
       </aside>
       <main class="content-area">
         <div id="highlightsContainer">
@@ -943,6 +971,9 @@
               <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input type="text" placeholder="Search settings..." id="settingsSearch">
             </div>
+            <button type="button" class="search-bar-collapsed-btn" title="Search" aria-label="Search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </button>
           </div>
           <nav class="sidebar-nav">
             <button type="button" class="sidebar-item active" data-view="appearance" title="Appearance">
@@ -966,13 +997,12 @@
               <span class="sidebar-label">Sync</span>
             </button>
           </nav>
-          <button type="button" class="sidebar-toggle" id="sidebarToggleSettings" title="Collapse sidebar">
-            <svg class="sidebar-chevron-collapse" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-            <svg class="sidebar-chevron-expand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            <span class="sidebar-toggle-label">Collapse</span>
-          </button>
         </div>
-        <div class="sidebar-resize-handle" id="sidebarResizeSettings"></div>
+        <button type="button" class="sidebar-toggle" id="sidebarToggleSettings" title="Collapse sidebar">
+          <svg class="sidebar-chevron-collapse" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg class="sidebar-chevron-expand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="sidebar-toggle-label">Collapse</span>
+        </button>
       </aside>
       <main class="content-area">
         <!-- Appearance View -->
