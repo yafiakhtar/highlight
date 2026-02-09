@@ -138,6 +138,7 @@
 
     body.dark .navbar-theme-btn .theme-icon.sun {
       display: block;
+      filter: brightness(0) invert(1);
     }
 
     .highlight-count {
@@ -875,11 +876,11 @@
         </div>
       </div>
       <div class="navbar-right">
+        <span class="highlight-count" id="highlightCount"></span>
         <button type="button" class="navbar-theme-btn" id="optionsThemeToggle" title="Toggle theme" aria-label="Toggle theme">
           <img src="assets/icons/moon.svg" alt="Dark mode" class="theme-icon moon">
           <img src="assets/icons/sun.svg" alt="Light mode" class="theme-icon sun">
         </button>
-        <span class="highlight-count" id="highlightCount"></span>
       </div>
     </header>
 
