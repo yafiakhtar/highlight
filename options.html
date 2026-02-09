@@ -22,18 +22,20 @@
     }
 
     .container {
-      max-width: 600px;
+      max-width: 1400px;
       margin: 0 auto;
-      padding: 52px 24px 80px;
+      padding: 24px;
     }
 
     /* ---- Header ---- */
 
     header {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       justify-content: space-between;
-      margin-bottom: 32px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e0e0e0;
     }
 
     header h1 {
@@ -41,6 +43,7 @@
       font-weight: 600;
       letter-spacing: 0.5px;
       text-transform: uppercase;
+      margin: 0;
     }
 
     .highlight-count {
@@ -49,12 +52,126 @@
       font-weight: 400;
     }
 
+    /* ---- Main Layout ---- */
+
+    .main-layout {
+      display: flex;
+      gap: 24px;
+      min-height: calc(100vh - 120px);
+    }
+
+    /* ---- Sidebar ---- */
+
+    .sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e8e8e8;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .search-bar {
+      margin-bottom: 8px;
+    }
+
+    .search-bar input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #fafafa;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .search-bar input:focus {
+      outline: none;
+      border-color: #1a1a1a;
+      background: #fff;
+    }
+
+    .search-bar input::placeholder {
+      color: #999;
+    }
+
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .sidebar-item {
+      padding: 10px 12px;
+      border: none;
+      background: none;
+      text-align: left;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.15s ease, color 0.15s ease;
+      font-family: inherit;
+    }
+
+    .sidebar-item:hover {
+      background: #f5f5f5;
+      color: #1a1a1a;
+    }
+
+    .sidebar-item.active {
+      background: #1a1a1a;
+      color: #fff;
+    }
+
+    /* ---- Content Area ---- */
+
+    .content-area {
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* Responsive: collapse sidebar on narrow screens */
+    @media (max-width: 768px) {
+      .main-layout {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+      }
+
+      .sidebar-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        gap: 8px;
+      }
+
+      .sidebar-item {
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+    }
+
+    .settings-view {
+      display: none;
+    }
+
+    .settings-view.active {
+      display: block;
+    }
+
     /* ---- Tabs ---- */
 
     .tab-bar {
       display: flex;
       gap: 0;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
       border-bottom: 1px solid #e0e0e0;
     }
 
@@ -85,7 +202,8 @@
     }
 
     .tab-panel.active {
-      display: block;
+      display: flex;
+      gap: 24px;
     }
 
     /* ---- Shared section card ---- */
@@ -480,99 +598,145 @@
 
     <!-- ==================== LIBRARY TAB ==================== -->
     <div class="tab-panel active" id="tab-library">
-      <div id="highlightsContainer">
-        <div class="empty-state">
-          <div class="empty-state-title">No highlights yet</div>
-          Highlight text on any webpage and it will appear here.
+      <aside class="sidebar">
+        <div class="search-bar">
+          <input type="text" placeholder="Search highlights..." id="librarySearch">
         </div>
-      </div>
+        <nav class="sidebar-nav">
+          <button type="button" class="sidebar-item active" data-view="all">All</button>
+          <button type="button" class="sidebar-item" data-view="favorites">Favorites</button>
+          <button type="button" class="sidebar-item" data-view="tags">Tags</button>
+          <button type="button" class="sidebar-item" data-view="history">History</button>
+          <button type="button" class="sidebar-item" data-view="recently-deleted">Recently Deleted</button>
+        </nav>
+      </aside>
+      <main class="content-area">
+        <div id="highlightsContainer">
+          <div class="empty-state">
+            <div class="empty-state-title">No highlights yet</div>
+            Highlight text on any webpage and it will appear here.
+          </div>
+        </div>
+      </main>
     </div>
 
     <!-- ==================== SETTINGS TAB ==================== -->
     <div class="tab-panel" id="tab-settings">
+      <aside class="sidebar">
+        <div class="search-bar">
+          <input type="text" placeholder="Search settings..." id="settingsSearch">
+        </div>
+        <nav class="sidebar-nav">
+          <button type="button" class="sidebar-item active" data-view="appearance">Appearance</button>
+          <button type="button" class="sidebar-item" data-view="behaviour">Behaviour</button>
+          <button type="button" class="sidebar-item" data-view="shortcuts">Shortcuts</button>
+          <button type="button" class="sidebar-item" data-view="data">Data</button>
+          <button type="button" class="sidebar-item" data-view="sync">Sync</button>
+        </nav>
+      </aside>
+      <main class="content-area">
+        <!-- Appearance View -->
+        <div class="settings-view active" data-view="appearance">
+          <div class="section">
+            <div class="section-title">Highlight Colors</div>
 
-      <!-- Colors -->
-      <div class="section">
-        <div class="section-title">Highlight Colors</div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Light mode</span>
+                <small>Used on light backgrounds</small>
+              </div>
+              <div class="color-input-wrap">
+                <input type="color" id="colorLight" class="color-swatch" value="#FFEA99">
+                <input type="text" id="colorLightHex" class="color-hex" value="#FFEA99" maxlength="7">
+              </div>
+            </div>
 
-        <div class="setting-row">
-          <div class="setting-label">
-            <span>Light mode</span>
-            <small>Used on light backgrounds</small>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Dark mode</span>
+                <small>Used on dark backgrounds</small>
+              </div>
+              <div class="color-input-wrap">
+                <input type="color" id="colorDark" class="color-swatch" value="#7C6129">
+                <input type="text" id="colorDarkHex" class="color-hex" value="#7C6129" maxlength="7">
+              </div>
+            </div>
+
+            <!-- Preview -->
+            <div class="preview-area preview-light" id="previewLight">
+              The quick brown fox <span class="preview-mark" id="previewMarkLight">jumps over</span> the lazy dog.
+            </div>
+            <div class="preview-area preview-dark" id="previewDark">
+              The quick brown fox <span class="preview-mark" id="previewMarkDark">jumps over</span> the lazy dog.
+            </div>
           </div>
-          <div class="color-input-wrap">
-            <input type="color" id="colorLight" class="color-swatch" value="#FFEA99">
-            <input type="text" id="colorLightHex" class="color-hex" value="#FFEA99" maxlength="7">
+        </div>
+
+        <!-- Behaviour View -->
+        <div class="settings-view" data-view="behaviour">
+          <div class="section">
+            <div class="section-title">Behavior</div>
+
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Show highlight button</span>
+                <small>Floating button appears when text is selected</small>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="showFab" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
         </div>
 
-        <div class="setting-row">
-          <div class="setting-label">
-            <span>Dark mode</span>
-            <small>Used on dark backgrounds</small>
+        <!-- Shortcuts View -->
+        <div class="settings-view" data-view="shortcuts">
+          <div class="section">
+            <div class="section-title">Keyboard Shortcuts</div>
+
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Highlight selection</span>
+              </div>
+              <span class="shortcut" id="shortcutDisplay">Ctrl+Shift+H</span>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Change shortcuts</span>
+                <small>Managed by your browser</small>
+              </div>
+              <button type="button" id="openShortcuts" class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px;">
+                Open settings
+              </button>
+            </div>
           </div>
-          <div class="color-input-wrap">
-            <input type="color" id="colorDark" class="color-swatch" value="#7C6129">
-            <input type="text" id="colorDarkHex" class="color-hex" value="#7C6129" maxlength="7">
+        </div>
+
+        <!-- Data View -->
+        <div class="settings-view" data-view="data">
+          <div class="section">
+            <div class="section-title">Data Management</div>
+
+            <div class="btn-row">
+              <button class="btn btn-primary" id="saveBtn">Save settings</button>
+              <button class="btn btn-secondary" id="resetBtn">Reset to defaults</button>
+            </div>
           </div>
         </div>
 
-        <!-- Preview -->
-        <div class="preview-area preview-light" id="previewLight">
-          The quick brown fox <span class="preview-mark" id="previewMarkLight">jumps over</span> the lazy dog.
-        </div>
-        <div class="preview-area preview-dark" id="previewDark">
-          The quick brown fox <span class="preview-mark" id="previewMarkDark">jumps over</span> the lazy dog.
-        </div>
-      </div>
-
-      <!-- Behavior -->
-      <div class="section">
-        <div class="section-title">Behavior</div>
-
-        <div class="setting-row">
-          <div class="setting-label">
-            <span>Show highlight button</span>
-            <small>Floating button appears when text is selected</small>
+        <!-- Sync View -->
+        <div class="settings-view" data-view="sync">
+          <div class="section">
+            <div class="section-title">Sync</div>
+            <div class="empty-state">
+              <div class="empty-state-title">Sync coming soon</div>
+              Sync your highlights across devices will be available in a future update.
+            </div>
           </div>
-          <label class="toggle">
-            <input type="checkbox" id="showFab" checked>
-            <span class="toggle-slider"></span>
-          </label>
         </div>
-      </div>
-
-      <!-- Shortcuts -->
-      <div class="section">
-        <div class="section-title">Keyboard Shortcuts</div>
-
-        <div class="setting-row">
-          <div class="setting-label">
-            <span>Highlight selection</span>
-          </div>
-          <span class="shortcut" id="shortcutDisplay">Ctrl+Shift+H</span>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-label">
-            <span>Change shortcuts</span>
-            <small>Managed by your browser</small>
-          </div>
-          <button type="button" id="openShortcuts" class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px;">
-            Open settings
-          </button>
-        </div>
-      </div>
-
-      <!-- Actions -->
-      <div class="section">
-        <div class="section-title">Actions</div>
-
-        <div class="btn-row">
-          <button class="btn btn-primary" id="saveBtn">Save settings</button>
-          <button class="btn btn-secondary" id="resetBtn">Reset to defaults</button>
-        </div>
-      </div>
+      </main>
     </div>
 
   </div>

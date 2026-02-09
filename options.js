@@ -4,9 +4,74 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    const panel = document.getElementById('tab-' + btn.dataset.tab);
+    panel.classList.add('active');
+    
+    // Reset sidebar to default item when switching tabs
+    resetSidebarForTab(btn.dataset.tab);
   });
 });
+
+// ---- Sidebar Navigation ----
+
+function resetSidebarForTab(tabName) {
+  const panel = document.getElementById('tab-' + tabName);
+  if (!panel) return;
+  
+  const sidebar = panel.querySelector('.sidebar');
+  if (!sidebar) return;
+  
+  // Remove active state from all sidebar items in this tab
+  sidebar.querySelectorAll('.sidebar-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  
+  // Set first sidebar item as active
+  const firstItem = sidebar.querySelector('.sidebar-item');
+  if (firstItem) {
+    firstItem.classList.add('active');
+    switchSidebarView(tabName, firstItem.dataset.view);
+  }
+}
+
+function switchSidebarView(tabName, viewName) {
+  const panel = document.getElementById('tab-' + tabName);
+  if (!panel) return;
+  
+  if (tabName === 'library') {
+    // Library tab: all views show the same content for now (Phase 1)
+    // In future phases, this will filter highlights
+    // For now, just update active state
+    const sidebar = panel.querySelector('.sidebar');
+    sidebar.querySelectorAll('.sidebar-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.view === viewName);
+    });
+  } else if (tabName === 'settings') {
+    // Settings tab: show/hide corresponding settings view
+    panel.querySelectorAll('.settings-view').forEach(view => {
+      view.classList.toggle('active', view.dataset.view === viewName);
+    });
+    
+    // Update sidebar active state
+    const sidebar = panel.querySelector('.sidebar');
+    sidebar.querySelectorAll('.sidebar-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.view === viewName);
+    });
+  }
+}
+
+// Initialize sidebar navigation handlers
+function initSidebarNavigation() {
+  document.querySelectorAll('.sidebar-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const panel = item.closest('.tab-panel');
+      if (!panel) return;
+      
+      const tabName = panel.id.replace('tab-', '');
+      switchSidebarView(tabName, item.dataset.view);
+    });
+  });
+}
 
 // ---- URL parameter handling ----
 function switchToTab(tabName) {
@@ -15,7 +80,11 @@ function switchToTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     tabBtn.classList.add('active');
-    document.getElementById('tab-' + tabName).classList.add('active');
+    const panel = document.getElementById('tab-' + tabName);
+    panel.classList.add('active');
+    
+    // Reset sidebar to default item when switching tabs
+    resetSidebarForTab(tabName);
   }
 }
 
@@ -376,3 +445,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // ---- Init ----
 loadSettings();
 loadAllHighlights();
+initSidebarNavigation();
+
+// Initialize sidebar state for active tab on load
+const activeTab = document.querySelector('.tab-btn.active');
+if (activeTab) {
+  resetSidebarForTab(activeTab.dataset.tab);
+}
