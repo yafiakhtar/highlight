@@ -173,10 +173,12 @@ function hexToHSL(hex) {
   } else {
     const d = max - min;
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-      case g: h = ((b - r) / d + 2) / 6; break;
-      default: h = ((r - g) / d + 4) / 6; break;
+    if (r >= g && r >= b) {
+      h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    } else if (g >= b) {
+      h = ((b - r) / d + 2) / 6;
+    } else {
+      h = ((r - g) / d + 4) / 6;
     }
   }
   return { h: h * 360, s: s * 100, l: l * 100 };
@@ -218,7 +220,7 @@ function deriveDarkFromLight(hex) {
 
 function deriveLightFromDark(hex) {
   const { h } = hexToHSL(hex);
-  return hslToHex(h, 30, 90);
+  return hslToHex(h, 52, 85);
 }
 
 // Validate hex color input
