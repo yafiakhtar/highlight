@@ -199,7 +199,8 @@ function getPageTheme() {
 }
 
 // Highlight the current selection
-function highlightSelection() {
+async function highlightSelection() {
+  await loadUserSettings();
   const selection = window.getSelection();
   
   if (!selection || selection.isCollapsed || !selection.toString().trim()) {
@@ -526,7 +527,8 @@ function createHighlightFab() {
   return highlightFab;
 }
 
-function showHighlightFab(x, y) {
+async function showHighlightFab(x, y) {
+  await loadUserSettings();
   if (!userSettings.showFab) return;
   if (!highlightFab) createHighlightFab();
   

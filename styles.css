@@ -11,22 +11,14 @@
   border-radius: 2px;
 }
 
-/* Light mode (default) */
+/* Light mode (default) - background set inline by content script */
 .text-highlighter-mark.hl-light {
-  background-color: #FFEA99 !important;
   color: #1a1a1a !important;  /* dark text for contrast */
 }
-.text-highlighter-mark.hl-light:hover {
-  background-color: #ffe066 !important;
-}
 
-/* Dark mode */
+/* Dark mode - background set inline by content script */
 .text-highlighter-mark.hl-dark {
-  background-color: #7C6129 !important;
   color: #fff !important;  /* light text for contrast */
-}
-.text-highlighter-mark.hl-dark:hover {
-  background-color: #8d7030 !important;
 }
 
 /* Floating action button for highlighting */
