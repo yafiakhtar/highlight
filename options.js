@@ -157,22 +157,96 @@ function syncDarkColor(hex) {
   previewMarkDark.style.color = '#fff';
 }
 
+// Hex <-> HSL for cross-derivation (h 0-360, s/l 0-100)
+function hexToHSL(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) / 255;
+  const g = ((n >> 8) & 0xff) / 255;
+  const b = (n & 0xff) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h, s;
+  const l = (max + min) / 2;
+  if (max === min) {
+    h = 0;
+    s = 0;
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      default: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+function hslToHex(h, s, l) {
+  h = h / 360;
+  s = s / 100;
+  l = l / 100;
+  let r, g, b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  const toHex = x => {
+    const n = Math.round(Math.max(0, Math.min(1, x)) * 255);
+    return n.toString(16).padStart(2, '0');
+  };
+  return '#' + toHex(r) + toHex(g) + toHex(b);
+}
+
+function deriveDarkFromLight(hex) {
+  const { h } = hexToHSL(hex);
+  return hslToHex(h, 45, 48);
+}
+
+function deriveLightFromDark(hex) {
+  const { h } = hexToHSL(hex);
+  return hslToHex(h, 30, 90);
+}
+
 // Validate hex color input
 function isValidHex(str) {
   return /^#[0-9A-Fa-f]{6}$/.test(str);
 }
 
 // ---- Event listeners for color inputs ----
+let skipCrossUpdate = false;
 
 colorLightPicker.addEventListener('input', (e) => {
-  syncLightColor(e.target.value);
+  if (skipCrossUpdate) { skipCrossUpdate = false; return; }
+  const hex = e.target.value;
+  syncLightColor(hex);
+  skipCrossUpdate = true;
+  syncDarkColor(deriveDarkFromLight(hex));
+  setTimeout(() => { skipCrossUpdate = false; }, 0);
 });
 
 colorLightHex.addEventListener('input', (e) => {
+  if (skipCrossUpdate) { skipCrossUpdate = false; return; }
   let val = e.target.value;
   if (!val.startsWith('#')) val = '#' + val;
   if (isValidHex(val)) {
     syncLightColor(val);
+    skipCrossUpdate = true;
+    syncDarkColor(deriveDarkFromLight(val));
+    setTimeout(() => { skipCrossUpdate = false; }, 0);
   }
 });
 
@@ -181,18 +255,30 @@ colorLightHex.addEventListener('blur', (e) => {
   if (!val.startsWith('#')) val = '#' + val;
   if (!isValidHex(val)) {
     syncLightColor(colorLightPicker.value);
+    skipCrossUpdate = true;
+    syncDarkColor(deriveDarkFromLight(colorLightPicker.value));
+    setTimeout(() => { skipCrossUpdate = false; }, 0);
   }
 });
 
 colorDarkPicker.addEventListener('input', (e) => {
-  syncDarkColor(e.target.value);
+  if (skipCrossUpdate) { skipCrossUpdate = false; return; }
+  const hex = e.target.value;
+  syncDarkColor(hex);
+  skipCrossUpdate = true;
+  syncLightColor(deriveLightFromDark(hex));
+  setTimeout(() => { skipCrossUpdate = false; }, 0);
 });
 
 colorDarkHex.addEventListener('input', (e) => {
+  if (skipCrossUpdate) { skipCrossUpdate = false; return; }
   let val = e.target.value;
   if (!val.startsWith('#')) val = '#' + val;
   if (isValidHex(val)) {
     syncDarkColor(val);
+    skipCrossUpdate = true;
+    syncLightColor(deriveLightFromDark(val));
+    setTimeout(() => { skipCrossUpdate = false; }, 0);
   }
 });
 
@@ -201,6 +287,9 @@ colorDarkHex.addEventListener('blur', (e) => {
   if (!val.startsWith('#')) val = '#' + val;
   if (!isValidHex(val)) {
     syncDarkColor(colorDarkPicker.value);
+    skipCrossUpdate = true;
+    syncLightColor(deriveLightFromDark(colorDarkPicker.value));
+    setTimeout(() => { skipCrossUpdate = false; }, 0);
   }
 });
 
