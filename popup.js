@@ -16,14 +16,23 @@ document.getElementById('theme').addEventListener('click', () => {
   chrome.storage.local.set({ popupTheme: isDark ? 'dark' : 'light' });
 });
 
-// Live sync when theme is changed from options page
+// Live sync when theme or highlight settings change
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local' && changes.popupTheme) {
+  if (areaName !== 'local') return;
+  if (changes.popupTheme) {
     const theme = changes.popupTheme.newValue;
     if (theme === 'dark') {
       document.body.classList.add('dark');
     } else {
       document.body.classList.remove('dark');
+    }
+  }
+  if (changes.highlightSettings) {
+    const s = changes.highlightSettings.newValue;
+    if (s) {
+      fabToggleBtn.classList.toggle('fab-disabled', s.showFab === false);
+      fabToggleBtn.title = s.showFab === false ? 'Enable FAB' : 'Disable FAB';
+      applyFabColors(s.colorLight, s.colorDark);
     }
   }
 });
@@ -50,13 +59,24 @@ document.getElementById('settings').addEventListener('click', () => {
 // FAB toggle button: enable/disable the floating action button
 const fabToggleBtn = document.getElementById('fab-toggle');
 
-// Load saved FAB preference
+const FAB_COLOR_LIGHT_DEFAULT = '#FFEA99';
+const FAB_COLOR_DARK_DEFAULT = '#7C6129';
+
+function applyFabColors(colorLight, colorDark) {
+  const lightEl = document.getElementById('fab-color-light');
+  const darkEl = document.getElementById('fab-color-dark');
+  if (lightEl) lightEl.setAttribute('fill', colorLight || FAB_COLOR_LIGHT_DEFAULT);
+  if (darkEl) darkEl.setAttribute('fill', colorDark || FAB_COLOR_DARK_DEFAULT);
+}
+
+// Load saved FAB preference and split colours
 chrome.storage.local.get('highlightSettings', (data) => {
   const settings = data.highlightSettings || {};
   if (settings.showFab === false) {
     fabToggleBtn.classList.add('fab-disabled');
     fabToggleBtn.title = 'Enable FAB';
   }
+  applyFabColors(settings.colorLight, settings.colorDark);
 });
 
 fabToggleBtn.addEventListener('click', () => {

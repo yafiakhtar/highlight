@@ -14,12 +14,21 @@ document.getElementById('optionsThemeToggle').addEventListener('click', () => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local' && changes.popupTheme) {
+  if (areaName !== 'local') return;
+  if (changes.popupTheme) {
     const theme = changes.popupTheme.newValue;
     if (theme === 'dark') {
       document.body.classList.add('dark');
     } else {
       document.body.classList.remove('dark');
+    }
+  }
+  if (changes.highlightSettings) {
+    const s = changes.highlightSettings.newValue;
+    if (s) {
+      syncLightColor(s.colorLight ?? DEFAULTS.colorLight);
+      syncDarkColor(s.colorDark ?? DEFAULTS.colorDark);
+      if (s.showFab !== undefined) showFabToggle.checked = s.showFab;
     }
   }
 });
@@ -238,6 +247,7 @@ colorLightPicker.addEventListener('input', (e) => {
   skipCrossUpdate = true;
   syncDarkColor(deriveDarkFromLight(hex));
   setTimeout(() => { skipCrossUpdate = false; }, 0);
+  persistColorsToStorage();
 });
 
 colorLightHex.addEventListener('input', (e) => {
@@ -249,6 +259,7 @@ colorLightHex.addEventListener('input', (e) => {
     skipCrossUpdate = true;
     syncDarkColor(deriveDarkFromLight(val));
     setTimeout(() => { skipCrossUpdate = false; }, 0);
+    persistColorsToStorage();
   }
 });
 
@@ -260,6 +271,7 @@ colorLightHex.addEventListener('blur', (e) => {
     skipCrossUpdate = true;
     syncDarkColor(deriveDarkFromLight(colorLightPicker.value));
     setTimeout(() => { skipCrossUpdate = false; }, 0);
+    persistColorsToStorage();
   }
 });
 
@@ -270,6 +282,7 @@ colorDarkPicker.addEventListener('input', (e) => {
   skipCrossUpdate = true;
   syncLightColor(deriveLightFromDark(hex));
   setTimeout(() => { skipCrossUpdate = false; }, 0);
+  persistColorsToStorage();
 });
 
 colorDarkHex.addEventListener('input', (e) => {
@@ -281,6 +294,7 @@ colorDarkHex.addEventListener('input', (e) => {
     skipCrossUpdate = true;
     syncLightColor(deriveLightFromDark(val));
     setTimeout(() => { skipCrossUpdate = false; }, 0);
+    persistColorsToStorage();
   }
 });
 
@@ -292,6 +306,7 @@ colorDarkHex.addEventListener('blur', (e) => {
     skipCrossUpdate = true;
     syncLightColor(deriveLightFromDark(colorDarkPicker.value));
     setTimeout(() => { skipCrossUpdate = false; }, 0);
+    persistColorsToStorage();
   }
 });
 
@@ -313,6 +328,15 @@ function saveSettings() {
   chrome.storage.local.set({ highlightSettings: settings }, () => {
     showToast('Settings saved');
   });
+}
+
+function persistColorsToStorage() {
+  const settings = {
+    colorLight: colorLightPicker.value,
+    colorDark: colorDarkPicker.value,
+    showFab: showFabToggle.checked
+  };
+  chrome.storage.local.set({ highlightSettings: settings });
 }
 
 function loadSettings() {
