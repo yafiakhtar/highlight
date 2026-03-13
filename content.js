@@ -566,6 +566,12 @@ function createHighlightFab() {
 
   highlightFab = document.createElement('div');
   highlightFab.className = 'text-highlighter-fab';
+  // Layout: horizontal row of color buttons only (no background)
+  highlightFab.style.display = 'flex';
+  highlightFab.style.alignItems = 'center';
+  highlightFab.style.justifyContent = 'center';
+  highlightFab.style.gap = '4px';
+  highlightFab.style.display = 'none';
   document.body.appendChild(highlightFab);
 
   // Create up to four color buttons based on presets
