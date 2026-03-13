@@ -511,6 +511,15 @@ function renderHighlights(pages, totalCount) {
       text.className = 'snippet-text';
       text.textContent = hl.text;
 
+      const dot = document.createElement('span');
+      dot.className = 'snippet-color-dot';
+      if (typeof hl.color === 'string' && hl.color.trim() !== '') {
+        dot.style.backgroundColor = hl.color;
+        dot.title = hl.color;
+      } else {
+        dot.style.display = 'none';
+      }
+
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'snippet-delete';
@@ -519,6 +528,7 @@ function renderHighlights(pages, totalCount) {
       del.addEventListener('click', () => deleteHighlight(page.url, hl.id));
 
       item.appendChild(text);
+      item.appendChild(dot);
       item.appendChild(del);
       list.appendChild(item);
     });

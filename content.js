@@ -60,13 +60,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // Apply custom highlight colors to existing marks
 function applyCustomColors() {
-  document.querySelectorAll('.text-highlighter-mark.hl-light').forEach(mark => {
-    mark.style.backgroundColor = userSettings.colorLight;
-  });
-  document.querySelectorAll('.text-highlighter-mark.hl-dark').forEach(mark => {
-    mark.style.backgroundColor = userSettings.colorDark;
-  });
-  // Update FAB colors too
+  // Only update FAB colors; existing marks keep their stored colors
   if (highlightFab) {
     if (highlightFab.classList.contains('fab-light')) {
       highlightFab.style.backgroundColor = userSettings.colorLight;
@@ -107,7 +101,8 @@ function saveHighlights() {
       id,
       text: mark.textContent,
       xpath: getXPath(mark.parentNode),
-      offset: getTextOffset(mark)
+      offset: getTextOffset(mark),
+      color: mark.style.backgroundColor || null
     });
   });
 
@@ -426,10 +421,12 @@ function restoreHighlights() {
   chrome.storage.local.get(key, (result) => {
     const highlights = result[key];
     if (!highlights || !highlights.length) return;
-    
+
     const theme = getPageTheme();
     const themeClass = theme === 'dark' ? 'hl-dark' : 'hl-light';
-    
+    const fallbackColor = theme === 'dark' ? userSettings.colorDark : userSettings.colorLight;
+    let needsColorBackfill = false;
+
     highlights.forEach(highlight => {
       try {
         // Find the element using XPath
@@ -469,11 +466,17 @@ function restoreHighlights() {
               const range = document.createRange();
               range.setStart(node, idx);
               range.setEnd(node, idx + highlight.text.length);
-              
+
+              const hasStoredColor = typeof highlight.color === 'string' && highlight.color.trim() !== '';
+              const appliedColor = hasStoredColor ? highlight.color : fallbackColor;
+              if (!hasStoredColor) needsColorBackfill = true;
+
               const mark = document.createElement('mark');
               mark.className = 'text-highlighter-mark ' + themeClass;
               mark.dataset.highlightId = highlight.id;
-              mark.style.backgroundColor = theme === 'dark' ? userSettings.colorDark : userSettings.colorLight;
+              if (appliedColor) {
+                mark.style.backgroundColor = appliedColor;
+              }
               
               try {
                 range.surroundContents(mark);
@@ -492,6 +495,12 @@ function restoreHighlights() {
         // Ignore errors during restore
       }
     });
+
+    // Self-heal: if any restored highlight lacked a stored color, persist the
+    // colors currently on the DOM marks so future reloads remain stable.
+    if (needsColorBackfill) {
+      saveHighlights();
+    }
   });
 }
 
