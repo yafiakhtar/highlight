@@ -2,7 +2,35 @@
 const DEFAULT_SETTINGS = {
   colorLight: '#FFEA99',
   colorDark: '#7C6129',
-  showFab: true
+  showFab: true,
+  // Four quick highlight presets for the FAB palette.
+  // Each preset has a name and per-theme colors.
+  presets: [
+    {
+      id: 'preset1',
+      name: 'General',
+      colorLight: '#FFEA99',
+      colorDark: '#7C6129'
+    },
+    {
+      id: 'preset2',
+      name: 'Important',
+      colorLight: '#FFD1A3',
+      colorDark: '#A05A1F'
+    },
+    {
+      id: 'preset3',
+      name: 'Reference',
+      colorLight: '#C7F0D8',
+      colorDark: '#2E7C4F'
+    },
+    {
+      id: 'preset4',
+      name: 'Question',
+      colorLight: '#CDE5FF',
+      colorDark: '#245B9B'
+    }
+  ]
 };
 
 let userSettings = { ...DEFAULT_SETTINGS };
@@ -58,16 +86,26 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// Apply custom highlight colors to existing marks
+// Apply custom highlight colors to existing marks / FAB palette
 function applyCustomColors() {
-  // Only update FAB colors; existing marks keep their stored colors
-  if (highlightFab) {
-    if (highlightFab.classList.contains('fab-light')) {
-      highlightFab.style.backgroundColor = userSettings.colorLight;
-    } else if (highlightFab.classList.contains('fab-dark')) {
-      highlightFab.style.backgroundColor = userSettings.colorDark;
+  // Only update FAB palette colors; existing marks keep their stored colors
+  if (!highlightFab || !Array.isArray(highlightFabButtons) || highlightFabButtons.length === 0) return;
+  const theme = getPageTheme();
+  const isDark = theme === 'dark';
+  const presets = Array.isArray(userSettings.presets) && userSettings.presets.length
+    ? userSettings.presets
+    : DEFAULT_SETTINGS.presets;
+
+  highlightFabButtons.forEach((btn, index) => {
+    if (!btn) return;
+    const preset = presets[index] || presets[0];
+    const color = isDark
+      ? (preset.colorDark || userSettings.colorDark)
+      : (preset.colorLight || userSettings.colorLight);
+    if (color) {
+      btn.style.backgroundColor = color;
     }
-  }
+  });
 }
 
 // Hide FAB immediately when setting is turned off
@@ -194,7 +232,7 @@ function getPageTheme() {
 }
 
 // Highlight the current selection
-async function highlightSelection() {
+async function highlightSelection(presetIndex = 0) {
   await loadUserSettings();
   const selection = window.getSelection();
   
@@ -216,12 +254,21 @@ async function highlightSelection() {
   const highlightId = generateId();
   const theme = getPageTheme();
   const themeClass = theme === 'dark' ? 'hl-dark' : 'hl-light';
+  const presets = Array.isArray(userSettings.presets) && userSettings.presets.length
+    ? userSettings.presets
+    : DEFAULT_SETTINGS.presets;
+  const preset = presets[presetIndex] || presets[0];
+  const appliedColor = theme === 'dark'
+    ? (preset.colorDark || userSettings.colorDark)
+    : (preset.colorLight || userSettings.colorLight);
   
   try {
     const mark = document.createElement('mark');
     mark.className = 'text-highlighter-mark ' + themeClass;
     mark.dataset.highlightId = highlightId;
-    mark.style.backgroundColor = theme === 'dark' ? userSettings.colorDark : userSettings.colorLight;
+    if (appliedColor) {
+      mark.style.backgroundColor = appliedColor;
+    }
     
     // Use surroundContents for simple selections
     range.surroundContents(mark);
@@ -252,7 +299,9 @@ async function highlightSelection() {
         const mark = document.createElement('mark');
         mark.className = 'text-highlighter-mark ' + themeClass;
         mark.dataset.highlightId = highlightId;
-        mark.style.backgroundColor = theme === 'dark' ? userSettings.colorDark : userSettings.colorLight;
+        if (appliedColor) {
+          mark.style.backgroundColor = appliedColor;
+        }
         
         try {
           nodeRange.surroundContents(mark);
@@ -505,34 +554,66 @@ function restoreHighlights() {
 }
 
 // ============================================
-// Floating Action Button (FAB) for highlighting
+// Floating Action Button (FAB) palette
 // ============================================
 
-// Create the FAB element once
+// Create the FAB palette element once
 let highlightFab = null;
+let highlightFabButtons = [];
 
 function createHighlightFab() {
   if (highlightFab) return highlightFab;
-  
+
   highlightFab = document.createElement('div');
   highlightFab.className = 'text-highlighter-fab';
-  highlightFab.title = 'Highlight selection';
   document.body.appendChild(highlightFab);
-  
-  // Click handler - highlight and hide
-  highlightFab.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    highlightSelection();
-    hideHighlightFab();
+
+  // Create up to four color buttons based on presets
+  const presets = Array.isArray(userSettings.presets) && userSettings.presets.length
+    ? userSettings.presets
+    : DEFAULT_SETTINGS.presets;
+
+  highlightFabButtons = [];
+  presets.slice(0, 4).forEach((preset, index) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'text-highlighter-fab-color';
+    btn.title = preset.name || '';
+    // Minimal inline styling to ensure circular colored dots
+    btn.style.border = 'none';
+    btn.style.padding = '0';
+    btn.style.margin = '0 3px';
+    btn.style.width = '18px';
+    btn.style.height = '18px';
+    btn.style.borderRadius = '999px';
+    btn.style.cursor = 'pointer';
+
+    // Prevent mousedown from clearing selection
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      highlightSelection(index);
+      hideHighlightFab();
+    });
+
+    highlightFab.appendChild(btn);
+    highlightFabButtons.push(btn);
   });
-  
-  // Prevent mousedown from clearing selection
+
+  // Prevent mousedown on the container from clearing selection
   highlightFab.addEventListener('mousedown', (e) => {
     e.preventDefault();
     e.stopPropagation();
   });
-  
+
+  // Apply initial colors
+  applyCustomColors();
+
   return highlightFab;
 }
 
@@ -540,13 +621,10 @@ async function showHighlightFab(x, y) {
   await loadUserSettings();
   if (!userSettings.showFab) return;
   if (!highlightFab) createHighlightFab();
-  
-  // Apply theme-appropriate color
-  const theme = getPageTheme();
-  highlightFab.classList.remove('fab-light', 'fab-dark');
-  highlightFab.classList.add(theme === 'dark' ? 'fab-dark' : 'fab-light');
-  highlightFab.style.backgroundColor = theme === 'dark' ? userSettings.colorDark : userSettings.colorLight;
-  
+
+  // Update palette colors for current theme
+  applyCustomColors();
+
   highlightFab.style.left = x + 'px';
   highlightFab.style.top = y + 'px';
   highlightFab.style.display = 'block';

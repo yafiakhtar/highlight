@@ -29,6 +29,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       syncLightColor(s.colorLight ?? DEFAULTS.colorLight);
       syncDarkColor(s.colorDark ?? DEFAULTS.colorDark);
       if (s.showFab !== undefined) showFabToggle.checked = s.showFab;
+      syncPresetSwatches(s.presets || DEFAULTS.presets);
     }
   }
 });
@@ -134,7 +135,35 @@ if (tabParam) {
 const DEFAULTS = {
   colorLight: '#FFEA99',
   colorDark: '#7C6129',
-  showFab: true
+  showFab: true,
+  // Four quick highlight presets for the FAB palette.
+  // Each preset has a name and per-theme colors.
+  presets: [
+    {
+      id: 'preset1',
+      name: 'General',
+      colorLight: '#FFEA99',
+      colorDark: '#7C6129'
+    },
+    {
+      id: 'preset2',
+      name: 'Important',
+      colorLight: '#FFD1A3',
+      colorDark: '#A05A1F'
+    },
+    {
+      id: 'preset3',
+      name: 'Reference',
+      colorLight: '#C7F0D8',
+      colorDark: '#2E7C4F'
+    },
+    {
+      id: 'preset4',
+      name: 'Question',
+      colorLight: '#CDE5FF',
+      colorDark: '#245B9B'
+    }
+  ]
 };
 
 // DOM elements
@@ -142,6 +171,12 @@ const colorLightPicker = document.getElementById('colorLight');
 const colorLightHex = document.getElementById('colorLightHex');
 const colorDarkPicker = document.getElementById('colorDark');
 const colorDarkHex = document.getElementById('colorDarkHex');
+const fabPresetSwatches = [
+  document.getElementById('fabPreset1'),
+  document.getElementById('fabPreset2'),
+  document.getElementById('fabPreset3'),
+  document.getElementById('fabPreset4')
+];
 const showFabToggle = document.getElementById('showFab');
 const previewMarkLight = document.getElementById('previewMarkLight');
 const previewMarkDark = document.getElementById('previewMarkDark');
@@ -164,6 +199,18 @@ function syncDarkColor(hex) {
   colorDarkHex.value = hex.toUpperCase();
   previewMarkDark.style.backgroundColor = hex;
   previewMarkDark.style.color = '#fff';
+}
+
+// Sync FAB preset swatches for the current theme
+function syncPresetSwatches(presets) {
+  if (!Array.isArray(presets) || presets.length === 0) return;
+  const isDark = document.body.classList.contains('dark');
+  fabPresetSwatches.forEach((swatch, index) => {
+    if (!swatch) return;
+    const preset = presets[index] || presets[0];
+    const color = isDark ? (preset.colorDark || DEFAULTS.colorDark) : (preset.colorLight || DEFAULTS.colorLight);
+    swatch.value = color;
+  });
 }
 
 // Hex <-> HSL for cross-derivation (h 0-360, s/l 0-100)
@@ -310,6 +357,30 @@ colorDarkHex.addEventListener('blur', (e) => {
   }
 });
 
+// ---- FAB preset swatch handlers ----
+
+fabPresetSwatches.forEach((swatch, index) => {
+  if (!swatch) return;
+  swatch.addEventListener('input', (e) => {
+    const newColor = e.target.value;
+    chrome.storage.local.get('highlightSettings', (result) => {
+      const current = result.highlightSettings || DEFAULTS;
+      const presets = Array.isArray(current.presets) && current.presets.length
+        ? current.presets
+        : DEFAULTS.presets.map(p => ({ ...p }));
+      const preset = presets[index] || presets[0];
+      const isDark = document.body.classList.contains('dark');
+      if (isDark) {
+        preset.colorDark = newColor;
+      } else {
+        preset.colorLight = newColor;
+      }
+      const updated = { ...current, presets };
+      chrome.storage.local.set({ highlightSettings: updated });
+    });
+  });
+});
+
 // ---- Save / Load / Reset ----
 
 function showToast(message) {
@@ -319,24 +390,32 @@ function showToast(message) {
 }
 
 function saveSettings() {
-  const settings = {
-    colorLight: colorLightPicker.value,
-    colorDark: colorDarkPicker.value,
-    showFab: showFabToggle.checked
-  };
+  chrome.storage.local.get('highlightSettings', (result) => {
+    const existing = result.highlightSettings || DEFAULTS;
+    const settings = {
+      ...existing,
+      colorLight: colorLightPicker.value,
+      colorDark: colorDarkPicker.value,
+      showFab: showFabToggle.checked
+    };
 
-  chrome.storage.local.set({ highlightSettings: settings }, () => {
-    showToast('Settings saved');
+    chrome.storage.local.set({ highlightSettings: settings }, () => {
+      showToast('Settings saved');
+    });
   });
 }
 
 function persistColorsToStorage() {
-  const settings = {
-    colorLight: colorLightPicker.value,
-    colorDark: colorDarkPicker.value,
-    showFab: showFabToggle.checked
-  };
-  chrome.storage.local.set({ highlightSettings: settings });
+  chrome.storage.local.get('highlightSettings', (result) => {
+    const existing = result.highlightSettings || DEFAULTS;
+    const settings = {
+      ...existing,
+      colorLight: colorLightPicker.value,
+      colorDark: colorDarkPicker.value,
+      showFab: showFabToggle.checked
+    };
+    chrome.storage.local.set({ highlightSettings: settings });
+  });
 }
 
 function loadSettings() {
@@ -346,6 +425,7 @@ function loadSettings() {
     syncLightColor(s.colorLight || DEFAULTS.colorLight);
     syncDarkColor(s.colorDark || DEFAULTS.colorDark);
     showFabToggle.checked = s.showFab !== undefined ? s.showFab : DEFAULTS.showFab;
+    syncPresetSwatches(s.presets || DEFAULTS.presets);
   });
 }
 
