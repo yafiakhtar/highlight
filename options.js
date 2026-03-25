@@ -70,18 +70,19 @@ function resetSidebarForTab(tabName) {
   }
 }
 
+let currentLibraryView = 'all';
+
 function switchSidebarView(tabName, viewName) {
   const panel = document.getElementById('tab-' + tabName);
   if (!panel) return;
   
   if (tabName === 'library') {
-    // Library tab: all views show the same content for now (Phase 1)
-    // In future phases, this will filter highlights
-    // For now, just update active state
+    currentLibraryView = viewName;
     const sidebar = panel.querySelector('.sidebar');
     sidebar.querySelectorAll('.sidebar-item').forEach(item => {
       item.classList.toggle('active', item.dataset.view === viewName);
     });
+    refreshLibrary();
   } else if (tabName === 'settings') {
     // Settings tab: show/hide corresponding settings view
     panel.querySelectorAll('.settings-view').forEach(view => {
@@ -473,6 +474,20 @@ chrome.commands.getAll((commands) => {
 const highlightsContainer = document.getElementById('highlightsContainer');
 const highlightCount = document.getElementById('highlightCount');
 
+const RECENTLY_DELETED_KEY = 'recentlyDeletedHighlights';
+
+function generateTrashId() {
+  return 'tr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
+}
+
+function refreshLibrary() {
+  if (currentLibraryView === 'recently-deleted') {
+    loadRecentlyDeleted();
+  } else {
+    loadAllHighlights();
+  }
+}
+
 // Load all highlights from storage and render them
 function loadAllHighlights() {
   chrome.storage.local.get(null, (all) => {
@@ -524,6 +539,192 @@ function loadAllHighlights() {
     pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
 
     renderHighlights(pages, totalCount);
+  });
+}
+
+function loadRecentlyDeleted() {
+  chrome.storage.local.get(RECENTLY_DELETED_KEY, (result) => {
+    const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
+    const sorted = trash.slice().sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+
+    if (sorted.length === 0) {
+      renderEmptyTrash();
+      return;
+    }
+
+    const byUrl = new Map();
+    for (const entry of sorted) {
+      const url = entry.pageUrl;
+      if (!byUrl.has(url)) {
+        byUrl.set(url, {
+          url,
+          title: entry.pageTitle || url,
+          entries: []
+        });
+      }
+      byUrl.get(url).entries.push(entry);
+    }
+
+    const pages = Array.from(byUrl.values()).sort((a, b) => {
+      const maxA = Math.max(...a.entries.map(e => e.deletedAt || 0));
+      const maxB = Math.max(...b.entries.map(e => e.deletedAt || 0));
+      return maxB - maxA;
+    });
+
+    renderRecentlyDeleted(pages, sorted.length);
+  });
+}
+
+function renderEmptyTrash() {
+  highlightCount.textContent = '';
+  highlightsContainer.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-state-title">Nothing in Recently Deleted</div>
+      Deleted highlights will appear here. You can restore them or remove them forever.
+    </div>
+  `;
+}
+
+function renderRecentlyDeleted(pages, totalTrashCount) {
+  highlightCount.textContent = totalTrashCount + ' deleted';
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'page-header';
+  toolbar.style.marginBottom = '16px';
+  const emptyTrashBtn = document.createElement('button');
+  emptyTrashBtn.type = 'button';
+  emptyTrashBtn.className = 'page-clear-btn';
+  emptyTrashBtn.textContent = 'Empty Recently Deleted';
+  emptyTrashBtn.addEventListener('click', emptyRecentlyDeleted);
+  toolbar.appendChild(emptyTrashBtn);
+  highlightsContainer.innerHTML = '';
+  highlightsContainer.appendChild(toolbar);
+
+  pages.forEach(page => {
+    const group = document.createElement('div');
+    group.className = 'page-group';
+
+    const header = document.createElement('div');
+    header.className = 'page-header';
+
+    const info = document.createElement('div');
+    info.className = 'page-info';
+
+    const titleLink = document.createElement('a');
+    titleLink.className = 'page-title';
+    titleLink.href = page.url;
+    titleLink.target = '_blank';
+    titleLink.rel = 'noopener';
+    titleLink.textContent = page.title;
+    titleLink.title = page.title;
+
+    const urlText = document.createElement('span');
+    urlText.className = 'page-url';
+    urlText.textContent = page.url;
+
+    info.appendChild(titleLink);
+    info.appendChild(urlText);
+    header.appendChild(info);
+    group.appendChild(header);
+
+    const list = document.createElement('ul');
+    list.className = 'snippet-list';
+
+    page.entries.forEach(entry => {
+      const hl = entry.highlight;
+      if (!hl) return;
+
+      const item = document.createElement('li');
+      item.className = 'snippet-item';
+
+      const text = document.createElement('span');
+      text.className = 'snippet-text';
+      text.textContent = hl.text || '';
+
+      const dot = document.createElement('span');
+      dot.className = 'snippet-color-dot';
+      if (typeof hl.color === 'string' && hl.color.trim() !== '') {
+        dot.style.backgroundColor = hl.color;
+        dot.title = hl.color;
+      } else {
+        dot.style.display = 'none';
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'snippet-trash-actions';
+      actions.style.display = 'flex';
+      actions.style.flexShrink = '0';
+      actions.style.gap = '6px';
+      actions.style.alignItems = 'center';
+
+      const restoreBtn = document.createElement('button');
+      restoreBtn.type = 'button';
+      restoreBtn.className = 'page-clear-btn';
+      restoreBtn.textContent = 'Restore';
+      restoreBtn.title = 'Restore highlight';
+      restoreBtn.addEventListener('click', () => restoreFromTrash(entry.trashId));
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'snippet-delete';
+      delBtn.innerHTML = '&#215;';
+      delBtn.title = 'Delete forever';
+      delBtn.addEventListener('click', () => deleteForeverFromTrash(entry.trashId));
+
+      actions.appendChild(restoreBtn);
+      actions.appendChild(delBtn);
+
+      item.appendChild(text);
+      item.appendChild(dot);
+      item.appendChild(actions);
+      list.appendChild(item);
+    });
+
+    group.appendChild(list);
+    highlightsContainer.appendChild(group);
+  });
+}
+
+function emptyRecentlyDeleted() {
+  chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: [] }, () => {
+    refreshLibrary();
+  });
+}
+
+function restoreFromTrash(trashId) {
+  chrome.storage.local.get([RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
+    const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
+    const entry = trash.find(t => t.trashId === trashId);
+    if (!entry || !entry.highlight) return;
+
+    const key = 'highlights_' + entry.pageUrl;
+    chrome.storage.local.get(key, (r2) => {
+      let highlights = r2[key] || [];
+      const newTrash = trash.filter(t => t.trashId !== trashId);
+      if (highlights.some(h => h.id === entry.highlight.id)) {
+        chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: newTrash }, refreshLibrary);
+        return;
+      }
+      highlights = highlights.concat([entry.highlight]);
+      const index = result.highlightIndex || {};
+      index[entry.pageUrl] = {
+        title: entry.pageTitle || entry.pageUrl,
+        lastUpdated: Date.now()
+      };
+      chrome.storage.local.set({
+        [key]: highlights,
+        highlightIndex: index,
+        [RECENTLY_DELETED_KEY]: newTrash
+      }, refreshLibrary);
+    });
+  });
+}
+
+function deleteForeverFromTrash(trashId) {
+  chrome.storage.local.get(RECENTLY_DELETED_KEY, (result) => {
+    const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
+    const newTrash = trash.filter(t => t.trashId !== trashId);
+    chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: newTrash }, refreshLibrary);
   });
 }
 
@@ -618,58 +819,90 @@ function renderHighlights(pages, totalCount) {
   });
 }
 
-// Delete a single highlight by ID
+// Delete a single highlight by ID (soft-delete into Recently Deleted)
 function deleteHighlight(url, highlightId) {
   const key = 'highlights_' + url;
 
-  chrome.storage.local.get([key, 'highlightIndex'], (result) => {
+  chrome.storage.local.get([key, 'highlightIndex', RECENTLY_DELETED_KEY], (result) => {
     let highlights = result[key] || [];
+    const removed = highlights.find(h => h.id === highlightId);
+    if (!removed) {
+      refreshLibrary();
+      return;
+    }
+
+    const index = result.highlightIndex || {};
+    const pageTitle = (index[url] && index[url].title) || url;
+    const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
+    trash.unshift({
+      trashId: generateTrashId(),
+      pageUrl: url,
+      pageTitle,
+      deletedAt: Date.now(),
+      highlight: { ...removed }
+    });
+
     highlights = highlights.filter(h => h.id !== highlightId);
 
     if (highlights.length > 0) {
-      chrome.storage.local.set({ [key]: highlights }, () => {
-        loadAllHighlights();
-      });
+      chrome.storage.local.set({ [key]: highlights, [RECENTLY_DELETED_KEY]: trash }, refreshLibrary);
     } else {
-      // Last highlight removed — clean up the page entry
-      const index = result.highlightIndex || {};
       delete index[url];
       chrome.storage.local.remove(key, () => {
-        chrome.storage.local.set({ highlightIndex: index }, () => {
-          loadAllHighlights();
-        });
+        chrome.storage.local.set({ highlightIndex: index, [RECENTLY_DELETED_KEY]: trash }, refreshLibrary);
       });
     }
   });
 }
 
-// Delete all highlights for a page
+// Delete all highlights for a page (soft-delete into Recently Deleted)
 function deletePageHighlights(url) {
   const key = 'highlights_' + url;
 
-  chrome.storage.local.get('highlightIndex', (result) => {
-    const index = result.highlightIndex || {};
-    delete index[url];
+  chrome.storage.local.get([key, 'highlightIndex', RECENTLY_DELETED_KEY], (result) => {
+    const highlights = result[key] || [];
+    if (highlights.length === 0) {
+      refreshLibrary();
+      return;
+    }
 
-    chrome.storage.local.remove(key, () => {
-      chrome.storage.local.set({ highlightIndex: index }, () => {
-        loadAllHighlights();
+    const index = result.highlightIndex || {};
+    const pageTitle = (index[url] && index[url].title) || url;
+    const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
+    const now = Date.now();
+    for (let i = highlights.length - 1; i >= 0; i--) {
+      trash.unshift({
+        trashId: generateTrashId(),
+        pageUrl: url,
+        pageTitle,
+        deletedAt: now,
+        highlight: { ...highlights[i] }
       });
+    }
+
+    delete index[url];
+    chrome.storage.local.remove(key, () => {
+      chrome.storage.local.set({ highlightIndex: index, [RECENTLY_DELETED_KEY]: trash }, refreshLibrary);
     });
   });
 }
 
-// Live-update when highlights change from another tab
+function isLibraryTabActive() {
+  const panel = document.getElementById('tab-library');
+  return panel && panel.classList.contains('active');
+}
+
+// Live-update when highlights or trash change from another tab
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
 
-  // Re-render if any highlight data changed
   const hasHighlightChange = Object.keys(changes).some(
     k => k === 'highlightIndex' || k.startsWith('highlights_')
   );
+  const hasTrashChange = Object.prototype.hasOwnProperty.call(changes, RECENTLY_DELETED_KEY);
 
-  if (hasHighlightChange) {
-    loadAllHighlights();
+  if ((hasHighlightChange || hasTrashChange) && isLibraryTabActive()) {
+    refreshLibrary();
   }
 });
 
@@ -732,7 +965,6 @@ function initSearchCollapsedBtn() {
 
 // ---- Init ----
 loadSettings();
-loadAllHighlights();
 initSidebarNavigation();
 loadSidebarCollapsedState();
 initSidebarCollapseToggle();
@@ -743,3 +975,4 @@ const activeTab = document.querySelector('.tab-btn.active');
 if (activeTab) {
   resetSidebarForTab(activeTab.dataset.tab);
 }
+refreshLibrary();

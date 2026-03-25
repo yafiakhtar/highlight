@@ -82,6 +82,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
           parent.normalize();
         }
       });
+      // Restore highlights added from options (e.g. Recently Deleted) without full reload
+      const domIds = new Set(
+        Array.from(document.querySelectorAll('.text-highlighter-mark')).map(m => m.dataset.highlightId)
+      );
+      const hasNewInStorage = newHighlights.some(h => h.id && !domIds.has(h.id));
+      if (hasNewInStorage) {
+        restoreHighlights();
+      }
     }
   }
 });
@@ -119,6 +127,12 @@ function updateFabVisibility() {
 // Get storage key for current URL
 function getStorageKey() {
   return 'highlights_' + window.location.href;
+}
+
+const RECENTLY_DELETED_KEY = 'recentlyDeletedHighlights';
+
+function generateTrashId() {
+  return 'tr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
 }
 
 // Generate unique ID for highlights
@@ -399,24 +413,65 @@ function removeHighlight(mark) {
   if (!mark.classList.contains('text-highlighter-mark')) {
     mark = mark.closest('.text-highlighter-mark');
   }
-  
+
   if (!mark) return;
-  
+
   const highlightId = mark.dataset.highlightId;
-  
-  // Find all marks with the same highlight ID (for multi-part highlights)
+  const key = getStorageKey();
+  const url = window.location.href;
+
   const allParts = document.querySelectorAll(`.text-highlighter-mark[data-highlight-id="${highlightId}"]`);
-  
-  allParts.forEach(part => {
-    const parent = part.parentNode;
-    while (part.firstChild) {
-      parent.insertBefore(part.firstChild, part);
+
+  chrome.storage.local.get([key, RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
+    const highlights = result[key] || [];
+    const hl = highlights.find(h => h.id === highlightId);
+    const trash = Array.isArray(result[RECENTLY_DELETED_KEY])
+      ? [...result[RECENTLY_DELETED_KEY]]
+      : [];
+    const index = result.highlightIndex || {};
+    const pageTitle = (index[url] && index[url].title) || document.title || url;
+
+    if (hl) {
+      trash.unshift({
+        trashId: generateTrashId(),
+        pageUrl: url,
+        pageTitle,
+        deletedAt: Date.now(),
+        highlight: { ...hl }
+      });
     }
-    parent.removeChild(part);
-    parent.normalize(); // Merge adjacent text nodes
+
+    allParts.forEach(part => {
+      const parent = part.parentNode;
+      while (part.firstChild) {
+        parent.insertBefore(part.firstChild, part);
+      }
+      parent.removeChild(part);
+      parent.normalize();
+    });
+
+    const newHighlights = highlights.filter(h => h.id !== highlightId);
+
+    if (newHighlights.length > 0) {
+      index[url] = {
+        title: document.title || url,
+        lastUpdated: Date.now()
+      };
+      chrome.storage.local.set({
+        [key]: newHighlights,
+        highlightIndex: index,
+        [RECENTLY_DELETED_KEY]: trash
+      });
+    } else {
+      delete index[url];
+      chrome.storage.local.remove(key, () => {
+        chrome.storage.local.set({
+          highlightIndex: index,
+          [RECENTLY_DELETED_KEY]: trash
+        });
+      });
+    }
   });
-  
-  saveHighlights();
 }
 
 // Remove highlight from current selection
@@ -442,24 +497,44 @@ function removeSelectedHighlight() {
 
 // Clear all highlights on the page
 function clearAllHighlights() {
-  document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
-    const parent = mark.parentNode;
-    while (mark.firstChild) {
-      parent.insertBefore(mark.firstChild, mark);
-    }
-    parent.removeChild(mark);
-    parent.normalize();
-  });
-  
   const key = getStorageKey();
   const url = window.location.href;
-  chrome.storage.local.remove(key);
 
-  // Remove this page from the global index
-  chrome.storage.local.get('highlightIndex', (result) => {
+  chrome.storage.local.get([key, RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
+    const highlights = result[key] || [];
+    const trash = Array.isArray(result[RECENTLY_DELETED_KEY])
+      ? [...result[RECENTLY_DELETED_KEY]]
+      : [];
     const index = result.highlightIndex || {};
+    const pageTitle = (index[url] && index[url].title) || document.title || url;
+    const now = Date.now();
+
+    for (let i = highlights.length - 1; i >= 0; i--) {
+      trash.unshift({
+        trashId: generateTrashId(),
+        pageUrl: url,
+        pageTitle,
+        deletedAt: now,
+        highlight: { ...highlights[i] }
+      });
+    }
+
+    document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
+      const parent = mark.parentNode;
+      while (mark.firstChild) {
+        parent.insertBefore(mark.firstChild, mark);
+      }
+      parent.removeChild(mark);
+      parent.normalize();
+    });
+
     delete index[url];
-    chrome.storage.local.set({ highlightIndex: index });
+    chrome.storage.local.remove(key, () => {
+      chrome.storage.local.set({
+        highlightIndex: index,
+        [RECENTLY_DELETED_KEY]: trash
+      });
+    });
   });
 }
 
@@ -478,6 +553,9 @@ function restoreHighlights() {
 
     highlights.forEach(highlight => {
       try {
+        if (document.querySelector(`.text-highlighter-mark[data-highlight-id="${highlight.id}"]`)) {
+          return;
+        }
         // Find the element using XPath
         const xpathResult = document.evaluate(
           highlight.xpath,
