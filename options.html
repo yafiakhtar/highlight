@@ -29,6 +29,7 @@
       --opt-hover: #e8e8e8;
       --opt-accent: #007acc;
       --opt-danger: #f14c4c;
+      --opt-star-gold: #c9a227;
     }
 
     body.dark {
@@ -47,6 +48,7 @@
       --opt-hover: #333333;
       --opt-accent: #007acc;
       --opt-danger: #f14c4c;
+      --opt-star-gold: #e8c547;
     }
 
     body {
@@ -837,13 +839,38 @@
       content: none;
     }
 
+    .snippet-item-actions {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    /* Fixed 20px column so gap is even dot–star and star–× (matches star/delete buttons) */
+    .snippet-color-slot {
+      flex: 0 0 20px;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .snippet-trash-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
     .snippet-color-dot {
       width: 12px;
       height: 12px;
       border-radius: 999px;
       border: 1px solid var(--opt-border);
       flex-shrink: 0;
-      margin-top: 4px;
     }
 
     .snippet-delete {
@@ -860,7 +887,6 @@
       align-items: center;
       justify-content: center;
       transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
-      margin-top: 1px;
       padding: 0;
       opacity: 0.5;
     }
@@ -869,6 +895,52 @@
       color: var(--opt-danger);
       background: rgba(241, 76, 76, 0.15);
       opacity: 1;
+    }
+
+    .snippet-star {
+      flex-shrink: 0;
+      box-sizing: border-box;
+      width: 20px;
+      height: 20px;
+      border: none;
+      background: none;
+      padding: 0;
+      cursor: pointer;
+      color: var(--opt-text-muted);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 0;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+
+    .snippet-star svg {
+      display: block;
+      flex-shrink: 0;
+    }
+
+    .snippet-star svg path {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.75;
+      stroke-linejoin: round;
+      transition: fill 0.15s ease, stroke 0.15s ease;
+    }
+
+    .snippet-star:hover:not(.is-favorited) svg path {
+      fill: var(--opt-star-gold);
+      stroke: var(--opt-star-gold);
+    }
+
+    .snippet-star.is-favorited svg path {
+      fill: var(--opt-star-gold);
+      stroke: var(--opt-star-gold);
+    }
+
+    .snippet-star.is-favorited:hover {
+      color: var(--opt-star-gold);
+      opacity: 0.88;
     }
 
     .page-group + .page-group {

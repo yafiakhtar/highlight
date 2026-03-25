@@ -483,6 +483,8 @@ function generateTrashId() {
 function refreshLibrary() {
   if (currentLibraryView === 'recently-deleted') {
     loadRecentlyDeleted();
+  } else if (currentLibraryView === 'favorites') {
+    loadFavoriteHighlights();
   } else {
     loadAllHighlights();
   }
@@ -538,8 +540,54 @@ function loadAllHighlights() {
     // Sort pages by lastUpdated (most recent first)
     pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
 
-    renderHighlights(pages, totalCount);
+    renderHighlights(pages, totalCount, { countLabel: 'saved' });
   });
+}
+
+function loadFavoriteHighlights() {
+  chrome.storage.local.get(null, (all) => {
+    const index = all.highlightIndex || {};
+    const pages = [];
+    let totalCount = 0;
+
+    for (const storageKey of Object.keys(all)) {
+      if (!storageKey.startsWith('highlights_')) continue;
+
+      const url = storageKey.substring('highlights_'.length);
+      const highlights = all[storageKey];
+      if (!Array.isArray(highlights) || highlights.length === 0) continue;
+
+      const favs = highlights.filter(h => h.favorited === true);
+      if (favs.length === 0) continue;
+
+      const meta = index[url] || {};
+      totalCount += favs.length;
+      pages.push({
+        url,
+        title: meta.title || url,
+        lastUpdated: meta.lastUpdated || Date.now(),
+        highlights: favs.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+      });
+    }
+
+    if (pages.length === 0) {
+      renderEmptyFavorites();
+      return;
+    }
+
+    pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+    renderHighlights(pages, totalCount, { countLabel: 'favorited' });
+  });
+}
+
+function renderEmptyFavorites() {
+  highlightCount.textContent = '';
+  highlightsContainer.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-state-title">No favorites yet</div>
+      Star highlights from the All view to see them here.
+    </div>
+  `;
 }
 
 function loadRecentlyDeleted() {
@@ -641,21 +689,20 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
       text.className = 'snippet-text';
       text.textContent = hl.text || '';
 
+      const colorSlot = document.createElement('span');
+      colorSlot.className = 'snippet-color-slot';
       const dot = document.createElement('span');
       dot.className = 'snippet-color-dot';
       if (typeof hl.color === 'string' && hl.color.trim() !== '') {
         dot.style.backgroundColor = hl.color;
         dot.title = hl.color;
+        colorSlot.appendChild(dot);
       } else {
-        dot.style.display = 'none';
+        colorSlot.style.display = 'none';
       }
 
-      const actions = document.createElement('div');
-      actions.className = 'snippet-trash-actions';
-      actions.style.display = 'flex';
-      actions.style.flexShrink = '0';
-      actions.style.gap = '6px';
-      actions.style.alignItems = 'center';
+      const trashBtns = document.createElement('div');
+      trashBtns.className = 'snippet-trash-actions';
 
       const restoreBtn = document.createElement('button');
       restoreBtn.type = 'button';
@@ -671,12 +718,16 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
       delBtn.title = 'Delete forever';
       delBtn.addEventListener('click', () => deleteForeverFromTrash(entry.trashId));
 
-      actions.appendChild(restoreBtn);
-      actions.appendChild(delBtn);
+      trashBtns.appendChild(restoreBtn);
+      trashBtns.appendChild(delBtn);
+
+      const rowActions = document.createElement('div');
+      rowActions.className = 'snippet-item-actions';
+      rowActions.appendChild(colorSlot);
+      rowActions.appendChild(trashBtns);
 
       item.appendChild(text);
-      item.appendChild(dot);
-      item.appendChild(actions);
+      item.appendChild(rowActions);
       list.appendChild(item);
     });
 
@@ -739,9 +790,47 @@ function renderEmpty() {
   `;
 }
 
+function createStarButton(pageUrl, hl) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'snippet-star' + (hl.favorited === true ? ' is-favorited' : '');
+  const favorited = hl.favorited === true;
+  btn.title = favorited ? 'Remove from favorites' : 'Add to favorites';
+  btn.setAttribute('aria-label', btn.title);
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFavorite(pageUrl, hl.id);
+  });
+  return btn;
+}
+
+function toggleFavorite(url, highlightId) {
+  const key = 'highlights_' + url;
+  chrome.storage.local.get(key, (result) => {
+    const highlights = result[key] || [];
+    let changed = false;
+    const next = highlights.map(h => {
+      if (h.id !== highlightId) return h;
+      changed = true;
+      const copy = { ...h };
+      if (copy.favorited === true) {
+        delete copy.favorited;
+      } else {
+        copy.favorited = true;
+      }
+      return copy;
+    });
+    if (!changed) return;
+    chrome.storage.local.set({ [key]: next }, refreshLibrary);
+  });
+}
+
 // Render all page groups
-function renderHighlights(pages, totalCount) {
-  highlightCount.textContent = totalCount + ' saved';
+function renderHighlights(pages, totalCount, options = {}) {
+  const countWord = options.countLabel === 'favorited' ? 'favorited' : 'saved';
+  highlightCount.textContent = totalCount + ' ' + countWord;
   highlightsContainer.innerHTML = '';
 
   pages.forEach(page => {
@@ -792,14 +881,19 @@ function renderHighlights(pages, totalCount) {
       text.className = 'snippet-text';
       text.textContent = hl.text;
 
+      const colorSlot = document.createElement('span');
+      colorSlot.className = 'snippet-color-slot';
       const dot = document.createElement('span');
       dot.className = 'snippet-color-dot';
       if (typeof hl.color === 'string' && hl.color.trim() !== '') {
         dot.style.backgroundColor = hl.color;
         dot.title = hl.color;
+        colorSlot.appendChild(dot);
       } else {
-        dot.style.display = 'none';
+        colorSlot.style.display = 'none';
       }
+
+      const star = createStarButton(page.url, hl);
 
       const del = document.createElement('button');
       del.type = 'button';
@@ -808,9 +902,14 @@ function renderHighlights(pages, totalCount) {
       del.title = 'Delete highlight';
       del.addEventListener('click', () => deleteHighlight(page.url, hl.id));
 
+      const rowActions = document.createElement('div');
+      rowActions.className = 'snippet-item-actions';
+      rowActions.appendChild(colorSlot);
+      rowActions.appendChild(star);
+      rowActions.appendChild(del);
+
       item.appendChild(text);
-      item.appendChild(dot);
-      item.appendChild(del);
+      item.appendChild(rowActions);
       list.appendChild(item);
     });
 

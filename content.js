@@ -160,13 +160,18 @@ function saveHighlights() {
 
   // Read existing data to preserve createdAt timestamps, then write
   chrome.storage.local.get([key, 'highlightIndex'], (result) => {
-    // Preserve existing createdAt timestamps
+    // Preserve existing createdAt timestamps and favorited flag
     const oldHighlights = result[key] || [];
     const oldTimestamps = {};
-    oldHighlights.forEach(h => { oldTimestamps[h.id] = h.createdAt; });
+    const oldFavorited = {};
+    oldHighlights.forEach(h => {
+      oldTimestamps[h.id] = h.createdAt;
+      if (h.favorited === true) oldFavorited[h.id] = true;
+    });
 
     highlights.forEach(h => {
       h.createdAt = oldTimestamps[h.id] || Date.now();
+      if (oldFavorited[h.id]) h.favorited = true;
     });
 
     const index = result.highlightIndex || {};
