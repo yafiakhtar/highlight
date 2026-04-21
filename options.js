@@ -637,7 +637,7 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
   highlightCount.textContent = totalTrashCount + ' deleted';
 
   const toolbar = document.createElement('div');
-  toolbar.className = 'page-header';
+  toolbar.className = 'page-header trash-toolbar';
   toolbar.style.marginBottom = '16px';
   const emptyTrashBtn = document.createElement('button');
   emptyTrashBtn.type = 'button';
