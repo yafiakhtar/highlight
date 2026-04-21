@@ -35,6 +35,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       if (pendingSettings.showFab !== undefined) showFabToggle.checked = pendingSettings.showFab;
       syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
       syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
+      if (isLibraryTabActive()) {
+        refreshLibrary();
+      }
     }
   }
 });
@@ -77,6 +80,18 @@ function resetSidebarForTab(tabName) {
 
 let currentLibraryView = 'all';
 let currentTagPresetId = null;
+
+function isLibraryTabActive() {
+  const panel = document.getElementById('tab-library');
+  return !!(panel && panel.classList.contains('active'));
+}
+
+/** Re-render Library → Tags when Tag Preset labels/colors change (uses pendingSettings). */
+function refreshTagsLibraryIfLive() {
+  if (isLibraryTabActive() && currentLibraryView === 'tags') {
+    refreshLibrary();
+  }
+}
 
 function switchSidebarView(tabName, viewName) {
   const panel = document.getElementById('tab-' + tabName);
@@ -449,10 +464,11 @@ fabPresetSwatches.forEach((swatch, index) => {
     else preset.colorLight = newColor;
     pendingSettings.presets = presets;
     syncPresetsEditor(pendingSettings.presets);
+    refreshTagsLibraryIfLive();
   });
 });
 
-// ---- Presets & Tags editor handlers ----
+// ---- Tag Presets editor handlers ----
 
 presetRows.forEach((row, index) => {
   if (!row.name || !row.light || !row.dark || !row.lightHex || !row.darkHex) return;
@@ -464,6 +480,7 @@ presetRows.forEach((row, index) => {
     p.name = (e.target.value || '').toString();
     pendingSettings.presets = presets;
     syncPresetSwatches(pendingSettings.presets);
+    refreshTagsLibraryIfLive();
   });
 
   row.light.addEventListener('input', (e) => {
@@ -475,6 +492,7 @@ presetRows.forEach((row, index) => {
     p.colorLight = hex;
     pendingSettings.presets = presets;
     syncPresetSwatches(pendingSettings.presets);
+    refreshTagsLibraryIfLive();
   });
 
   row.dark.addEventListener('input', (e) => {
@@ -486,6 +504,7 @@ presetRows.forEach((row, index) => {
     p.colorDark = hex;
     pendingSettings.presets = presets;
     syncPresetSwatches(pendingSettings.presets);
+    refreshTagsLibraryIfLive();
   });
 
   row.lightHex.addEventListener('input', (e) => {
@@ -499,6 +518,7 @@ presetRows.forEach((row, index) => {
     p.colorLight = val;
     pendingSettings.presets = presets;
     syncPresetSwatches(pendingSettings.presets);
+    refreshTagsLibraryIfLive();
   });
 
   row.darkHex.addEventListener('input', (e) => {
@@ -512,6 +532,7 @@ presetRows.forEach((row, index) => {
     p.colorDark = val;
     pendingSettings.presets = presets;
     syncPresetSwatches(pendingSettings.presets);
+    refreshTagsLibraryIfLive();
   });
 
   row.lightHex.addEventListener('blur', () => {
@@ -636,10 +657,19 @@ function loadTagsView() {
   }
 }
 
+/** Tag folder titles/colors follow staged Tag Presets (pendingSettings), not only storage. */
+function getTagPresetDefinitions(storageHighlightSettings) {
+  if (pendingSettings && Array.isArray(pendingSettings.presets)) {
+    return normalizePresets(pendingSettings.presets);
+  }
+  const s = storageHighlightSettings || DEFAULTS;
+  return normalizePresets(s.presets);
+}
+
 function loadTagFolders() {
   chrome.storage.local.get(null, (all) => {
     const settings = all.highlightSettings || DEFAULTS;
-    const presets = normalizePresets(settings.presets);
+    const presets = getTagPresetDefinitions(settings);
 
     const counts = {};
     let total = 0;
@@ -700,7 +730,7 @@ function renderTagFolders(presets, counts) {
 function loadTagHighlights(presetId) {
   chrome.storage.local.get(null, (all) => {
     const settings = all.highlightSettings || DEFAULTS;
-    const presets = normalizePresets(settings.presets);
+    const presets = getTagPresetDefinitions(settings);
     const preset = presets.find(p => p.id === presetId) || presets[0];
 
     const index = all.highlightIndex || {};
