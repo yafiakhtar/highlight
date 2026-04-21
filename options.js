@@ -11,6 +11,9 @@ document.getElementById('optionsThemeToggle').addEventListener('click', () => {
   document.body.classList.toggle('dark');
   const isDark = document.body.classList.contains('dark');
   chrome.storage.local.set({ popupTheme: isDark ? 'dark' : 'light' });
+  if (pendingSettings) {
+    syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
+  }
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -26,10 +29,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (changes.highlightSettings) {
     const s = changes.highlightSettings.newValue;
     if (s) {
-      syncLightColor(s.colorLight ?? DEFAULTS.colorLight);
-      syncDarkColor(s.colorDark ?? DEFAULTS.colorDark);
-      if (s.showFab !== undefined) showFabToggle.checked = s.showFab;
-      syncPresetSwatches(s.presets || DEFAULTS.presets);
+      setPending(s);
+      syncLightColor(pendingSettings.colorLight ?? DEFAULTS.colorLight);
+      syncDarkColor(pendingSettings.colorDark ?? DEFAULTS.colorDark);
+      if (pendingSettings.showFab !== undefined) showFabToggle.checked = pendingSettings.showFab;
+      syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
+      syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
     }
   }
 });
@@ -71,6 +76,7 @@ function resetSidebarForTab(tabName) {
 }
 
 let currentLibraryView = 'all';
+let currentTagPresetId = null;
 
 function switchSidebarView(tabName, viewName) {
   const panel = document.getElementById('tab-' + tabName);
@@ -78,6 +84,9 @@ function switchSidebarView(tabName, viewName) {
   
   if (tabName === 'library') {
     currentLibraryView = viewName;
+    if (viewName !== 'tags') {
+      currentTagPresetId = null;
+    }
     const sidebar = panel.querySelector('.sidebar');
     sidebar.querySelectorAll('.sidebar-item').forEach(item => {
       item.classList.toggle('active', item.dataset.view === viewName);
@@ -167,6 +176,8 @@ const DEFAULTS = {
   ]
 };
 
+let pendingSettings = null;
+
 // DOM elements
 const colorLightPicker = document.getElementById('colorLight');
 const colorLightHex = document.getElementById('colorLightHex');
@@ -185,6 +196,14 @@ const saveBtn = document.getElementById('saveBtn');
 const resetBtn = document.getElementById('resetBtn');
 const openShortcuts = document.getElementById('openShortcuts');
 const toast = document.getElementById('toast');
+
+const presetRows = [1, 2, 3, 4].map(i => ({
+  name: document.getElementById(`presetName${i}`),
+  light: document.getElementById(`presetLight${i}`),
+  lightHex: document.getElementById(`presetLightHex${i}`),
+  dark: document.getElementById(`presetDark${i}`),
+  darkHex: document.getElementById(`presetDarkHex${i}`)
+}));
 
 // ---- Color sync helpers ----
 
@@ -211,6 +230,46 @@ function syncPresetSwatches(presets) {
     const preset = presets[index] || presets[0];
     const color = isDark ? (preset.colorDark || DEFAULTS.colorDark) : (preset.colorLight || DEFAULTS.colorLight);
     swatch.value = color;
+  });
+}
+
+function cloneDefaults() {
+  return {
+    ...DEFAULTS,
+    presets: DEFAULTS.presets.map(p => ({ ...p }))
+  };
+}
+
+function normalizePresets(presets) {
+  const base = DEFAULTS.presets.map(p => ({ ...p }));
+  if (!Array.isArray(presets)) return base;
+  return base.map((def, idx) => {
+    const p = presets[idx] || {};
+    return {
+      ...def,
+      ...p
+    };
+  });
+}
+
+function setPending(next) {
+  const source = next || {};
+  pendingSettings = {
+    ...cloneDefaults(),
+    ...source,
+    presets: normalizePresets(source.presets)
+  };
+}
+
+function syncPresetsEditor(presets) {
+  const norm = normalizePresets(presets);
+  presetRows.forEach((row, idx) => {
+    const p = norm[idx] || norm[0];
+    if (row.name) row.name.value = (p.name || '').toString();
+    if (row.light) row.light.value = p.colorLight || DEFAULTS.colorLight;
+    if (row.lightHex) row.lightHex.value = (p.colorLight || DEFAULTS.colorLight).toUpperCase();
+    if (row.dark) row.dark.value = p.colorDark || DEFAULTS.colorDark;
+    if (row.darkHex) row.darkHex.value = (p.colorDark || DEFAULTS.colorDark).toUpperCase();
   });
 }
 
@@ -295,7 +354,10 @@ colorLightPicker.addEventListener('input', (e) => {
   skipCrossUpdate = true;
   syncDarkColor(deriveDarkFromLight(hex));
   setTimeout(() => { skipCrossUpdate = false; }, 0);
-  persistColorsToStorage();
+  if (pendingSettings) {
+    pendingSettings.colorLight = colorLightPicker.value;
+    pendingSettings.colorDark = colorDarkPicker.value;
+  }
 });
 
 colorLightHex.addEventListener('input', (e) => {
@@ -307,7 +369,10 @@ colorLightHex.addEventListener('input', (e) => {
     skipCrossUpdate = true;
     syncDarkColor(deriveDarkFromLight(val));
     setTimeout(() => { skipCrossUpdate = false; }, 0);
-    persistColorsToStorage();
+    if (pendingSettings) {
+      pendingSettings.colorLight = colorLightPicker.value;
+      pendingSettings.colorDark = colorDarkPicker.value;
+    }
   }
 });
 
@@ -319,7 +384,10 @@ colorLightHex.addEventListener('blur', (e) => {
     skipCrossUpdate = true;
     syncDarkColor(deriveDarkFromLight(colorLightPicker.value));
     setTimeout(() => { skipCrossUpdate = false; }, 0);
-    persistColorsToStorage();
+    if (pendingSettings) {
+      pendingSettings.colorLight = colorLightPicker.value;
+      pendingSettings.colorDark = colorDarkPicker.value;
+    }
   }
 });
 
@@ -330,7 +398,10 @@ colorDarkPicker.addEventListener('input', (e) => {
   skipCrossUpdate = true;
   syncLightColor(deriveLightFromDark(hex));
   setTimeout(() => { skipCrossUpdate = false; }, 0);
-  persistColorsToStorage();
+  if (pendingSettings) {
+    pendingSettings.colorLight = colorLightPicker.value;
+    pendingSettings.colorDark = colorDarkPicker.value;
+  }
 });
 
 colorDarkHex.addEventListener('input', (e) => {
@@ -342,7 +413,10 @@ colorDarkHex.addEventListener('input', (e) => {
     skipCrossUpdate = true;
     syncLightColor(deriveLightFromDark(val));
     setTimeout(() => { skipCrossUpdate = false; }, 0);
-    persistColorsToStorage();
+    if (pendingSettings) {
+      pendingSettings.colorLight = colorLightPicker.value;
+      pendingSettings.colorDark = colorDarkPicker.value;
+    }
   }
 });
 
@@ -354,7 +428,10 @@ colorDarkHex.addEventListener('blur', (e) => {
     skipCrossUpdate = true;
     syncLightColor(deriveLightFromDark(colorDarkPicker.value));
     setTimeout(() => { skipCrossUpdate = false; }, 0);
-    persistColorsToStorage();
+    if (pendingSettings) {
+      pendingSettings.colorLight = colorLightPicker.value;
+      pendingSettings.colorDark = colorDarkPicker.value;
+    }
   }
 });
 
@@ -364,21 +441,89 @@ fabPresetSwatches.forEach((swatch, index) => {
   if (!swatch) return;
   swatch.addEventListener('input', (e) => {
     const newColor = e.target.value;
-    chrome.storage.local.get('highlightSettings', (result) => {
-      const current = result.highlightSettings || DEFAULTS;
-      const presets = Array.isArray(current.presets) && current.presets.length
-        ? current.presets
-        : DEFAULTS.presets.map(p => ({ ...p }));
-      const preset = presets[index] || presets[0];
-      const isDark = document.body.classList.contains('dark');
-      if (isDark) {
-        preset.colorDark = newColor;
-      } else {
-        preset.colorLight = newColor;
-      }
-      const updated = { ...current, presets };
-      chrome.storage.local.set({ highlightSettings: updated });
-    });
+    if (!pendingSettings) return;
+    const presets = normalizePresets(pendingSettings.presets);
+    const preset = presets[index] || presets[0];
+    const isDark = document.body.classList.contains('dark');
+    if (isDark) preset.colorDark = newColor;
+    else preset.colorLight = newColor;
+    pendingSettings.presets = presets;
+    syncPresetsEditor(pendingSettings.presets);
+  });
+});
+
+// ---- Presets & Tags editor handlers ----
+
+presetRows.forEach((row, index) => {
+  if (!row.name || !row.light || !row.dark || !row.lightHex || !row.darkHex) return;
+
+  row.name.addEventListener('input', (e) => {
+    if (!pendingSettings) return;
+    const presets = normalizePresets(pendingSettings.presets);
+    const p = presets[index] || presets[0];
+    p.name = (e.target.value || '').toString();
+    pendingSettings.presets = presets;
+    syncPresetSwatches(pendingSettings.presets);
+  });
+
+  row.light.addEventListener('input', (e) => {
+    if (!pendingSettings) return;
+    const hex = e.target.value;
+    row.lightHex.value = hex.toUpperCase();
+    const presets = normalizePresets(pendingSettings.presets);
+    const p = presets[index] || presets[0];
+    p.colorLight = hex;
+    pendingSettings.presets = presets;
+    syncPresetSwatches(pendingSettings.presets);
+  });
+
+  row.dark.addEventListener('input', (e) => {
+    if (!pendingSettings) return;
+    const hex = e.target.value;
+    row.darkHex.value = hex.toUpperCase();
+    const presets = normalizePresets(pendingSettings.presets);
+    const p = presets[index] || presets[0];
+    p.colorDark = hex;
+    pendingSettings.presets = presets;
+    syncPresetSwatches(pendingSettings.presets);
+  });
+
+  row.lightHex.addEventListener('input', (e) => {
+    if (!pendingSettings) return;
+    let val = e.target.value || '';
+    if (!val.startsWith('#')) val = '#' + val;
+    if (!isValidHex(val)) return;
+    row.light.value = val;
+    const presets = normalizePresets(pendingSettings.presets);
+    const p = presets[index] || presets[0];
+    p.colorLight = val;
+    pendingSettings.presets = presets;
+    syncPresetSwatches(pendingSettings.presets);
+  });
+
+  row.darkHex.addEventListener('input', (e) => {
+    if (!pendingSettings) return;
+    let val = e.target.value || '';
+    if (!val.startsWith('#')) val = '#' + val;
+    if (!isValidHex(val)) return;
+    row.dark.value = val;
+    const presets = normalizePresets(pendingSettings.presets);
+    const p = presets[index] || presets[0];
+    p.colorDark = val;
+    pendingSettings.presets = presets;
+    syncPresetSwatches(pendingSettings.presets);
+  });
+
+  row.lightHex.addEventListener('blur', () => {
+    if (!isValidHex(row.lightHex.value)) {
+      row.lightHex.value = row.light.value.toUpperCase();
+    }
+  });
+
+  row.darkHex.addEventListener('blur', () => {
+    if (!isValidHex(row.darkHex.value)) {
+      row.darkHex.value = row.dark.value.toUpperCase();
+    }
   });
 });
 
@@ -391,31 +536,9 @@ function showToast(message) {
 }
 
 function saveSettings() {
-  chrome.storage.local.get('highlightSettings', (result) => {
-    const existing = result.highlightSettings || DEFAULTS;
-    const settings = {
-      ...existing,
-      colorLight: colorLightPicker.value,
-      colorDark: colorDarkPicker.value,
-      showFab: showFabToggle.checked
-    };
-
-    chrome.storage.local.set({ highlightSettings: settings }, () => {
-      showToast('Settings saved');
-    });
-  });
-}
-
-function persistColorsToStorage() {
-  chrome.storage.local.get('highlightSettings', (result) => {
-    const existing = result.highlightSettings || DEFAULTS;
-    const settings = {
-      ...existing,
-      colorLight: colorLightPicker.value,
-      colorDark: colorDarkPicker.value,
-      showFab: showFabToggle.checked
-    };
-    chrome.storage.local.set({ highlightSettings: settings });
+  if (!pendingSettings) return;
+  chrome.storage.local.set({ highlightSettings: pendingSettings }, () => {
+    showToast('Settings saved');
   });
 }
 
@@ -423,10 +546,12 @@ function loadSettings() {
   chrome.storage.local.get('highlightSettings', (result) => {
     const s = result.highlightSettings || DEFAULTS;
 
-    syncLightColor(s.colorLight || DEFAULTS.colorLight);
-    syncDarkColor(s.colorDark || DEFAULTS.colorDark);
-    showFabToggle.checked = s.showFab !== undefined ? s.showFab : DEFAULTS.showFab;
-    syncPresetSwatches(s.presets || DEFAULTS.presets);
+    setPending(s);
+    syncLightColor(pendingSettings.colorLight || DEFAULTS.colorLight);
+    syncDarkColor(pendingSettings.colorDark || DEFAULTS.colorDark);
+    showFabToggle.checked = pendingSettings.showFab !== undefined ? pendingSettings.showFab : DEFAULTS.showFab;
+    syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
+    syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
   });
 }
 
@@ -434,6 +559,9 @@ function resetSettings() {
   syncLightColor(DEFAULTS.colorLight);
   syncDarkColor(DEFAULTS.colorDark);
   showFabToggle.checked = DEFAULTS.showFab;
+  setPending(DEFAULTS);
+  syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
+  syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
 
   chrome.storage.local.set({ highlightSettings: DEFAULTS }, () => {
     showToast('Reset to defaults');
@@ -445,8 +573,10 @@ function resetSettings() {
 saveBtn.addEventListener('click', saveSettings);
 resetBtn.addEventListener('click', resetSettings);
 
-// Auto-save when the FAB toggle changes (toggles should be instant)
-showFabToggle.addEventListener('change', saveSettings);
+showFabToggle.addEventListener('change', () => {
+  if (!pendingSettings) return;
+  pendingSettings.showFab = showFabToggle.checked;
+});
 
 openShortcuts.addEventListener('click', () => {
   // chrome:// URLs can't be opened directly; copy the URL for the user instead
@@ -483,11 +613,159 @@ function generateTrashId() {
 function refreshLibrary() {
   if (currentLibraryView === 'recently-deleted') {
     loadRecentlyDeleted();
+  } else if (currentLibraryView === 'tags') {
+    loadTagsView();
   } else if (currentLibraryView === 'favorites') {
     loadFavoriteHighlights();
   } else {
     loadAllHighlights();
   }
+}
+
+function getHighlightPresetId(hl) {
+  if (hl && typeof hl.presetId === 'string' && hl.presetId.trim() !== '') return hl.presetId;
+  // Back-compat: highlights created before presetId existed
+  return 'preset1';
+}
+
+function loadTagsView() {
+  if (currentTagPresetId) {
+    loadTagHighlights(currentTagPresetId);
+  } else {
+    loadTagFolders();
+  }
+}
+
+function loadTagFolders() {
+  chrome.storage.local.get(null, (all) => {
+    const settings = all.highlightSettings || DEFAULTS;
+    const presets = normalizePresets(settings.presets);
+
+    const counts = {};
+    let total = 0;
+
+    for (const storageKey of Object.keys(all)) {
+      if (!storageKey.startsWith('highlights_')) continue;
+      const highlights = all[storageKey];
+      if (!Array.isArray(highlights) || highlights.length === 0) continue;
+      for (const hl of highlights) {
+        const pid = getHighlightPresetId(hl);
+        counts[pid] = (counts[pid] || 0) + 1;
+        total++;
+      }
+    }
+
+    highlightCount.textContent = total > 0 ? `${total} saved` : '';
+    renderTagFolders(presets, counts);
+  });
+}
+
+function renderTagFolders(presets, counts) {
+  highlightsContainer.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'tag-folders';
+
+  presets.slice(0, 4).forEach(p => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tag-folder';
+    btn.addEventListener('click', () => {
+      currentTagPresetId = p.id;
+      loadTagsView();
+    });
+
+    const dot = document.createElement('span');
+    dot.className = 'tag-dot';
+    const isDark = document.body.classList.contains('dark');
+    dot.style.backgroundColor = isDark ? (p.colorDark || DEFAULTS.colorDark) : (p.colorLight || DEFAULTS.colorLight);
+
+    const name = document.createElement('span');
+    name.className = 'tag-name';
+    name.textContent = p.name || 'Untitled';
+
+    const count = document.createElement('span');
+    count.className = 'tag-count';
+    count.textContent = (counts[p.id] || 0).toString();
+
+    btn.appendChild(dot);
+    btn.appendChild(name);
+    btn.appendChild(count);
+    wrap.appendChild(btn);
+  });
+
+  highlightsContainer.appendChild(wrap);
+}
+
+function loadTagHighlights(presetId) {
+  chrome.storage.local.get(null, (all) => {
+    const settings = all.highlightSettings || DEFAULTS;
+    const presets = normalizePresets(settings.presets);
+    const preset = presets.find(p => p.id === presetId) || presets[0];
+
+    const index = all.highlightIndex || {};
+    const pages = [];
+    let totalCount = 0;
+
+    for (const storageKey of Object.keys(all)) {
+      if (!storageKey.startsWith('highlights_')) continue;
+
+      const url = storageKey.substring('highlights_'.length);
+      const highlights = all[storageKey];
+      if (!Array.isArray(highlights) || highlights.length === 0) continue;
+
+      const filtered = highlights.filter(h => getHighlightPresetId(h) === presetId);
+      if (filtered.length === 0) continue;
+
+      const meta = index[url] || {};
+      totalCount += filtered.length;
+      pages.push({
+        url,
+        title: meta.title || url,
+        lastUpdated: meta.lastUpdated || Date.now(),
+        highlights: filtered.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+      });
+    }
+
+    if (pages.length === 0) {
+      highlightCount.textContent = '';
+      highlightsContainer.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-title">No highlights in ${preset.name || 'this tag'}</div>
+          Highlights you create with this preset will appear here.
+        </div>
+      `;
+      const toolbar = createTagsToolbar(preset);
+      highlightsContainer.prepend(toolbar);
+      return;
+    }
+
+    pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+    renderHighlights(pages, totalCount, { countLabel: 'saved' });
+    highlightsContainer.prepend(createTagsToolbar(preset));
+  });
+}
+
+function createTagsToolbar(preset) {
+  const toolbar = document.createElement('div');
+  toolbar.className = 'tags-toolbar';
+
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'page-clear-btn';
+  backBtn.textContent = 'Back';
+  backBtn.addEventListener('click', () => {
+    currentTagPresetId = null;
+    loadTagsView();
+  });
+
+  const title = document.createElement('div');
+  title.className = 'tags-toolbar-title';
+  title.textContent = `Tags / ${preset && preset.name ? preset.name : 'Tag'}`;
+
+  toolbar.appendChild(backBtn);
+  toolbar.appendChild(title);
+  return toolbar;
 }
 
 // Load all highlights from storage and render them

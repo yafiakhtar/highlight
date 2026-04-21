@@ -571,6 +571,140 @@
       text-transform: uppercase;
     }
 
+    .text-input {
+      width: 100%;
+      font-size: 13px;
+      color: var(--opt-text);
+      padding: 8px 10px;
+      border: 1px solid var(--opt-border);
+      border-radius: 8px;
+      background: var(--opt-surface-alt);
+      outline: none;
+    }
+
+    .text-input:focus {
+      border-color: rgba(124, 97, 41, 0.55);
+      box-shadow: 0 0 0 3px rgba(124, 97, 41, 0.18);
+    }
+
+    /* ---- Presets editor (Presets & Tags view) ---- */
+
+    .presets-editor {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .presets-grid {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--opt-border);
+      border-radius: 12px;
+      background: var(--opt-surface-alt);
+    }
+
+    .presets-grid-header {
+      background: transparent;
+      border: none;
+      padding: 0 2px;
+      border-radius: 0;
+      color: var(--opt-text-muted);
+      font-size: 12px;
+    }
+
+    .presets-col {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .presets-col-name {
+      gap: 10px;
+    }
+
+    .presets-row-label {
+      width: 62px;
+      flex-shrink: 0;
+      font-size: 12px;
+      color: var(--opt-text-muted);
+    }
+
+    .muted-hint {
+      font-size: 12px;
+      color: var(--opt-text-muted);
+      margin-top: 2px;
+    }
+
+    /* ---- Tags folders (Library → Tags) ---- */
+
+    .tag-folders {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .tag-folder {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid var(--opt-border);
+      border-radius: 14px;
+      background: var(--opt-surface-alt);
+      color: var(--opt-text);
+      cursor: pointer;
+      text-align: left;
+      transition: transform 0.12s ease, border-color 0.12s ease;
+    }
+
+    .tag-folder:hover {
+      transform: translateY(-1px);
+      border-color: rgba(124, 97, 41, 0.35);
+    }
+
+    .tag-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+
+    .tag-name {
+      font-size: 13px;
+      font-weight: 500;
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tag-count {
+      font-size: 12px;
+      color: var(--opt-text-muted);
+      flex-shrink: 0;
+    }
+
+    .tags-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .tags-toolbar-title {
+      font-size: 13px;
+      color: var(--opt-text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     /* ---- Toggle switch ---- */
 
     .toggle {
@@ -1062,6 +1196,10 @@
               <span class="sidebar-icon"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M6 16h12"/></svg></span>
               <span class="sidebar-label">Shortcuts</span>
             </button>
+            <button type="button" class="sidebar-item" data-view="presets-tags" title="Presets &amp; Tags">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7"/><path d="M4 8V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3"/><path d="M12 12v9"/><path d="M8 12l4-4 4 4"/></svg></span>
+              <span class="sidebar-label">Presets &amp; Tags</span>
+            </button>
             <button type="button" class="sidebar-item" data-view="data" title="Data">
               <span class="sidebar-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></span>
               <span class="sidebar-label">Data</span>
@@ -1162,6 +1300,82 @@
               <button type="button" id="openShortcuts" class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px;">
                 Open settings
               </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Presets & Tags View -->
+        <div class="settings-view" data-view="presets-tags">
+          <div class="section">
+            <div class="section-title">Presets &amp; Tags</div>
+            <div class="presets-editor">
+              <div class="presets-grid presets-grid-header">
+                <div class="presets-col presets-col-name">Preset</div>
+                <div class="presets-col presets-col-light">Light</div>
+                <div class="presets-col presets-col-dark">Dark</div>
+              </div>
+
+              <div class="presets-grid">
+                <div class="presets-col presets-col-name">
+                  <span class="presets-row-label">Preset 1</span>
+                  <input type="text" id="presetName1" class="text-input" placeholder="General" maxlength="32">
+                </div>
+                <div class="presets-col presets-col-light">
+                  <input type="color" id="presetLight1" class="color-swatch">
+                  <input type="text" id="presetLightHex1" class="color-hex" maxlength="7" value="#FFEA99">
+                </div>
+                <div class="presets-col presets-col-dark">
+                  <input type="color" id="presetDark1" class="color-swatch">
+                  <input type="text" id="presetDarkHex1" class="color-hex" maxlength="7" value="#7C6129">
+                </div>
+              </div>
+
+              <div class="presets-grid">
+                <div class="presets-col presets-col-name">
+                  <span class="presets-row-label">Preset 2</span>
+                  <input type="text" id="presetName2" class="text-input" placeholder="Important" maxlength="32">
+                </div>
+                <div class="presets-col presets-col-light">
+                  <input type="color" id="presetLight2" class="color-swatch">
+                  <input type="text" id="presetLightHex2" class="color-hex" maxlength="7">
+                </div>
+                <div class="presets-col presets-col-dark">
+                  <input type="color" id="presetDark2" class="color-swatch">
+                  <input type="text" id="presetDarkHex2" class="color-hex" maxlength="7">
+                </div>
+              </div>
+
+              <div class="presets-grid">
+                <div class="presets-col presets-col-name">
+                  <span class="presets-row-label">Preset 3</span>
+                  <input type="text" id="presetName3" class="text-input" placeholder="Reference" maxlength="32">
+                </div>
+                <div class="presets-col presets-col-light">
+                  <input type="color" id="presetLight3" class="color-swatch">
+                  <input type="text" id="presetLightHex3" class="color-hex" maxlength="7">
+                </div>
+                <div class="presets-col presets-col-dark">
+                  <input type="color" id="presetDark3" class="color-swatch">
+                  <input type="text" id="presetDarkHex3" class="color-hex" maxlength="7">
+                </div>
+              </div>
+
+              <div class="presets-grid">
+                <div class="presets-col presets-col-name">
+                  <span class="presets-row-label">Preset 4</span>
+                  <input type="text" id="presetName4" class="text-input" placeholder="Question" maxlength="32">
+                </div>
+                <div class="presets-col presets-col-light">
+                  <input type="color" id="presetLight4" class="color-swatch">
+                  <input type="text" id="presetLightHex4" class="color-hex" maxlength="7">
+                </div>
+                <div class="presets-col presets-col-dark">
+                  <input type="color" id="presetDark4" class="color-swatch">
+                  <input type="text" id="presetDarkHex4" class="color-hex" maxlength="7">
+                </div>
+              </div>
+
+              <div class="muted-hint">Tip: use preset names as “tags” in the Library → Tags view.</div>
             </div>
           </div>
         </div>

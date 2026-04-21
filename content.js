@@ -35,15 +35,35 @@ const DEFAULT_SETTINGS = {
 
 let userSettings = { ...DEFAULT_SETTINGS };
 
+function isExtensionContextValid() {
+  try {
+    return !!(chrome && chrome.runtime && chrome.runtime.id);
+  } catch {
+    return false;
+  }
+}
+
 // Load user settings from storage
 function loadUserSettings() {
   return new Promise((resolve) => {
-    chrome.storage.local.get('highlightSettings', (result) => {
-      if (result.highlightSettings) {
-        userSettings = { ...DEFAULT_SETTINGS, ...result.highlightSettings };
-      }
+    if (!isExtensionContextValid()) {
       resolve(userSettings);
-    });
+      return;
+    }
+    try {
+      chrome.storage.local.get('highlightSettings', (result) => {
+        if (chrome.runtime.lastError) {
+          resolve(userSettings);
+          return;
+        }
+        if (result.highlightSettings) {
+          userSettings = { ...DEFAULT_SETTINGS, ...result.highlightSettings };
+        }
+        resolve(userSettings);
+      });
+    } catch {
+      resolve(userSettings);
+    }
   });
 }
 
@@ -151,6 +171,7 @@ function saveHighlights() {
     const id = mark.dataset.highlightId;
     highlights.push({
       id,
+      presetId: mark.dataset.presetId || null,
       text: mark.textContent,
       xpath: getXPath(mark.parentNode),
       offset: getTextOffset(mark),
@@ -159,7 +180,10 @@ function saveHighlights() {
   });
 
   // Read existing data to preserve createdAt timestamps, then write
-  chrome.storage.local.get([key, 'highlightIndex'], (result) => {
+  if (!isExtensionContextValid()) return;
+  try {
+    chrome.storage.local.get([key, 'highlightIndex'], (result) => {
+      if (chrome.runtime.lastError) return;
     // Preserve existing createdAt timestamps and favorited flag
     const oldHighlights = result[key] || [];
     const oldTimestamps = {};
@@ -188,7 +212,10 @@ function saveHighlights() {
       chrome.storage.local.remove(key);
       chrome.storage.local.set({ highlightIndex: index });
     }
-  });
+    });
+  } catch {
+    // ignore
+  }
 }
 
 // Get XPath for an element
@@ -277,6 +304,7 @@ async function highlightSelection(presetIndex = 0) {
     ? userSettings.presets
     : DEFAULT_SETTINGS.presets;
   const preset = presets[presetIndex] || presets[0];
+  const presetId = preset && typeof preset.id === 'string' ? preset.id : null;
   const appliedColor = theme === 'dark'
     ? (preset.colorDark || userSettings.colorDark)
     : (preset.colorLight || userSettings.colorLight);
@@ -285,6 +313,7 @@ async function highlightSelection(presetIndex = 0) {
     const mark = document.createElement('mark');
     mark.className = 'text-highlighter-mark ' + themeClass;
     mark.dataset.highlightId = highlightId;
+    if (presetId) mark.dataset.presetId = presetId;
     if (appliedColor) {
       mark.style.backgroundColor = appliedColor;
     }
@@ -318,6 +347,7 @@ async function highlightSelection(presetIndex = 0) {
         const mark = document.createElement('mark');
         mark.className = 'text-highlighter-mark ' + themeClass;
         mark.dataset.highlightId = highlightId;
+        if (presetId) mark.dataset.presetId = presetId;
         if (appliedColor) {
           mark.style.backgroundColor = appliedColor;
         }
@@ -427,7 +457,10 @@ function removeHighlight(mark) {
 
   const allParts = document.querySelectorAll(`.text-highlighter-mark[data-highlight-id="${highlightId}"]`);
 
-  chrome.storage.local.get([key, RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
+  if (!isExtensionContextValid()) return;
+  try {
+    chrome.storage.local.get([key, RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
+      if (chrome.runtime.lastError) return;
     const highlights = result[key] || [];
     const hl = highlights.find(h => h.id === highlightId);
     const trash = Array.isArray(result[RECENTLY_DELETED_KEY])
@@ -476,7 +509,10 @@ function removeHighlight(mark) {
         });
       });
     }
-  });
+    });
+  } catch {
+    // ignore
+  }
 }
 
 // Remove highlight from current selection
@@ -505,7 +541,10 @@ function clearAllHighlights() {
   const key = getStorageKey();
   const url = window.location.href;
 
-  chrome.storage.local.get([key, RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
+  if (!isExtensionContextValid()) return;
+  try {
+    chrome.storage.local.get([key, RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
+      if (chrome.runtime.lastError) return;
     const highlights = result[key] || [];
     const trash = Array.isArray(result[RECENTLY_DELETED_KEY])
       ? [...result[RECENTLY_DELETED_KEY]]
@@ -540,14 +579,20 @@ function clearAllHighlights() {
         [RECENTLY_DELETED_KEY]: trash
       });
     });
-  });
+    });
+  } catch {
+    // ignore
+  }
 }
 
 // Restore highlights from storage
 function restoreHighlights() {
   const key = getStorageKey();
-  
-  chrome.storage.local.get(key, (result) => {
+
+  if (!isExtensionContextValid()) return;
+  try {
+    chrome.storage.local.get(key, (result) => {
+      if (chrome.runtime.lastError) return;
     const highlights = result[key];
     if (!highlights || !highlights.length) return;
 
@@ -633,7 +678,10 @@ function restoreHighlights() {
     if (needsColorBackfill) {
       saveHighlights();
     }
-  });
+    });
+  } catch {
+    // ignore
+  }
 }
 
 // ============================================
