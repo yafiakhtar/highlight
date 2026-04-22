@@ -624,6 +624,10 @@ chrome.commands.getAll((commands) => {
 
 const highlightsContainer = document.getElementById('highlightsContainer');
 const highlightCount = document.getElementById('highlightCount');
+const librarySearchInput = document.getElementById('librarySearch');
+
+let libraryQuery = '';
+let librarySearchDebounce = null;
 
 const RECENTLY_DELETED_KEY = 'recentlyDeletedHighlights';
 
@@ -645,6 +649,52 @@ function tightenPunctuation(text) {
     .replace(/\s+([\)\]\}])/g, '$1')
     // wikipedia-style numeric citations: "word [2]" -> "word[2]"
     .replace(/\s+(\[\d+\])/g, '$1');
+}
+
+function normalizeQuery(q) {
+  const clean = collapseWhitespace((q || '').toString().toLowerCase());
+  if (!clean) return [];
+  return clean.split(' ').filter(Boolean);
+}
+
+function matchesTokens(haystack, tokens) {
+  if (!tokens || tokens.length === 0) return true;
+  const h = (haystack || '').toString().toLowerCase();
+  return tokens.every(t => h.includes(t));
+}
+
+function pageMatchesQuery(pageTitle, pageUrl, tokens) {
+  return matchesTokens(pageTitle || '', tokens) || matchesTokens(pageUrl || '', tokens);
+}
+
+function highlightMatchesQuery(hlText, tokens) {
+  return matchesTokens(hlText || '', tokens);
+}
+
+function filterPagesByQuery(pages, tokens, { includeAllIfPageMatches } = { includeAllIfPageMatches: true }) {
+  if (!tokens || tokens.length === 0) {
+    return { pages, totalCount: pages.reduce((sum, p) => sum + (p.highlights?.length || 0), 0) };
+  }
+
+  const filteredPages = [];
+  let totalCount = 0;
+
+  for (const page of pages) {
+    const pageMatch = pageMatchesQuery(page.title, page.url, tokens);
+    if (pageMatch && includeAllIfPageMatches) {
+      filteredPages.push(page);
+      totalCount += page.highlights.length;
+      continue;
+    }
+
+    const filteredHighlights = page.highlights.filter(hl => highlightMatchesQuery(hl.text, tokens));
+    if (filteredHighlights.length === 0) continue;
+
+    filteredPages.push({ ...page, highlights: filteredHighlights });
+    totalCount += filteredHighlights.length;
+  }
+
+  return { pages: filteredPages, totalCount };
 }
 
 function normalizeStoredHighlights(raw) {
@@ -740,6 +790,16 @@ function refreshLibrary() {
   }
 }
 
+if (librarySearchInput) {
+  librarySearchInput.addEventListener('input', (e) => {
+    libraryQuery = (e.target && e.target.value) ? e.target.value : '';
+    if (librarySearchDebounce) clearTimeout(librarySearchDebounce);
+    librarySearchDebounce = setTimeout(() => {
+      refreshLibrary();
+    }, 120);
+  });
+}
+
 function getHighlightPresetId(hl) {
   if (hl && typeof hl.presetId === 'string' && hl.presetId.trim() !== '') return hl.presetId;
   // Back-compat: highlights created before presetId existed
@@ -768,9 +828,11 @@ function loadTagFolders() {
     const settings = all.highlightSettings || DEFAULTS;
     const presets = getTagPresetDefinitions(settings);
     const storageFixups = {};
+    const tokens = normalizeQuery(libraryQuery);
 
     const counts = {};
     let total = 0;
+    const tagHasMatch = {};
 
     for (const storageKey of Object.keys(all)) {
       if (!storageKey.startsWith('highlights_')) continue;
@@ -783,10 +845,21 @@ function loadTagFolders() {
       if (normalized.changed) {
         storageFixups[storageKey] = highlights;
       }
+
+      const url = storageKey.substring('highlights_'.length);
+      const meta = (all.highlightIndex && all.highlightIndex[url]) || {};
+      const pageTitle = meta.title || url;
+      const pageMatch = tokens.length > 0 ? pageMatchesQuery(pageTitle, url, tokens) : false;
+
       for (const hl of highlights) {
         const pid = getHighlightPresetId(hl);
+        const hlMatch = tokens.length > 0 ? highlightMatchesQuery(hl.text, tokens) : true;
+        const isMatch = tokens.length === 0 ? true : (pageMatch || hlMatch);
+        if (!isMatch) continue;
+
         counts[pid] = (counts[pid] || 0) + 1;
         total++;
+        tagHasMatch[pid] = true;
       }
     }
 
@@ -795,7 +868,22 @@ function loadTagFolders() {
     }
 
     highlightCount.textContent = total > 0 ? `${total} saved` : '';
-    renderTagFolders(presets, counts);
+    if (tokens.length > 0 && total === 0) {
+      highlightCount.textContent = '';
+      highlightsContainer.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-title">No results</div>
+          Try a different keyword.
+        </div>
+      `;
+      return;
+    }
+
+    const filteredPresets = tokens.length === 0
+      ? presets
+      : presets.filter(p => matchesTokens(p.name || '', tokens) || tagHasMatch[p.id]);
+
+    renderTagFolders(filteredPresets, counts);
   });
 }
 
@@ -842,6 +930,7 @@ function loadTagHighlights(presetId) {
     const presets = getTagPresetDefinitions(settings);
     const preset = presets.find(p => p.id === presetId) || presets[0];
     const storageFixups = {};
+    const tokens = normalizeQuery(libraryQuery);
 
     const index = all.highlightIndex || {};
     const pages = [];
@@ -861,14 +950,21 @@ function loadTagHighlights(presetId) {
         storageFixups[storageKey] = highlights;
       }
 
-      const filtered = highlights.filter(h => getHighlightPresetId(h) === presetId);
-      if (filtered.length === 0) continue;
+      const inTag = highlights.filter(h => getHighlightPresetId(h) === presetId);
+      if (inTag.length === 0) continue;
 
       const meta = index[url] || {};
+      const pageTitle = meta.title || url;
+      const pageMatch = tokens.length > 0 ? pageMatchesQuery(pageTitle, url, tokens) : false;
+      const filtered = tokens.length === 0
+        ? inTag
+        : (pageMatch ? inTag : inTag.filter(h => highlightMatchesQuery(h.text, tokens)));
+      if (filtered.length === 0) continue;
+
       totalCount += filtered.length;
       pages.push({
         url,
-        title: meta.title || url,
+        title: pageTitle,
         lastUpdated: meta.lastUpdated || Date.now(),
         highlights: filtered.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
       });
@@ -878,8 +974,8 @@ function loadTagHighlights(presetId) {
       highlightCount.textContent = '';
       highlightsContainer.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-title">No highlights in ${preset.name || 'this tag'}</div>
-          Highlights you create with this preset will appear here.
+          <div class="empty-state-title">${tokens.length > 0 ? 'No results' : `No highlights in ${preset.name || 'this tag'}`}</div>
+          ${tokens.length > 0 ? 'Try a different keyword.' : 'Highlights you create with this preset will appear here.'}
         </div>
       `;
       const toolbar = createTagsToolbar(preset);
@@ -981,7 +1077,20 @@ function loadAllHighlights() {
     // Sort pages by lastUpdated (most recent first)
     pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
 
-    renderHighlights(pages, totalCount, { countLabel: 'saved' });
+    const tokens = normalizeQuery(libraryQuery);
+    const filtered = filterPagesByQuery(pages, tokens, { includeAllIfPageMatches: true });
+    if (tokens.length > 0 && filtered.pages.length === 0) {
+      highlightCount.textContent = '';
+      highlightsContainer.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-title">No results</div>
+          Try a different keyword.
+        </div>
+      `;
+      return;
+    }
+
+    renderHighlights(filtered.pages, filtered.totalCount, { countLabel: 'saved' });
   });
 }
 
@@ -1023,13 +1132,26 @@ function loadFavoriteHighlights() {
       chrome.storage.local.set(storageFixups);
     }
 
-    if (pages.length === 0) {
+    const tokens = normalizeQuery(libraryQuery);
+    const filtered = filterPagesByQuery(pages, tokens, { includeAllIfPageMatches: true });
+
+    if (filtered.pages.length === 0) {
+      if (tokens.length > 0) {
+        highlightCount.textContent = '';
+        highlightsContainer.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-title">No results</div>
+            Try a different keyword.
+          </div>
+        `;
+        return;
+      }
       renderEmptyFavorites();
       return;
     }
 
-    pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
-    renderHighlights(pages, totalCount, { countLabel: 'favorited' });
+    filtered.pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+    renderHighlights(filtered.pages, filtered.totalCount, { countLabel: 'favorited' });
   });
 }
 
@@ -1046,10 +1168,30 @@ function renderEmptyFavorites() {
 function loadRecentlyDeleted() {
   chrome.storage.local.get(RECENTLY_DELETED_KEY, (result) => {
     const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
-    const sorted = trash.slice().sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+    const tokens = normalizeQuery(libraryQuery);
+    const filteredTrash = tokens.length === 0
+      ? trash
+      : trash.filter(entry => {
+          const hlText = entry && entry.highlight ? entry.highlight.text : '';
+          return matchesTokens(hlText, tokens)
+            || matchesTokens(entry.pageTitle || '', tokens)
+            || matchesTokens(entry.pageUrl || '', tokens);
+        });
+
+    const sorted = filteredTrash.slice().sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
 
     if (sorted.length === 0) {
-      renderEmptyTrash();
+      if (tokens.length > 0) {
+        highlightCount.textContent = '';
+        highlightsContainer.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-title">No results</div>
+            Try a different keyword.
+          </div>
+        `;
+      } else {
+        renderEmptyTrash();
+      }
       return;
     }
 
