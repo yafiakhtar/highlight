@@ -631,6 +631,89 @@ function generateTrashId() {
   return 'tr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
 }
 
+function collapseWhitespace(text) {
+  return (text || '').toString().replace(/\s+/g, ' ').trim();
+}
+
+function normalizeStoredHighlights(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) return { highlights: [], changed: false };
+
+  let changed = false;
+  const byId = new Map();
+  for (const h of raw) {
+    if (!h || typeof h.id !== 'string' || h.id.trim() === '') continue;
+    if (!byId.has(h.id)) byId.set(h.id, []);
+    byId.get(h.id).push(h);
+  }
+
+  const merged = [];
+  for (const [id, items] of byId.entries()) {
+    if (items.length === 1 && Array.isArray(items[0].parts) && items[0].parts.length > 0) {
+      const one = { ...items[0] };
+      const combined = collapseWhitespace((one.parts || []).map(p => (p && p.text) || '').join(' '));
+      if (combined && combined !== one.text) {
+        one.text = combined;
+        changed = true;
+      }
+      merged.push(one);
+      continue;
+    }
+
+    if (items.length > 1) changed = true;
+    if (items.length === 1 && !Array.isArray(items[0].parts)) changed = true;
+
+    const base = items[0] || { id };
+    const parts = [];
+    for (const it of items) {
+      if (Array.isArray(it.parts) && it.parts.length > 0) {
+        for (const p of it.parts) {
+          if (!p) continue;
+          parts.push({
+            xpath: p.xpath || it.xpath || '',
+            offset: typeof p.offset === 'number' ? p.offset : (typeof it.offset === 'number' ? it.offset : 0),
+            text: p.text || ''
+          });
+        }
+      } else {
+        parts.push({
+          xpath: it.xpath || '',
+          offset: typeof it.offset === 'number' ? it.offset : 0,
+          text: it.text || ''
+        });
+      }
+    }
+
+    const combinedText = collapseWhitespace(parts.map(p => p.text).join(' '));
+    const createdAt = Math.min(...items.map(it => (typeof it.createdAt === 'number' ? it.createdAt : Date.now())));
+    const favorited = items.some(it => it && it.favorited === true);
+    const color = items.find(it => typeof it.color === 'string' && it.color.trim() !== '')?.color
+      || base.color
+      || null;
+    const presetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
+      || base.presetId
+      || null;
+
+    const firstPart = parts[0] || { xpath: base.xpath || '', offset: base.offset || 0 };
+    const out = {
+      ...base,
+      id,
+      presetId,
+      text: combinedText,
+      xpath: firstPart.xpath,
+      offset: firstPart.offset,
+      color,
+      createdAt,
+      parts
+    };
+    if (favorited) out.favorited = true;
+    else delete out.favorited;
+
+    merged.push(out);
+  }
+
+  return { highlights: merged, changed };
+}
+
 function refreshLibrary() {
   if (currentLibraryView === 'recently-deleted') {
     loadRecentlyDeleted();
@@ -670,19 +753,31 @@ function loadTagFolders() {
   chrome.storage.local.get(null, (all) => {
     const settings = all.highlightSettings || DEFAULTS;
     const presets = getTagPresetDefinitions(settings);
+    const storageFixups = {};
 
     const counts = {};
     let total = 0;
 
     for (const storageKey of Object.keys(all)) {
       if (!storageKey.startsWith('highlights_')) continue;
-      const highlights = all[storageKey];
+      const raw = all[storageKey];
+      if (!Array.isArray(raw) || raw.length === 0) continue;
+
+      const normalized = normalizeStoredHighlights(raw);
+      const highlights = normalized.highlights;
       if (!Array.isArray(highlights) || highlights.length === 0) continue;
+      if (normalized.changed) {
+        storageFixups[storageKey] = highlights;
+      }
       for (const hl of highlights) {
         const pid = getHighlightPresetId(hl);
         counts[pid] = (counts[pid] || 0) + 1;
         total++;
       }
+    }
+
+    if (Object.keys(storageFixups).length > 0) {
+      chrome.storage.local.set(storageFixups);
     }
 
     highlightCount.textContent = total > 0 ? `${total} saved` : '';
@@ -732,6 +827,7 @@ function loadTagHighlights(presetId) {
     const settings = all.highlightSettings || DEFAULTS;
     const presets = getTagPresetDefinitions(settings);
     const preset = presets.find(p => p.id === presetId) || presets[0];
+    const storageFixups = {};
 
     const index = all.highlightIndex || {};
     const pages = [];
@@ -741,8 +837,15 @@ function loadTagHighlights(presetId) {
       if (!storageKey.startsWith('highlights_')) continue;
 
       const url = storageKey.substring('highlights_'.length);
-      const highlights = all[storageKey];
+      const raw = all[storageKey];
+      if (!Array.isArray(raw) || raw.length === 0) continue;
+
+      const normalized = normalizeStoredHighlights(raw);
+      const highlights = normalized.highlights;
       if (!Array.isArray(highlights) || highlights.length === 0) continue;
+      if (normalized.changed) {
+        storageFixups[storageKey] = highlights;
+      }
 
       const filtered = highlights.filter(h => getHighlightPresetId(h) === presetId);
       if (filtered.length === 0) continue;
@@ -768,6 +871,10 @@ function loadTagHighlights(presetId) {
       const toolbar = createTagsToolbar(preset);
       highlightsContainer.prepend(toolbar);
       return;
+    }
+
+    if (Object.keys(storageFixups).length > 0) {
+      chrome.storage.local.set(storageFixups);
     }
 
     pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
@@ -803,6 +910,7 @@ function loadAllHighlights() {
   chrome.storage.local.get(null, (all) => {
     const index = all.highlightIndex || {};
     const indexNeedsUpdate = {};
+    const storageFixups = {};
 
     // Scan ALL keys for highlights_* data — don't rely only on the index
     const pages = [];
@@ -812,8 +920,15 @@ function loadAllHighlights() {
       if (!storageKey.startsWith('highlights_')) continue;
 
       const url = storageKey.substring('highlights_'.length);
-      const highlights = all[storageKey];
+      const raw = all[storageKey];
+      if (!Array.isArray(raw) || raw.length === 0) continue;
+
+      const normalized = normalizeStoredHighlights(raw);
+      const highlights = normalized.highlights;
       if (!Array.isArray(highlights) || highlights.length === 0) continue;
+      if (normalized.changed) {
+        storageFixups[storageKey] = highlights;
+      }
 
       // Use index metadata if available, otherwise build it
       const meta = index[url] || {};
@@ -832,6 +947,10 @@ function loadAllHighlights() {
         lastUpdated,
         highlights: highlights.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
       });
+    }
+
+    if (Object.keys(storageFixups).length > 0) {
+      chrome.storage.local.set(storageFixups);
     }
 
     // Repair: write missing entries back to the index
@@ -857,15 +976,23 @@ function loadFavoriteHighlights() {
     const index = all.highlightIndex || {};
     const pages = [];
     let totalCount = 0;
+    const storageFixups = {};
 
     for (const storageKey of Object.keys(all)) {
       if (!storageKey.startsWith('highlights_')) continue;
 
       const url = storageKey.substring('highlights_'.length);
-      const highlights = all[storageKey];
-      if (!Array.isArray(highlights) || highlights.length === 0) continue;
+      const raw = all[storageKey];
+      if (!Array.isArray(raw) || raw.length === 0) continue;
 
-      const favs = highlights.filter(h => h.favorited === true);
+      const normalized = normalizeStoredHighlights(raw);
+      const highlights = normalized.highlights;
+      if (!Array.isArray(highlights) || highlights.length === 0) continue;
+      if (normalized.changed) {
+        storageFixups[storageKey] = highlights;
+      }
+
+      const favs = highlights.filter(h => h && h.favorited === true);
       if (favs.length === 0) continue;
 
       const meta = index[url] || {};
@@ -876,6 +1003,10 @@ function loadFavoriteHighlights() {
         lastUpdated: meta.lastUpdated || Date.now(),
         highlights: favs.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
       });
+    }
+
+    if (Object.keys(storageFixups).length > 0) {
+      chrome.storage.local.set(storageFixups);
     }
 
     if (pages.length === 0) {

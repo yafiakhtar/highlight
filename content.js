@@ -160,24 +160,139 @@ function generateId() {
   return 'hl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
 }
 
+function collapseWhitespace(text) {
+  return (text || '').toString().replace(/\s+/g, ' ').trim();
+}
+
+function normalizeStoredHighlights(raw) {
+  if (!Array.isArray(raw) || raw.length === 0) return { highlights: [], changed: false };
+
+  let changed = false;
+  const byId = new Map();
+
+  for (const h of raw) {
+    if (!h || typeof h.id !== 'string' || h.id.trim() === '') continue;
+    if (!byId.has(h.id)) byId.set(h.id, []);
+    byId.get(h.id).push(h);
+  }
+
+  const merged = [];
+  for (const [id, items] of byId.entries()) {
+    if (items.length === 1 && Array.isArray(items[0].parts) && items[0].parts.length > 0) {
+      // Ensure text is normalized
+      const one = { ...items[0] };
+      const combined = collapseWhitespace(
+        (one.parts || []).map(p => (p && p.text) || '').join(' ')
+      );
+      if (combined && combined !== one.text) {
+        one.text = combined;
+        changed = true;
+      }
+      merged.push(one);
+      continue;
+    }
+
+    if (items.length > 1) changed = true;
+    if (items.length === 1 && !Array.isArray(items[0].parts)) changed = true;
+
+    // Merge duplicates into one record with parts[]
+    const base = items[0] || { id };
+
+    const parts = [];
+    for (const it of items) {
+      if (Array.isArray(it.parts) && it.parts.length > 0) {
+        for (const p of it.parts) {
+          if (!p) continue;
+          parts.push({
+            xpath: p.xpath || it.xpath || '',
+            offset: typeof p.offset === 'number' ? p.offset : (typeof it.offset === 'number' ? it.offset : 0),
+            text: p.text || ''
+          });
+        }
+      } else {
+        parts.push({
+          xpath: it.xpath || '',
+          offset: typeof it.offset === 'number' ? it.offset : 0,
+          text: it.text || ''
+        });
+      }
+    }
+
+    const combinedText = collapseWhitespace(parts.map(p => p.text).join(' '));
+    const createdAt = Math.min(...items.map(it => (typeof it.createdAt === 'number' ? it.createdAt : Date.now())));
+    const favorited = items.some(it => it && it.favorited === true);
+    const color = items.find(it => typeof it.color === 'string' && it.color.trim() !== '')?.color
+      || base.color
+      || null;
+    const presetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
+      || base.presetId
+      || null;
+
+    const firstPart = parts[0] || { xpath: base.xpath || '', offset: base.offset || 0 };
+
+    const out = {
+      ...base,
+      id,
+      presetId,
+      text: combinedText,
+      xpath: firstPart.xpath,
+      offset: firstPart.offset,
+      color,
+      createdAt,
+      parts
+    };
+
+    if (favorited) out.favorited = true;
+    else delete out.favorited;
+
+    merged.push(out);
+  }
+
+  return { highlights: merged, changed };
+}
+
 // Save highlights to storage and update the global index
 function saveHighlights() {
   const key = getStorageKey();
   const url = window.location.href;
 
   // Gather current highlights from the DOM first (synchronous)
-  const highlights = [];
-  document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
+  const marks = Array.from(document.querySelectorAll('.text-highlighter-mark'));
+  const byId = new Map();
+
+  for (const mark of marks) {
     const id = mark.dataset.highlightId;
-    highlights.push({
-      id,
-      presetId: mark.dataset.presetId || null,
-      text: mark.textContent,
+    if (!id) continue;
+    if (!byId.has(id)) byId.set(id, []);
+    byId.get(id).push(mark);
+  }
+
+  const highlights = [];
+  for (const [id, group] of byId.entries()) {
+    const first = group[0];
+    const parts = group.map(mark => ({
       xpath: getXPath(mark.parentNode),
       offset: getTextOffset(mark),
-      color: mark.style.backgroundColor || null
+      text: mark.textContent || ''
+    }));
+
+    const combinedText = collapseWhitespace(parts.map(p => p.text).join(' '));
+    const presetId = first.dataset.presetId || null;
+    const color = first.style.backgroundColor || null;
+
+    // Keep xpath/offset for older readers; points at first part.
+    const firstPart = parts[0] || { xpath: '', offset: 0, text: '' };
+
+    highlights.push({
+      id,
+      presetId,
+      text: combinedText,
+      xpath: firstPart.xpath,
+      offset: firstPart.offset,
+      color,
+      parts
     });
-  });
+  }
 
   // Read existing data to preserve createdAt timestamps, then write
   if (!isExtensionContextValid()) return;
@@ -593,8 +708,20 @@ function restoreHighlights() {
   try {
     chrome.storage.local.get(key, (result) => {
       if (chrome.runtime.lastError) return;
-    const highlights = result[key];
-    if (!highlights || !highlights.length) return;
+    const raw = result[key];
+    if (!raw || !raw.length) return;
+
+    const normalized = normalizeStoredHighlights(raw);
+    const highlights = normalized.highlights;
+    if (!highlights || highlights.length === 0) return;
+
+    if (normalized.changed) {
+      try {
+        chrome.storage.local.set({ [key]: highlights });
+      } catch {
+        // ignore
+      }
+    }
 
     const theme = getPageTheme();
     const themeClass = theme === 'dark' ? 'hl-dark' : 'hl-light';
@@ -606,68 +733,81 @@ function restoreHighlights() {
         if (document.querySelector(`.text-highlighter-mark[data-highlight-id="${highlight.id}"]`)) {
           return;
         }
-        // Find the element using XPath
-        const xpathResult = document.evaluate(
-          highlight.xpath,
-          document,
-          null,
-          XPathResult.FIRST_ORDERED_NODE_TYPE,
-          null
-        );
-        
-        const element = xpathResult.singleNodeValue;
-        if (!element) return;
-        
-        // Find the text within the element
-        const walker = document.createTreeWalker(
-          element,
-          NodeFilter.SHOW_TEXT,
-          null,
-          false
-        );
-        
-        let currentOffset = 0;
-        let node;
-        
-        while ((node = walker.nextNode())) {
-          const nodeLength = node.textContent.length;
+        const parts = Array.isArray(highlight.parts) && highlight.parts.length > 0
+          ? highlight.parts
+          : [{ xpath: highlight.xpath, offset: highlight.offset, text: highlight.text }];
+
+        const hasStoredColor = typeof highlight.color === 'string' && highlight.color.trim() !== '';
+        const appliedColor = hasStoredColor ? highlight.color : fallbackColor;
+        if (!hasStoredColor) needsColorBackfill = true;
+
+        parts.forEach(part => {
+          if (!part || !part.xpath) return;
+
+          // Find the element using XPath
+          const xpathResult = document.evaluate(
+            part.xpath,
+            document,
+            null,
+            XPathResult.FIRST_ORDERED_NODE_TYPE,
+            null
+          );
           
-          // Check if this node contains our highlight start
-          if (currentOffset + nodeLength > highlight.offset) {
-            const localOffset = highlight.offset - currentOffset;
-            const text = node.textContent;
+          const element = xpathResult.singleNodeValue;
+          if (!element) return;
+          
+          // Find the text within the element
+          const walker = document.createTreeWalker(
+            element,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+          );
+          
+          let currentOffset = 0;
+          let node;
+          
+          while ((node = walker.nextNode())) {
+            const nodeLength = node.textContent.length;
             
-            // Search slightly before expected offset to tolerate minor DOM changes
-            const idx = text.indexOf(highlight.text, localOffset > 0 ? localOffset - 5 : 0);
-            if (idx !== -1) {
-              const range = document.createRange();
-              range.setStart(node, idx);
-              range.setEnd(node, idx + highlight.text.length);
-
-              const hasStoredColor = typeof highlight.color === 'string' && highlight.color.trim() !== '';
-              const appliedColor = hasStoredColor ? highlight.color : fallbackColor;
-              if (!hasStoredColor) needsColorBackfill = true;
-
-              const mark = document.createElement('mark');
-              mark.className = 'text-highlighter-mark ' + themeClass;
-              mark.dataset.highlightId = highlight.id;
-              if (appliedColor) {
-                mark.style.backgroundColor = appliedColor;
-              }
+            // Check if this node contains our highlight start
+            if (currentOffset + nodeLength > (part.offset || 0)) {
+              const localOffset = (part.offset || 0) - currentOffset;
+              const text = node.textContent;
+              const needle = (part.text || '').toString();
+              if (!needle) return;
               
-              try {
-                range.surroundContents(mark);
-                mark.addEventListener('click', handleHighlightClick);
-              } catch (e) {
-                // Ignore errors during restore
+              // Search slightly before expected offset to tolerate minor DOM changes
+              const idx = text.indexOf(needle, localOffset > 0 ? localOffset - 5 : 0);
+              if (idx !== -1) {
+                const range = document.createRange();
+                range.setStart(node, idx);
+                range.setEnd(node, idx + needle.length);
+
+                const mark = document.createElement('mark');
+                mark.className = 'text-highlighter-mark ' + themeClass;
+                mark.dataset.highlightId = highlight.id;
+                if (typeof highlight.presetId === 'string' && highlight.presetId.trim() !== '') {
+                  mark.dataset.presetId = highlight.presetId;
+                }
+                if (appliedColor) {
+                  mark.style.backgroundColor = appliedColor;
+                }
+                
+                try {
+                  range.surroundContents(mark);
+                  mark.addEventListener('click', handleHighlightClick);
+                } catch (e) {
+                  // Ignore errors during restore
+                }
+                
+                return;
               }
-              
-              return;
             }
+            
+            currentOffset += nodeLength;
           }
-          
-          currentOffset += nodeLength;
-        }
+        });
       } catch (e) {
         // Ignore errors during restore
       }
