@@ -635,6 +635,18 @@ function collapseWhitespace(text) {
   return (text || '').toString().replace(/\s+/g, ' ').trim();
 }
 
+function tightenPunctuation(text) {
+  return (text || '')
+    .toString()
+    // remove spaces before punctuation
+    .replace(/\s+([,.;:!?])/g, '$1')
+    // remove spaces just inside brackets/parentheses
+    .replace(/([\(\[\{])\s+/g, '$1')
+    .replace(/\s+([\)\]\}])/g, '$1')
+    // wikipedia-style numeric citations: "word [2]" -> "word[2]"
+    .replace(/\s+(\[\d+\])/g, '$1');
+}
+
 function normalizeStoredHighlights(raw) {
   if (!Array.isArray(raw) || raw.length === 0) return { highlights: [], changed: false };
 
@@ -650,7 +662,8 @@ function normalizeStoredHighlights(raw) {
   for (const [id, items] of byId.entries()) {
     if (items.length === 1 && Array.isArray(items[0].parts) && items[0].parts.length > 0) {
       const one = { ...items[0] };
-      const combined = collapseWhitespace((one.parts || []).map(p => (p && p.text) || '').join(' '));
+      const collapsed = collapseWhitespace((one.parts || []).map(p => (p && p.text) || '').join(' '));
+      const combined = one.parts.length > 1 ? tightenPunctuation(collapsed) : collapsed;
       if (combined && combined !== one.text) {
         one.text = combined;
         changed = true;
@@ -683,7 +696,8 @@ function normalizeStoredHighlights(raw) {
       }
     }
 
-    const combinedText = collapseWhitespace(parts.map(p => p.text).join(' '));
+    const collapsed = collapseWhitespace(parts.map(p => p.text).join(' '));
+    const combinedText = parts.length > 1 ? tightenPunctuation(collapsed) : collapsed;
     const createdAt = Math.min(...items.map(it => (typeof it.createdAt === 'number' ? it.createdAt : Date.now())));
     const favorited = items.some(it => it && it.favorited === true);
     const color = items.find(it => typeof it.color === 'string' && it.color.trim() !== '')?.color
