@@ -27,13 +27,14 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       document.body.classList.remove('dark');
     }
   }
-  if (changes.highlightSettings) {
-    const s = changes.highlightSettings.newValue;
-    if (s) {
+  const needsFabUpdate = !!changes.highlightSettings || Object.prototype.hasOwnProperty.call(changes, 'lastUsedPresetId');
+  if (needsFabUpdate) {
+    chrome.storage.local.get(['highlightSettings', 'lastUsedPresetId'], (data) => {
+      const s = data.highlightSettings || {};
       fabToggleBtn.classList.toggle('fab-disabled', s.showFab === false);
       fabToggleBtn.title = s.showFab === false ? 'Enable FAB' : 'Disable FAB';
-      applyFabColors(s.colorLight, s.colorDark);
-    }
+      applyFabColorsFromState(s, data.lastUsedPresetId);
+    });
   }
 });
 
@@ -69,14 +70,36 @@ function applyFabColors(colorLight, colorDark) {
   if (darkEl) darkEl.setAttribute('fill', colorDark || FAB_COLOR_DARK_DEFAULT);
 }
 
+function isValidHex(str) {
+  return typeof str === 'string' && /^#[0-9A-Fa-f]{6}$/.test(str.trim());
+}
+
+function applyFabColorsFromState(settings, lastUsedPresetId) {
+  const presets = Array.isArray(settings && settings.presets) ? settings.presets : [];
+  const safeId = typeof lastUsedPresetId === 'string' ? lastUsedPresetId.trim() : '';
+  const preset = (safeId ? presets.find(p => p && p.id === safeId) : null) || presets[0] || null;
+
+  const light =
+    (preset && isValidHex(preset.colorLight) ? preset.colorLight : null) ||
+    (isValidHex(settings && settings.colorLight) ? settings.colorLight : null) ||
+    FAB_COLOR_LIGHT_DEFAULT;
+
+  const dark =
+    (preset && isValidHex(preset.colorDark) ? preset.colorDark : null) ||
+    (isValidHex(settings && settings.colorDark) ? settings.colorDark : null) ||
+    FAB_COLOR_DARK_DEFAULT;
+
+  applyFabColors(light, dark);
+}
+
 // Load saved FAB preference and split colours
-chrome.storage.local.get('highlightSettings', (data) => {
+chrome.storage.local.get(['highlightSettings', 'lastUsedPresetId'], (data) => {
   const settings = data.highlightSettings || {};
   if (settings.showFab === false) {
     fabToggleBtn.classList.add('fab-disabled');
     fabToggleBtn.title = 'Enable FAB';
   }
-  applyFabColors(settings.colorLight, settings.colorDark);
+  applyFabColorsFromState(settings, data.lastUsedPresetId);
 });
 
 fabToggleBtn.addEventListener('click', () => {

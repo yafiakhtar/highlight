@@ -889,6 +889,14 @@ function createHighlightFab() {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      // Track last-used preset for popup icon consistency
+      try {
+        if (isExtensionContextValid() && preset && typeof preset.id === 'string' && preset.id.trim() !== '') {
+          chrome.storage.local.set({ lastUsedPresetId: preset.id });
+        }
+      } catch {
+        // ignore
+      }
       highlightSelection(index);
       hideHighlightFab();
     });
