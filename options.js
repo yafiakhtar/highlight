@@ -220,6 +220,12 @@ const presetRows = [1, 2, 3, 4].map(i => ({
   darkHex: document.getElementById(`presetDarkHex${i}`)
 }));
 
+const lastChangedSideByRow = [null, null, null, null];
+
+const autoMatchAllLightToDarkBtn = document.getElementById('autoMatchAllLightToDark');
+const autoMatchAllDarkToLightBtn = document.getElementById('autoMatchAllDarkToLight');
+const autoMatchRowButtons = [1, 2, 3, 4].map(i => document.getElementById(`autoMatchPreset${i}`));
+
 // ---- Color sync helpers ----
 
 function syncLightColor(hex) {
@@ -354,6 +360,48 @@ function deriveLightFromDark(hex) {
   return hslToHex(h, 52, 85);
 }
 
+function autoMatchRowLightToDark(index) {
+  if (!pendingSettings) return;
+  const row = presetRows[index];
+  if (!row || !row.light || !row.dark || !row.darkHex) return;
+  const light = row.light.value;
+  if (!isValidHex(light)) return;
+  const dark = deriveDarkFromLight(light);
+  row.dark.value = dark;
+  row.darkHex.value = dark.toUpperCase();
+  const presets = normalizePresets(pendingSettings.presets);
+  const p = presets[index] || presets[0];
+  p.colorDark = dark;
+  pendingSettings.presets = presets;
+  syncPresetSwatches(pendingSettings.presets);
+  refreshTagsLibraryIfLive();
+}
+
+function autoMatchRowDarkToLight(index) {
+  if (!pendingSettings) return;
+  const row = presetRows[index];
+  if (!row || !row.light || !row.lightHex || !row.dark) return;
+  const dark = row.dark.value;
+  if (!isValidHex(dark)) return;
+  const light = deriveLightFromDark(dark);
+  row.light.value = light;
+  row.lightHex.value = light.toUpperCase();
+  const presets = normalizePresets(pendingSettings.presets);
+  const p = presets[index] || presets[0];
+  p.colorLight = light;
+  pendingSettings.presets = presets;
+  syncPresetSwatches(pendingSettings.presets);
+  refreshTagsLibraryIfLive();
+}
+
+function autoMatchRow(index) {
+  if (lastChangedSideByRow[index] === 'dark') {
+    autoMatchRowDarkToLight(index);
+  } else {
+    autoMatchRowLightToDark(index);
+  }
+}
+
 // Validate hex color input
 function isValidHex(str) {
   return /^#[0-9A-Fa-f]{6}$/.test(str);
@@ -486,6 +534,7 @@ presetRows.forEach((row, index) => {
   row.light.addEventListener('input', (e) => {
     if (!pendingSettings) return;
     const hex = e.target.value;
+    lastChangedSideByRow[index] = 'light';
     row.lightHex.value = hex.toUpperCase();
     const presets = normalizePresets(pendingSettings.presets);
     const p = presets[index] || presets[0];
@@ -498,6 +547,7 @@ presetRows.forEach((row, index) => {
   row.dark.addEventListener('input', (e) => {
     if (!pendingSettings) return;
     const hex = e.target.value;
+    lastChangedSideByRow[index] = 'dark';
     row.darkHex.value = hex.toUpperCase();
     const presets = normalizePresets(pendingSettings.presets);
     const p = presets[index] || presets[0];
@@ -512,6 +562,7 @@ presetRows.forEach((row, index) => {
     let val = e.target.value || '';
     if (!val.startsWith('#')) val = '#' + val;
     if (!isValidHex(val)) return;
+    lastChangedSideByRow[index] = 'light';
     row.light.value = val;
     const presets = normalizePresets(pendingSettings.presets);
     const p = presets[index] || presets[0];
@@ -526,6 +577,7 @@ presetRows.forEach((row, index) => {
     let val = e.target.value || '';
     if (!val.startsWith('#')) val = '#' + val;
     if (!isValidHex(val)) return;
+    lastChangedSideByRow[index] = 'dark';
     row.dark.value = val;
     const presets = normalizePresets(pendingSettings.presets);
     const p = presets[index] || presets[0];
@@ -547,6 +599,29 @@ presetRows.forEach((row, index) => {
     }
   });
 });
+
+autoMatchRowButtons.forEach((btn, index) => {
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    autoMatchRow(index);
+  });
+});
+
+if (autoMatchAllLightToDarkBtn) {
+  autoMatchAllLightToDarkBtn.addEventListener('click', () => {
+    for (let i = 0; i < presetRows.length; i++) {
+      autoMatchRowLightToDark(i);
+    }
+  });
+}
+
+if (autoMatchAllDarkToLightBtn) {
+  autoMatchAllDarkToLightBtn.addEventListener('click', () => {
+    for (let i = 0; i < presetRows.length; i++) {
+      autoMatchRowDarkToLight(i);
+    }
+  });
+}
 
 // ---- Save / Load / Reset ----
 
