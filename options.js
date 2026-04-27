@@ -14,6 +14,10 @@ document.getElementById('optionsThemeToggle').addEventListener('click', () => {
   if (pendingSettings) {
     syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
   }
+  // Refresh FAB builder preview colors for this theme
+  renderFabToolbox();
+  renderFabGrid();
+  renderFabPreview();
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -35,6 +39,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       if (pendingSettings.showFab !== undefined) showFabToggle.checked = pendingSettings.showFab;
       syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
       syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
+      // Keep FAB builder colors in sync with preset edits
+      renderFabToolbox();
+      renderFabGrid();
+      renderFabPreview();
       if (isLibraryTabActive()) {
         refreshLibrary();
       }
@@ -225,6 +233,280 @@ const lastChangedSideByRow = [null, null, null, null];
 const autoMatchAllLightToDarkBtn = document.getElementById('autoMatchAllLightToDark');
 const autoMatchAllDarkToLightBtn = document.getElementById('autoMatchAllDarkToLight');
 const autoMatchRowButtons = [1, 2, 3, 4].map(i => document.getElementById(`autoMatchPreset${i}`));
+
+// ============================================
+// Settings → FAB builder
+// ============================================
+
+const FAB_LAYOUT_KEY = 'fabLayoutV1';
+const fabToolboxEl = document.getElementById('fabToolbox');
+const fabGridEl = document.getElementById('fabGrid');
+const fabPreviewEl = document.getElementById('fabPreview');
+const fabRemoveZoneEl = document.getElementById('fabRemoveZone');
+
+const FAB_BUTTON_DEFS = [
+  { id: 'preset1', label: 'Preset 1', type: 'preset', presetIndex: 0 },
+  { id: 'preset2', label: 'Preset 2', type: 'preset', presetIndex: 1 },
+  { id: 'preset3', label: 'Preset 3', type: 'preset', presetIndex: 2 },
+  { id: 'preset4', label: 'Preset 4', type: 'preset', presetIndex: 3 },
+  { id: 'favorite', label: 'Favorite', type: 'placeholder', glyph: '★' },
+  { id: 'comment', label: 'Comment', type: 'placeholder', glyph: '💬' },
+  { id: 'copyLink', label: 'Copy link', type: 'placeholder', glyph: '⧉' },
+  { id: 'share', label: 'Share', type: 'placeholder', glyph: '↗' }
+];
+
+let fabLayoutState = null;
+
+function defaultFabLayout() {
+  return { rows: 2, cols: 4, slots: ['preset1', 'preset2', 'preset3', 'preset4', null, null, null, null] };
+}
+
+function normalizeFabLayout(raw) {
+  const base = defaultFabLayout();
+  if (!raw || typeof raw !== 'object') return base;
+  const rows = raw.rows === 2 ? 2 : 2;
+  const cols = raw.cols === 4 ? 4 : 4;
+  const expected = rows * cols;
+  const slots = Array.isArray(raw.slots) ? raw.slots.slice(0, expected) : [];
+  while (slots.length < expected) slots.push(null);
+
+  // Only keep known button IDs; everything else becomes null.
+  const allowed = new Set(FAB_BUTTON_DEFS.map(d => d.id));
+  for (let i = 0; i < slots.length; i++) {
+    if (slots[i] == null) continue;
+    if (!allowed.has(slots[i])) slots[i] = null;
+  }
+  return { rows, cols, slots };
+}
+
+function getFabButtonDef(id) {
+  return FAB_BUTTON_DEFS.find(d => d.id === id) || null;
+}
+
+function getPresetColorsForIndex(idx) {
+  const isDark = document.body.classList.contains('dark');
+  const presets = pendingSettings && Array.isArray(pendingSettings.presets)
+    ? normalizePresets(pendingSettings.presets)
+    : DEFAULTS.presets;
+  const p = presets[idx] || presets[0] || {};
+  return {
+    light: p.colorLight || DEFAULTS.colorLight,
+    dark: p.colorDark || DEFAULTS.colorDark,
+    current: isDark ? (p.colorDark || DEFAULTS.colorDark) : (p.colorLight || DEFAULTS.colorLight)
+  };
+}
+
+function showFabPreviewToast(message) {
+  showToast(message);
+}
+
+function persistFabLayout() {
+  if (!fabLayoutState) return;
+  chrome.storage.local.set({ [FAB_LAYOUT_KEY]: fabLayoutState });
+}
+
+function renderFabToolbox() {
+  if (!fabToolboxEl) return;
+  fabToolboxEl.innerHTML = '';
+  FAB_BUTTON_DEFS.forEach(def => {
+    const chip = document.createElement('div');
+    chip.className = 'fab-toolbox-item';
+    chip.draggable = true;
+    chip.dataset.fabButtonId = def.id;
+
+    const swatch = document.createElement('span');
+    swatch.className = 'fab-toolbox-swatch';
+    if (def.type === 'preset') {
+      swatch.style.backgroundColor = getPresetColorsForIndex(def.presetIndex).current;
+    } else {
+      swatch.style.backgroundColor = 'transparent';
+      swatch.style.borderStyle = 'solid';
+    }
+
+    const label = document.createElement('span');
+    label.textContent = def.label;
+
+    chip.appendChild(swatch);
+    chip.appendChild(label);
+
+    chip.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'copyMove';
+      e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'toolbox', id: def.id }));
+    });
+
+    fabToolboxEl.appendChild(chip);
+  });
+}
+
+function renderFabGrid() {
+  if (!fabGridEl || !fabLayoutState) return;
+  fabGridEl.innerHTML = '';
+  fabGridEl.style.gridTemplateColumns = `repeat(${fabLayoutState.cols}, minmax(0, 1fr))`;
+
+  fabLayoutState.slots.forEach((slotId, idx) => {
+    const slot = document.createElement('div');
+    slot.className = 'fab-slot';
+    slot.dataset.slotIndex = String(idx);
+
+    const setOver = (on) => slot.classList.toggle('is-over', on);
+
+    slot.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      setOver(true);
+      e.dataTransfer.dropEffect = 'move';
+    });
+    slot.addEventListener('dragleave', () => setOver(false));
+    slot.addEventListener('drop', (e) => {
+      e.preventDefault();
+      setOver(false);
+      handleFabDropToSlot(idx, e);
+    });
+
+    if (slotId) {
+      const def = getFabButtonDef(slotId);
+      const btn = document.createElement('div');
+      btn.className = 'fab-slot-btn';
+      btn.draggable = true;
+      btn.dataset.fabButtonId = slotId;
+      btn.title = def ? def.label : slotId;
+
+      if (def && def.type === 'preset') {
+        btn.style.backgroundColor = getPresetColorsForIndex(def.presetIndex).current;
+      } else {
+        btn.textContent = def && def.glyph ? def.glyph : '⋯';
+      }
+
+      btn.addEventListener('dragstart', (ev) => {
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'slot', fromIndex: idx, id: slotId }));
+      });
+
+      slot.appendChild(btn);
+    } else {
+      slot.textContent = 'Empty';
+    }
+
+    fabGridEl.appendChild(slot);
+  });
+}
+
+function renderFabPreview() {
+  if (!fabPreviewEl || !fabLayoutState) return;
+  fabPreviewEl.innerHTML = '';
+  fabPreviewEl.style.gridTemplateColumns = `repeat(${fabLayoutState.cols}, 32px)`;
+
+  fabLayoutState.slots.forEach((slotId) => {
+    if (!slotId) {
+      const spacer = document.createElement('div');
+      spacer.style.width = '32px';
+      spacer.style.height = '32px';
+      fabPreviewEl.appendChild(spacer);
+      return;
+    }
+
+    const def = getFabButtonDef(slotId);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'fab-preview-btn';
+    btn.title = def ? def.label : slotId;
+
+    if (def && def.type === 'preset') {
+      btn.style.backgroundColor = getPresetColorsForIndex(def.presetIndex).current;
+      btn.addEventListener('click', () => showFabPreviewToast(`Preview: ${def.label}`));
+    } else {
+      btn.textContent = def && def.glyph ? def.glyph : '⋯';
+      btn.addEventListener('click', () => showFabPreviewToast(`Preview: ${def ? def.label : 'Action'}`));
+    }
+
+    fabPreviewEl.appendChild(btn);
+  });
+}
+
+function rerenderFabBuilder() {
+  if (!fabToolboxEl || !fabGridEl || !fabPreviewEl) return;
+  renderFabToolbox();
+  renderFabGrid();
+  renderFabPreview();
+}
+
+function setFabSlot(index, idOrNull) {
+  if (!fabLayoutState) return;
+  fabLayoutState.slots[index] = idOrNull;
+}
+
+function handleFabDropToSlot(targetIndex, e) {
+  if (!fabLayoutState) return;
+  let payload = null;
+  try {
+    payload = JSON.parse(e.dataTransfer.getData('text/plain') || 'null');
+  } catch {
+    payload = null;
+  }
+  if (!payload || !payload.id) return;
+  const id = payload.id;
+
+  if (payload.kind === 'slot' && typeof payload.fromIndex === 'number') {
+    const from = payload.fromIndex;
+    if (from === targetIndex) return;
+    // swap/move
+    const tmp = fabLayoutState.slots[targetIndex];
+    setFabSlot(targetIndex, id);
+    setFabSlot(from, tmp || null);
+  } else {
+    // toolbox copy into slot (but if it already exists elsewhere, we move it)
+    const existingIdx = fabLayoutState.slots.findIndex(x => x === id);
+    if (existingIdx !== -1) {
+      const tmp = fabLayoutState.slots[targetIndex];
+      setFabSlot(targetIndex, id);
+      setFabSlot(existingIdx, tmp || null);
+    } else {
+      setFabSlot(targetIndex, id);
+    }
+  }
+
+  persistFabLayout();
+  rerenderFabBuilder();
+}
+
+function initFabRemoveZone() {
+  if (!fabRemoveZoneEl) return;
+  const setOver = (on) => fabRemoveZoneEl.classList.toggle('is-over', on);
+
+  fabRemoveZoneEl.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    setOver(true);
+    e.dataTransfer.dropEffect = 'move';
+  });
+  fabRemoveZoneEl.addEventListener('dragleave', () => setOver(false));
+  fabRemoveZoneEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    setOver(false);
+    if (!fabLayoutState) return;
+    let payload = null;
+    try {
+      payload = JSON.parse(e.dataTransfer.getData('text/plain') || 'null');
+    } catch {
+      payload = null;
+    }
+    if (!payload || payload.kind !== 'slot' || typeof payload.fromIndex !== 'number') return;
+    setFabSlot(payload.fromIndex, null);
+    persistFabLayout();
+    rerenderFabBuilder();
+  });
+}
+
+function initFabBuilder() {
+  if (!fabToolboxEl || !fabGridEl || !fabPreviewEl) return;
+  chrome.storage.local.get(FAB_LAYOUT_KEY, (result) => {
+    fabLayoutState = normalizeFabLayout(result && result[FAB_LAYOUT_KEY]);
+    // Persist defaults if missing
+    if (!result || !result[FAB_LAYOUT_KEY]) {
+      persistFabLayout();
+    }
+    rerenderFabBuilder();
+  });
+  initFabRemoveZone();
+}
 
 // ---- Color sync helpers ----
 
@@ -648,6 +930,9 @@ function loadSettings() {
     showFabToggle.checked = pendingSettings.showFab !== undefined ? pendingSettings.showFab : DEFAULTS.showFab;
     syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
     syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
+
+    // Init FAB builder once settings are ready (so preset colors are available)
+    initFabBuilder();
   });
 }
 

@@ -34,6 +34,48 @@ const DEFAULT_SETTINGS = {
 };
 
 let userSettings = { ...DEFAULT_SETTINGS };
+let fabLayoutV1 = null;
+
+const FAB_LAYOUT_KEY = 'fabLayoutV1';
+
+function defaultFabLayoutV1() {
+  return { rows: 2, cols: 4, slots: ['preset1', 'preset2', 'preset3', 'preset4', null, null, null, null] };
+}
+
+function normalizeFabLayoutV1(raw) {
+  const base = defaultFabLayoutV1();
+  if (!raw || typeof raw !== 'object') return base;
+  const rows = raw.rows === 2 ? 2 : 2;
+  const cols = raw.cols === 4 ? 4 : 4;
+  const expected = rows * cols;
+  const slots = Array.isArray(raw.slots) ? raw.slots.slice(0, expected) : [];
+  while (slots.length < expected) slots.push(null);
+  return { rows, cols, slots };
+}
+
+function loadFabLayoutV1() {
+  return new Promise((resolve) => {
+    if (!isExtensionContextValid()) {
+      fabLayoutV1 = defaultFabLayoutV1();
+      resolve(fabLayoutV1);
+      return;
+    }
+    try {
+      chrome.storage.local.get(FAB_LAYOUT_KEY, (result) => {
+        if (chrome.runtime.lastError) {
+          fabLayoutV1 = defaultFabLayoutV1();
+          resolve(fabLayoutV1);
+          return;
+        }
+        fabLayoutV1 = normalizeFabLayoutV1(result && result[FAB_LAYOUT_KEY]);
+        resolve(fabLayoutV1);
+      });
+    } catch {
+      fabLayoutV1 = defaultFabLayoutV1();
+      resolve(fabLayoutV1);
+    }
+  });
+}
 
 function isExtensionContextValid() {
   try {
@@ -77,6 +119,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
     userSettings = { ...DEFAULT_SETTINGS, ...newVal };
     applyCustomColors();
     updateFabVisibility();
+  }
+
+  if (Object.prototype.hasOwnProperty.call(changes, FAB_LAYOUT_KEY)) {
+    const next = changes[FAB_LAYOUT_KEY] && changes[FAB_LAYOUT_KEY].newValue;
+    fabLayoutV1 = normalizeFabLayoutV1(next);
+    rebuildHighlightFab();
   }
 
   // Highlight data for this page changed (e.g. deleted from options page)
@@ -126,13 +174,13 @@ function applyCustomColors() {
 
   highlightFabButtons.forEach((btn, index) => {
     if (!btn) return;
-    const preset = presets[index] || presets[0];
+    if (btn.dataset.fabKind !== 'preset') return;
+    const presetId = btn.dataset.presetId;
+    const preset = (presetId ? presets.find(p => p && p.id === presetId) : null) || presets[0];
     const color = isDark
       ? (preset.colorDark || userSettings.colorDark)
       : (preset.colorLight || userSettings.colorLight);
-    if (color) {
-      btn.style.backgroundColor = color;
-    }
+    if (color) btn.style.backgroundColor = color;
   });
 }
 
@@ -847,63 +895,126 @@ function restoreHighlights() {
 let highlightFab = null;
 let highlightFabButtons = [];
 
+function rebuildHighlightFab() {
+  if (!highlightFab) return;
+  highlightFab.innerHTML = '';
+  highlightFabButtons = [];
+  buildFabButtonsInto(highlightFab);
+  applyCustomColors();
+}
+
+function buildFabButtonsInto(container) {
+  const layout = fabLayoutV1 || defaultFabLayoutV1();
+  const presets = Array.isArray(userSettings.presets) && userSettings.presets.length
+    ? userSettings.presets
+    : DEFAULT_SETTINGS.presets;
+
+  container.style.display = 'grid';
+  container.style.gridTemplateColumns = `repeat(${layout.cols}, 18px)`;
+  container.style.gridAutoRows = '18px';
+  container.style.gap = '8px';
+  container.style.alignItems = 'center';
+  container.style.justifyContent = 'center';
+
+  const makePlaceholderBtn = (slotId) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'text-highlighter-fab-action';
+    btn.dataset.fabKind = 'placeholder';
+    btn.dataset.actionId = slotId;
+    btn.title = slotId;
+    btn.style.border = '1px solid rgba(0,0,0,0.12)';
+    btn.style.padding = '0';
+    btn.style.margin = '0';
+    btn.style.width = '18px';
+    btn.style.height = '18px';
+    btn.style.borderRadius = '999px';
+    btn.style.cursor = 'pointer';
+    btn.style.background = 'rgba(255,255,255,0.85)';
+    btn.style.color = '#333';
+    btn.style.fontSize = '11px';
+    btn.style.lineHeight = '18px';
+    btn.textContent = '⋯';
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Placeholder action (no-op for now)
+      hideHighlightFab();
+    });
+    return btn;
+  };
+
+  layout.slots.forEach((slotId) => {
+    if (!slotId) {
+      const spacer = document.createElement('div');
+      spacer.style.width = '18px';
+      spacer.style.height = '18px';
+      container.appendChild(spacer);
+      return;
+    }
+
+    if (slotId.startsWith('preset')) {
+      const preset = presets.find(p => p && p.id === slotId) || presets[0];
+      const presetIndex = presets.indexOf(preset);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'text-highlighter-fab-color';
+      btn.dataset.fabKind = 'preset';
+      btn.dataset.presetId = preset && preset.id ? preset.id : '';
+      btn.title = (preset && preset.name) ? preset.name : '';
+      btn.style.border = 'none';
+      btn.style.padding = '0';
+      btn.style.margin = '0';
+      btn.style.width = '18px';
+      btn.style.height = '18px';
+      btn.style.borderRadius = '999px';
+      btn.style.cursor = 'pointer';
+
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Track last-used preset for popup icon consistency
+        try {
+          if (isExtensionContextValid() && preset && typeof preset.id === 'string' && preset.id.trim() !== '') {
+            chrome.storage.local.set({ lastUsedPresetId: preset.id });
+          }
+        } catch {
+          // ignore
+        }
+        highlightSelection(presetIndex >= 0 ? presetIndex : 0);
+        hideHighlightFab();
+      });
+
+      container.appendChild(btn);
+      highlightFabButtons.push(btn);
+      return;
+    }
+
+    const actionBtn = makePlaceholderBtn(slotId);
+    container.appendChild(actionBtn);
+    highlightFabButtons.push(actionBtn);
+  });
+}
+
 function createHighlightFab() {
   if (highlightFab) return highlightFab;
 
   highlightFab = document.createElement('div');
   highlightFab.className = 'text-highlighter-fab';
-  // Layout: horizontal row of color buttons only (no background)
-  highlightFab.style.display = 'flex';
-  highlightFab.style.alignItems = 'center';
-  highlightFab.style.justifyContent = 'center';
-  highlightFab.style.gap = '4px';
+  // Layout: grid controlled by fabLayoutV1 (2×4)
   highlightFab.style.display = 'none';
   document.body.appendChild(highlightFab);
 
-  // Create up to four color buttons based on presets
-  const presets = Array.isArray(userSettings.presets) && userSettings.presets.length
-    ? userSettings.presets
-    : DEFAULT_SETTINGS.presets;
-
-  highlightFabButtons = [];
-  presets.slice(0, 4).forEach((preset, index) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'text-highlighter-fab-color';
-    btn.title = preset.name || '';
-    // Minimal inline styling to ensure circular colored dots
-    btn.style.border = 'none';
-    btn.style.padding = '0';
-    btn.style.margin = '0 3px';
-    btn.style.width = '18px';
-    btn.style.height = '18px';
-    btn.style.borderRadius = '999px';
-    btn.style.cursor = 'pointer';
-
-    // Prevent mousedown from clearing selection
-    btn.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      // Track last-used preset for popup icon consistency
-      try {
-        if (isExtensionContextValid() && preset && typeof preset.id === 'string' && preset.id.trim() !== '') {
-          chrome.storage.local.set({ lastUsedPresetId: preset.id });
-        }
-      } catch {
-        // ignore
-      }
-      highlightSelection(index);
-      hideHighlightFab();
-    });
-
-    highlightFab.appendChild(btn);
-    highlightFabButtons.push(btn);
-  });
+  buildFabButtonsInto(highlightFab);
 
   // Prevent mousedown on the container from clearing selection
   highlightFab.addEventListener('mousedown', (e) => {
@@ -1018,6 +1129,7 @@ document.addEventListener('visibilitychange', () => {
 // Load settings then restore highlights when page loads
 async function init() {
   await loadUserSettings();
+  await loadFabLayoutV1();
   restoreHighlights();
 }
 

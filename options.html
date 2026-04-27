@@ -661,6 +661,193 @@
       letter-spacing: 0.1px;
     }
 
+    /* ---- FAB builder (Settings → FAB) ---- */
+
+    .fab-builder {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    @media (max-width: 860px) {
+      .fab-builder {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .fab-panel-title {
+      font-size: 12px;
+      color: var(--opt-text-muted);
+      margin: 0 0 10px 0;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+    }
+
+    .fab-toolbox {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--opt-border);
+      background: var(--opt-surface-alt);
+      min-height: 66px;
+    }
+
+    .fab-toolbox-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--opt-hover);
+      background: var(--opt-surface);
+      color: var(--opt-text);
+      font-size: 12px;
+      cursor: grab;
+      user-select: none;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .fab-toolbox-item:active {
+      cursor: grabbing;
+      opacity: 0.85;
+    }
+
+    .fab-toolbox-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(0,0,0,0.12);
+      flex-shrink: 0;
+    }
+
+    body.dark .fab-toolbox-swatch {
+      border-color: rgba(255,255,255,0.14);
+    }
+
+    .fab-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--opt-border);
+      background: var(--opt-surface-alt);
+    }
+
+    .fab-slot {
+      position: relative;
+      height: 46px;
+      border-radius: 12px;
+      border: 1px dashed rgba(0,0,0,0.22);
+      background: rgba(255,255,255,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--opt-text-muted);
+      font-size: 12px;
+      user-select: none;
+    }
+
+    body.dark .fab-slot {
+      border-color: rgba(255,255,255,0.22);
+      background: rgba(0,0,0,0.12);
+    }
+
+    .fab-slot.is-over {
+      border-style: solid;
+      border-color: rgba(124, 97, 41, 0.55);
+      box-shadow: 0 0 0 3px rgba(124, 97, 41, 0.18);
+    }
+
+    .fab-slot-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      border: 1px solid rgba(0,0,0,0.12);
+      background: var(--opt-surface);
+      cursor: grab;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--opt-text);
+      user-select: none;
+    }
+
+    body.dark .fab-slot-btn {
+      border-color: rgba(255,255,255,0.14);
+    }
+
+    .fab-slot-btn:active {
+      cursor: grabbing;
+      opacity: 0.9;
+    }
+
+    .fab-remove-zone {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px dashed rgba(241, 76, 76, 0.55);
+      background: rgba(241, 76, 76, 0.08);
+      color: var(--opt-text);
+      font-size: 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+
+    .fab-remove-zone.is-over {
+      border-style: solid;
+      background: rgba(241, 76, 76, 0.12);
+    }
+
+    .fab-preview-wrap {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--opt-border);
+      background: var(--opt-surface-alt);
+    }
+
+    .fab-preview {
+      display: grid;
+      grid-template-columns: repeat(4, 32px);
+      gap: 8px;
+      justify-content: start;
+      align-items: center;
+    }
+
+    .fab-preview-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      border: 1px solid rgba(0,0,0,0.12);
+      background: var(--opt-surface);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--opt-text);
+      user-select: none;
+    }
+
+    body.dark .fab-preview-btn {
+      border-color: rgba(255,255,255,0.14);
+    }
+
+    .fab-hint {
+      font-size: 12px;
+      color: var(--opt-text-muted);
+      margin-top: 10px;
+      line-height: 1.55;
+    }
+
     /* ---- Tags folders (Library → Tags) ---- */
 
     .tag-folders {
@@ -1222,6 +1409,10 @@
               <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7"/><path d="M4 8V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3"/><path d="M12 12v9"/><path d="M8 12l4-4 4 4"/></svg></span>
               <span class="sidebar-label">Tag Presets</span>
             </button>
+            <button type="button" class="sidebar-item" data-view="fab" title="FAB">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M7 12h10"/></svg></span>
+              <span class="sidebar-label">FAB</span>
+            </button>
             <button type="button" class="sidebar-item" data-view="data" title="Data">
               <span class="sidebar-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></span>
               <span class="sidebar-label">Data</span>
@@ -1420,6 +1611,36 @@
               </div>
 
               <div class="muted-hint">Tip: these names are the tag folders in Library → Tags.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FAB Builder view -->
+        <div class="settings-view" data-view="fab">
+          <div class="section">
+            <div class="section-title">FAB</div>
+
+            <div class="fab-builder">
+              <div>
+                <div class="fab-panel-title">Toolbox</div>
+                <div class="fab-toolbox" id="fabToolbox"></div>
+
+                <div class="fab-panel-title" style="margin-top: 14px;">Preview</div>
+                <div class="fab-preview-wrap">
+                  <div class="fab-preview" id="fabPreview"></div>
+                </div>
+              </div>
+
+              <div>
+                <div class="fab-panel-title">Layout (2 × 4)</div>
+                <div class="fab-grid" id="fabGrid"></div>
+                <div class="fab-remove-zone" id="fabRemoveZone" title="Drop here to remove from the grid">
+                  Remove from FAB
+                </div>
+                <div class="fab-hint">
+                  Drag buttons from the toolbox into the grid. Drag within the grid to move/swap. Changes apply immediately.
+                </div>
+              </div>
             </div>
           </div>
         </div>
