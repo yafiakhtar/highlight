@@ -29,10 +29,17 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     } else {
       document.body.classList.remove('dark');
     }
+    if (isLibraryTabActive()) refreshLibrary();
   }
   if (changes.highlightSettings) {
     const s = changes.highlightSettings.newValue;
     if (s) {
+      const presetSignature = JSON.stringify(normalizePresets(s.presets));
+      if (selfPersistedPresetSignatures.has(presetSignature)) {
+        selfPersistedPresetSignatures.delete(presetSignature);
+        if (isLibraryTabActive()) refreshLibrary();
+        return;
+      }
       setPending(s);
       syncLightColor(pendingSettings.colorLight ?? DEFAULTS.colorLight);
       syncDarkColor(pendingSettings.colorDark ?? DEFAULTS.colorDark);
@@ -220,19 +227,13 @@ const resetBtn = document.getElementById('resetBtn');
 const openShortcuts = document.getElementById('openShortcuts');
 const toast = document.getElementById('toast');
 
-const presetRows = [1, 2, 3, 4].map(i => ({
-  name: document.getElementById(`presetName${i}`),
-  light: document.getElementById(`presetLight${i}`),
-  lightHex: document.getElementById(`presetLightHex${i}`),
-  dark: document.getElementById(`presetDark${i}`),
-  darkHex: document.getElementById(`presetDarkHex${i}`)
-}));
-
-const lastChangedSideByRow = [null, null, null, null];
+const presetsEditorRowsEl = document.getElementById('presetsEditorRows');
+const addTagPresetBtn = document.getElementById('addTagPreset');
+let presetRows = [];
+const lastChangedSideByPreset = new Map();
 
 const autoMatchAllLightToDarkBtn = document.getElementById('autoMatchAllLightToDark');
 const autoMatchAllDarkToLightBtn = document.getElementById('autoMatchAllDarkToLight');
-const autoMatchRowButtons = [1, 2, 3, 4].map(i => document.getElementById(`autoMatchPreset${i}`));
 
 // ============================================
 // Settings → FAB builder
@@ -244,11 +245,7 @@ const fabGridEl = document.getElementById('fabGrid');
 const fabPreviewEl = document.getElementById('fabPreview');
 const fabRemoveZoneEl = document.getElementById('fabRemoveZone');
 
-const FAB_BUTTON_DEFS = [
-  { id: 'preset1', label: 'Preset 1', type: 'preset', presetIndex: 0 },
-  { id: 'preset2', label: 'Preset 2', type: 'preset', presetIndex: 1 },
-  { id: 'preset3', label: 'Preset 3', type: 'preset', presetIndex: 2 },
-  { id: 'preset4', label: 'Preset 4', type: 'preset', presetIndex: 3 },
+const FAB_ACTION_DEFS = [
   { id: 'favorite', label: 'Favorite', type: 'placeholder', glyph: '★' },
   { id: 'comment', label: 'Comment', type: 'placeholder', glyph: '💬' },
   { id: 'copyLink', label: 'Copy link', type: 'placeholder', glyph: '⧉' },
@@ -261,6 +258,19 @@ function defaultFabLayout() {
   return { rows: 2, cols: 4, slots: ['preset1', 'preset2', 'preset3', 'preset4', null, null, null, null] };
 }
 
+function getFabButtonDefs() {
+  const presets = pendingSettings && Array.isArray(pendingSettings.presets)
+    ? normalizePresets(pendingSettings.presets)
+    : DEFAULTS.presets;
+  const presetDefs = presets.map((preset, presetIndex) => ({
+    id: preset.id,
+    label: preset.name || `Tag ${presetIndex + 1}`,
+    type: 'preset',
+    presetIndex
+  }));
+  return [...presetDefs, ...FAB_ACTION_DEFS];
+}
+
 function normalizeFabLayout(raw) {
   const base = defaultFabLayout();
   if (!raw || typeof raw !== 'object') return base;
@@ -271,7 +281,7 @@ function normalizeFabLayout(raw) {
   while (slots.length < expected) slots.push(null);
 
   // Only keep known button IDs; everything else becomes null.
-  const allowed = new Set(FAB_BUTTON_DEFS.map(d => d.id));
+  const allowed = new Set(getFabButtonDefs().map(d => d.id));
   for (let i = 0; i < slots.length; i++) {
     if (slots[i] == null) continue;
     if (!allowed.has(slots[i])) slots[i] = null;
@@ -280,15 +290,15 @@ function normalizeFabLayout(raw) {
 }
 
 function getFabButtonDef(id) {
-  return FAB_BUTTON_DEFS.find(d => d.id === id) || null;
+  return getFabButtonDefs().find(d => d.id === id) || null;
 }
 
-function getPresetColorsForIndex(idx) {
+function getPresetColorsForId(presetId) {
   const isDark = document.body.classList.contains('dark');
   const presets = pendingSettings && Array.isArray(pendingSettings.presets)
     ? normalizePresets(pendingSettings.presets)
     : DEFAULTS.presets;
-  const p = presets[idx] || presets[0] || {};
+  const p = presets.find(preset => preset.id === presetId) || presets[0] || {};
   return {
     light: p.colorLight || DEFAULTS.colorLight,
     dark: p.colorDark || DEFAULTS.colorDark,
@@ -308,7 +318,7 @@ function persistFabLayout() {
 function renderFabToolbox() {
   if (!fabToolboxEl) return;
   fabToolboxEl.innerHTML = '';
-  FAB_BUTTON_DEFS.forEach(def => {
+  getFabButtonDefs().forEach(def => {
     const chip = document.createElement('div');
     chip.className = 'fab-toolbox-item';
     chip.draggable = true;
@@ -317,7 +327,7 @@ function renderFabToolbox() {
     const swatch = document.createElement('span');
     swatch.className = 'fab-toolbox-swatch';
     if (def.type === 'preset') {
-      swatch.style.backgroundColor = getPresetColorsForIndex(def.presetIndex).current;
+      swatch.style.backgroundColor = getPresetColorsForId(def.id).current;
     } else {
       swatch.style.backgroundColor = 'transparent';
       swatch.style.borderStyle = 'solid';
@@ -371,7 +381,7 @@ function renderFabGrid() {
       btn.title = def ? def.label : slotId;
 
       if (def && def.type === 'preset') {
-        btn.style.backgroundColor = getPresetColorsForIndex(def.presetIndex).current;
+        btn.style.backgroundColor = getPresetColorsForId(def.id).current;
       } else {
         btn.textContent = def && def.glyph ? def.glyph : '⋯';
       }
@@ -411,7 +421,7 @@ function renderFabPreview() {
     btn.title = def ? def.label : slotId;
 
     if (def && def.type === 'preset') {
-      btn.style.backgroundColor = getPresetColorsForIndex(def.presetIndex).current;
+      btn.style.backgroundColor = getPresetColorsForId(def.id).current;
       btn.addEventListener('click', () => showFabPreviewToast(`Preview: ${def.label}`));
     } else {
       btn.textContent = def && def.glyph ? def.glyph : '⋯';
@@ -543,16 +553,41 @@ function cloneDefaults() {
   };
 }
 
+function generatePresetId() {
+  return 'tag_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+}
+
 function normalizePresets(presets) {
   const base = DEFAULTS.presets.map(p => ({ ...p }));
-  if (!Array.isArray(presets)) return base;
-  return base.map((def, idx) => {
-    const p = presets[idx] || {};
-    return {
-      ...def,
-      ...p
-    };
+  const source = Array.isArray(presets) && presets.length > 0 ? presets : base;
+  const seen = new Set();
+  const normalized = [];
+
+  source.forEach((raw, idx) => {
+    if (!raw || typeof raw !== 'object') return;
+    const matchingDefault = base.find(def => def.id === raw.id) || base[idx] || base[0];
+    let id = typeof raw.id === 'string' && raw.id.trim() !== ''
+      ? raw.id.trim()
+      : (idx < base.length ? base[idx].id : generatePresetId());
+    if (seen.has(id)) id = generatePresetId();
+    seen.add(id);
+    normalized.push({
+      id,
+      name: typeof raw.name === 'string' ? raw.name : matchingDefault.name,
+      colorLight: isValidHex(raw.colorLight) ? raw.colorLight : matchingDefault.colorLight,
+      colorDark: isValidHex(raw.colorDark) ? raw.colorDark : matchingDefault.colorDark
+    });
   });
+
+  // Preserve the four built-ins for old or partially populated settings.
+  base.forEach(def => {
+    if (!seen.has(def.id)) {
+      normalized.push({ ...def });
+      seen.add(def.id);
+    }
+  });
+
+  return normalized.length > 0 ? normalized : base;
 }
 
 function setPending(next) {
@@ -564,15 +599,105 @@ function setPending(next) {
   };
 }
 
+let tagPresetSaveTimer = null;
+let tagPresetSaveGeneration = 0;
+const selfPersistedPresetSignatures = new Set();
+
+function schedulePresetSettingsSave() {
+  if (!pendingSettings) return;
+  if (tagPresetSaveTimer) clearTimeout(tagPresetSaveTimer);
+  const generation = ++tagPresetSaveGeneration;
+  tagPresetSaveTimer = setTimeout(() => {
+    tagPresetSaveTimer = null;
+    const presets = normalizePresets(pendingSettings.presets).map(p => ({ ...p }));
+    const signature = JSON.stringify(presets);
+    chrome.storage.local.get('highlightSettings', (result) => {
+      if (generation !== tagPresetSaveGeneration) return;
+      const stored = result.highlightSettings || cloneDefaults();
+      selfPersistedPresetSignatures.add(signature);
+      chrome.storage.local.set({
+        highlightSettings: {
+          ...stored,
+          presets
+        }
+      });
+    });
+  }, 120);
+}
+
+function updatePendingPreset(presetId, update) {
+  if (!pendingSettings) return null;
+  const presets = normalizePresets(pendingSettings.presets);
+  const preset = presets.find(p => p.id === presetId);
+  if (!preset) return null;
+  update(preset);
+  pendingSettings.presets = presets;
+  syncPresetSwatches(presets);
+  rerenderFabBuilder();
+  refreshTagsLibraryIfLive();
+  schedulePresetSettingsSave();
+  return preset;
+}
+
 function syncPresetsEditor(presets) {
   const norm = normalizePresets(presets);
-  presetRows.forEach((row, idx) => {
-    const p = norm[idx] || norm[0];
-    if (row.name) row.name.value = (p.name || '').toString();
-    if (row.light) row.light.value = p.colorLight || DEFAULTS.colorLight;
-    if (row.lightHex) row.lightHex.value = (p.colorLight || DEFAULTS.colorLight).toUpperCase();
-    if (row.dark) row.dark.value = p.colorDark || DEFAULTS.colorDark;
-    if (row.darkHex) row.darkHex.value = (p.colorDark || DEFAULTS.colorDark).toUpperCase();
+  if (!presetsEditorRowsEl) return;
+
+  presetsEditorRowsEl.innerHTML = '';
+  presetRows = norm.map((preset, idx) => {
+    const grid = document.createElement('div');
+    grid.className = 'presets-grid';
+
+    const nameCol = document.createElement('div');
+    nameCol.className = 'presets-col presets-col-name';
+    const label = document.createElement('span');
+    label.className = 'presets-row-label';
+    label.textContent = `Tag ${idx + 1}`;
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.className = 'text-input';
+    name.maxLength = 32;
+    name.placeholder = 'Tag name';
+    name.value = preset.name || '';
+    nameCol.append(label, name);
+
+    const lightCol = document.createElement('div');
+    lightCol.className = 'presets-col presets-col-light';
+    const light = document.createElement('input');
+    light.type = 'color';
+    light.className = 'color-swatch';
+    light.value = preset.colorLight;
+    const lightHex = document.createElement('input');
+    lightHex.type = 'text';
+    lightHex.className = 'color-hex';
+    lightHex.maxLength = 7;
+    lightHex.value = preset.colorLight.toUpperCase();
+    lightCol.append(light, lightHex);
+
+    const darkCol = document.createElement('div');
+    darkCol.className = 'presets-col presets-col-dark';
+    const dark = document.createElement('input');
+    dark.type = 'color';
+    dark.className = 'color-swatch';
+    dark.value = preset.colorDark;
+    const darkHex = document.createElement('input');
+    darkHex.type = 'text';
+    darkHex.className = 'color-hex';
+    darkHex.maxLength = 7;
+    darkHex.value = preset.colorDark.toUpperCase();
+    const autoMatch = document.createElement('button');
+    autoMatch.type = 'button';
+    autoMatch.className = 'btn btn-secondary btn-small';
+    autoMatch.title = 'Auto-match this preset';
+    autoMatch.textContent = 'Auto-match';
+    darkCol.append(dark, darkHex, autoMatch);
+
+    grid.append(nameCol, lightCol, darkCol);
+    presetsEditorRowsEl.appendChild(grid);
+
+    const row = { presetId: preset.id, name, light, lightHex, dark, darkHex, autoMatch };
+    bindPresetRow(row);
+    return row;
   });
 }
 
@@ -642,45 +767,39 @@ function deriveLightFromDark(hex) {
   return hslToHex(h, 52, 85);
 }
 
-function autoMatchRowLightToDark(index) {
+function autoMatchRowLightToDark(presetId) {
   if (!pendingSettings) return;
-  const row = presetRows[index];
+  const row = presetRows.find(item => item.presetId === presetId);
   if (!row || !row.light || !row.dark || !row.darkHex) return;
   const light = row.light.value;
   if (!isValidHex(light)) return;
   const dark = deriveDarkFromLight(light);
   row.dark.value = dark;
   row.darkHex.value = dark.toUpperCase();
-  const presets = normalizePresets(pendingSettings.presets);
-  const p = presets[index] || presets[0];
-  p.colorDark = dark;
-  pendingSettings.presets = presets;
-  syncPresetSwatches(pendingSettings.presets);
-  refreshTagsLibraryIfLive();
+  updatePendingPreset(presetId, preset => {
+    preset.colorDark = dark;
+  });
 }
 
-function autoMatchRowDarkToLight(index) {
+function autoMatchRowDarkToLight(presetId) {
   if (!pendingSettings) return;
-  const row = presetRows[index];
+  const row = presetRows.find(item => item.presetId === presetId);
   if (!row || !row.light || !row.lightHex || !row.dark) return;
   const dark = row.dark.value;
   if (!isValidHex(dark)) return;
   const light = deriveLightFromDark(dark);
   row.light.value = light;
   row.lightHex.value = light.toUpperCase();
-  const presets = normalizePresets(pendingSettings.presets);
-  const p = presets[index] || presets[0];
-  p.colorLight = light;
-  pendingSettings.presets = presets;
-  syncPresetSwatches(pendingSettings.presets);
-  refreshTagsLibraryIfLive();
+  updatePendingPreset(presetId, preset => {
+    preset.colorLight = light;
+  });
 }
 
-function autoMatchRow(index) {
-  if (lastChangedSideByRow[index] === 'dark') {
-    autoMatchRowDarkToLight(index);
+function autoMatchRow(presetId) {
+  if (lastChangedSideByPreset.get(presetId) === 'dark') {
+    autoMatchRowDarkToLight(presetId);
   } else {
-    autoMatchRowLightToDark(index);
+    autoMatchRowLightToDark(presetId);
   }
 }
 
@@ -794,79 +913,62 @@ fabPresetSwatches.forEach((swatch, index) => {
     else preset.colorLight = newColor;
     pendingSettings.presets = presets;
     syncPresetsEditor(pendingSettings.presets);
+    rerenderFabBuilder();
     refreshTagsLibraryIfLive();
+    schedulePresetSettingsSave();
   });
 });
 
 // ---- Tag Presets editor handlers ----
 
-presetRows.forEach((row, index) => {
+function bindPresetRow(row) {
   if (!row.name || !row.light || !row.dark || !row.lightHex || !row.darkHex) return;
+  const presetId = row.presetId;
 
   row.name.addEventListener('input', (e) => {
-    if (!pendingSettings) return;
-    const presets = normalizePresets(pendingSettings.presets);
-    const p = presets[index] || presets[0];
-    p.name = (e.target.value || '').toString();
-    pendingSettings.presets = presets;
-    syncPresetSwatches(pendingSettings.presets);
-    refreshTagsLibraryIfLive();
+    updatePendingPreset(presetId, preset => {
+      preset.name = (e.target.value || '').toString();
+    });
   });
 
   row.light.addEventListener('input', (e) => {
-    if (!pendingSettings) return;
     const hex = e.target.value;
-    lastChangedSideByRow[index] = 'light';
+    lastChangedSideByPreset.set(presetId, 'light');
     row.lightHex.value = hex.toUpperCase();
-    const presets = normalizePresets(pendingSettings.presets);
-    const p = presets[index] || presets[0];
-    p.colorLight = hex;
-    pendingSettings.presets = presets;
-    syncPresetSwatches(pendingSettings.presets);
-    refreshTagsLibraryIfLive();
+    updatePendingPreset(presetId, preset => {
+      preset.colorLight = hex;
+    });
   });
 
   row.dark.addEventListener('input', (e) => {
-    if (!pendingSettings) return;
     const hex = e.target.value;
-    lastChangedSideByRow[index] = 'dark';
+    lastChangedSideByPreset.set(presetId, 'dark');
     row.darkHex.value = hex.toUpperCase();
-    const presets = normalizePresets(pendingSettings.presets);
-    const p = presets[index] || presets[0];
-    p.colorDark = hex;
-    pendingSettings.presets = presets;
-    syncPresetSwatches(pendingSettings.presets);
-    refreshTagsLibraryIfLive();
+    updatePendingPreset(presetId, preset => {
+      preset.colorDark = hex;
+    });
   });
 
   row.lightHex.addEventListener('input', (e) => {
-    if (!pendingSettings) return;
     let val = e.target.value || '';
     if (!val.startsWith('#')) val = '#' + val;
     if (!isValidHex(val)) return;
-    lastChangedSideByRow[index] = 'light';
+    lastChangedSideByPreset.set(presetId, 'light');
     row.light.value = val;
-    const presets = normalizePresets(pendingSettings.presets);
-    const p = presets[index] || presets[0];
-    p.colorLight = val;
-    pendingSettings.presets = presets;
-    syncPresetSwatches(pendingSettings.presets);
-    refreshTagsLibraryIfLive();
+    updatePendingPreset(presetId, preset => {
+      preset.colorLight = val;
+    });
   });
 
   row.darkHex.addEventListener('input', (e) => {
-    if (!pendingSettings) return;
     let val = e.target.value || '';
     if (!val.startsWith('#')) val = '#' + val;
     if (!isValidHex(val)) return;
-    lastChangedSideByRow[index] = 'dark';
+    lastChangedSideByPreset.set(presetId, 'dark');
     row.dark.value = val;
-    const presets = normalizePresets(pendingSettings.presets);
-    const p = presets[index] || presets[0];
-    p.colorDark = val;
-    pendingSettings.presets = presets;
-    syncPresetSwatches(pendingSettings.presets);
-    refreshTagsLibraryIfLive();
+    updatePendingPreset(presetId, preset => {
+      preset.colorDark = val;
+    });
   });
 
   row.lightHex.addEventListener('blur', () => {
@@ -880,28 +982,39 @@ presetRows.forEach((row, index) => {
       row.darkHex.value = row.dark.value.toUpperCase();
     }
   });
-});
 
-autoMatchRowButtons.forEach((btn, index) => {
-  if (!btn) return;
-  btn.addEventListener('click', () => {
-    autoMatchRow(index);
+  row.autoMatch.addEventListener('click', () => autoMatchRow(presetId));
+}
+
+if (addTagPresetBtn) {
+  addTagPresetBtn.addEventListener('click', () => {
+    if (!pendingSettings) return;
+    const presets = normalizePresets(pendingSettings.presets);
+    const colorLight = '#E2D5FF';
+    presets.push({
+      id: generatePresetId(),
+      name: `New Tag ${presets.length + 1}`,
+      colorLight,
+      colorDark: deriveDarkFromLight(colorLight)
+    });
+    pendingSettings.presets = presets;
+    syncPresetsEditor(presets);
+    syncPresetSwatches(presets);
+    rerenderFabBuilder();
+    refreshTagsLibraryIfLive();
+    schedulePresetSettingsSave();
   });
-});
+}
 
 if (autoMatchAllLightToDarkBtn) {
   autoMatchAllLightToDarkBtn.addEventListener('click', () => {
-    for (let i = 0; i < presetRows.length; i++) {
-      autoMatchRowLightToDark(i);
-    }
+    presetRows.forEach(row => autoMatchRowLightToDark(row.presetId));
   });
 }
 
 if (autoMatchAllDarkToLightBtn) {
   autoMatchAllDarkToLightBtn.addEventListener('click', () => {
-    for (let i = 0; i < presetRows.length; i++) {
-      autoMatchRowDarkToLight(i);
-    }
+    presetRows.forEach(row => autoMatchRowDarkToLight(row.presetId));
   });
 }
 
@@ -915,6 +1028,11 @@ function showToast(message) {
 
 function saveSettings() {
   if (!pendingSettings) return;
+  tagPresetSaveGeneration++;
+  if (tagPresetSaveTimer) {
+    clearTimeout(tagPresetSaveTimer);
+    tagPresetSaveTimer = null;
+  }
   chrome.storage.local.set({ highlightSettings: pendingSettings }, () => {
     showToast('Settings saved');
   });
@@ -937,6 +1055,11 @@ function loadSettings() {
 }
 
 function resetSettings() {
+  tagPresetSaveGeneration++;
+  if (tagPresetSaveTimer) {
+    clearTimeout(tagPresetSaveTimer);
+    tagPresetSaveTimer = null;
+  }
   syncLightColor(DEFAULTS.colorLight);
   syncDarkColor(DEFAULTS.colorDark);
   showFabToggle.checked = DEFAULTS.showFab;
@@ -1072,6 +1195,15 @@ function normalizeStoredHighlights(raw) {
   for (const [id, items] of byId.entries()) {
     if (items.length === 1 && Array.isArray(items[0].parts) && items[0].parts.length > 0) {
       const one = { ...items[0] };
+      const normalizedPresetId = normalizeLibraryPresetId(one.presetId);
+      if (one.presetId !== normalizedPresetId) {
+        one.presetId = normalizedPresetId;
+        changed = true;
+      }
+      if (Object.prototype.hasOwnProperty.call(one, 'color')) {
+        delete one.color;
+        changed = true;
+      }
       const collapsed = collapseWhitespace((one.parts || []).map(p => (p && p.text) || '').join(' '));
       const combined = one.parts.length > 1 ? tightenPunctuation(collapsed) : collapsed;
       if (combined && combined !== one.text) {
@@ -1110,12 +1242,10 @@ function normalizeStoredHighlights(raw) {
     const combinedText = parts.length > 1 ? tightenPunctuation(collapsed) : collapsed;
     const createdAt = Math.min(...items.map(it => (typeof it.createdAt === 'number' ? it.createdAt : Date.now())));
     const favorited = items.some(it => it && it.favorited === true);
-    const color = items.find(it => typeof it.color === 'string' && it.color.trim() !== '')?.color
-      || base.color
-      || null;
-    const presetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
+    const rawPresetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
       || base.presetId
-      || null;
+      || DEFAULTS.presets[0].id;
+    const presetId = normalizeLibraryPresetId(rawPresetId);
 
     const firstPart = parts[0] || { xpath: base.xpath || '', offset: base.offset || 0 };
     const out = {
@@ -1125,10 +1255,10 @@ function normalizeStoredHighlights(raw) {
       text: combinedText,
       xpath: firstPart.xpath,
       offset: firstPart.offset,
-      color,
       createdAt,
       parts
     };
+    delete out.color;
     if (favorited) out.favorited = true;
     else delete out.favorited;
 
@@ -1166,6 +1296,31 @@ function getHighlightPresetId(hl) {
   return 'preset1';
 }
 
+let activeLibraryPresets = DEFAULTS.presets.map(p => ({ ...p }));
+
+function normalizeLibraryPresetId(presetId) {
+  const match = activeLibraryPresets.find(p => p.id === presetId);
+  return match ? match.id : (activeLibraryPresets[0] || DEFAULTS.presets[0]).id;
+}
+
+function setActiveLibraryPresets(settings) {
+  activeLibraryPresets = getTagPresetDefinitions(settings || DEFAULTS);
+}
+
+function getLibraryPresetForHighlight(hl) {
+  const presetId = getHighlightPresetId(hl);
+  return activeLibraryPresets.find(p => p.id === presetId)
+    || activeLibraryPresets[0]
+    || DEFAULTS.presets[0];
+}
+
+function getLibraryHighlightColor(hl) {
+  const preset = getLibraryPresetForHighlight(hl);
+  return document.body.classList.contains('dark')
+    ? (preset.colorDark || DEFAULTS.colorDark)
+    : (preset.colorLight || DEFAULTS.colorLight);
+}
+
 function loadTagsView() {
   if (currentTagPresetId) {
     loadTagHighlights(currentTagPresetId);
@@ -1187,6 +1342,7 @@ function loadTagFolders() {
   chrome.storage.local.get(null, (all) => {
     const settings = all.highlightSettings || DEFAULTS;
     const presets = getTagPresetDefinitions(settings);
+    activeLibraryPresets = presets;
     const storageFixups = {};
     const tokens = normalizeQuery(libraryQuery);
 
@@ -1253,7 +1409,7 @@ function renderTagFolders(presets, counts) {
   const wrap = document.createElement('div');
   wrap.className = 'tag-folders';
 
-  presets.slice(0, 4).forEach(p => {
+  presets.forEach(p => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'tag-folder';
@@ -1288,6 +1444,7 @@ function loadTagHighlights(presetId) {
   chrome.storage.local.get(null, (all) => {
     const settings = all.highlightSettings || DEFAULTS;
     const presets = getTagPresetDefinitions(settings);
+    activeLibraryPresets = presets;
     const preset = presets.find(p => p.id === presetId) || presets[0];
     const storageFixups = {};
     const tokens = normalizeQuery(libraryQuery);
@@ -1378,6 +1535,7 @@ function createTagsToolbar(preset) {
 // Load all highlights from storage and render them
 function loadAllHighlights() {
   chrome.storage.local.get(null, (all) => {
+    setActiveLibraryPresets(all.highlightSettings);
     const index = all.highlightIndex || {};
     const indexNeedsUpdate = {};
     const storageFixups = {};
@@ -1456,6 +1614,7 @@ function loadAllHighlights() {
 
 function loadFavoriteHighlights() {
   chrome.storage.local.get(null, (all) => {
+    setActiveLibraryPresets(all.highlightSettings);
     const index = all.highlightIndex || {};
     const pages = [];
     let totalCount = 0;
@@ -1526,8 +1685,21 @@ function renderEmptyFavorites() {
 }
 
 function loadRecentlyDeleted() {
-  chrome.storage.local.get(RECENTLY_DELETED_KEY, (result) => {
-    const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
+  chrome.storage.local.get([RECENTLY_DELETED_KEY, 'highlightSettings'], (result) => {
+    setActiveLibraryPresets(result.highlightSettings);
+    const rawTrash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
+    let trashChanged = false;
+    const trash = rawTrash.map(entry => {
+      if (!entry || !entry.highlight) return entry;
+      const normalized = normalizeStoredHighlights([entry.highlight]);
+      const highlight = normalized.highlights[0];
+      if (!highlight) return entry;
+      if (normalized.changed) trashChanged = true;
+      return normalized.changed ? { ...entry, highlight } : entry;
+    });
+    if (trashChanged) {
+      chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: trash });
+    }
     const tokens = normalizeQuery(libraryQuery);
     const filteredTrash = tokens.length === 0
       ? trash
@@ -1648,13 +1820,10 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
       colorSlot.className = 'snippet-color-slot';
       const dot = document.createElement('span');
       dot.className = 'snippet-color-dot';
-      if (typeof hl.color === 'string' && hl.color.trim() !== '') {
-        dot.style.backgroundColor = hl.color;
-        dot.title = hl.color;
-        colorSlot.appendChild(dot);
-      } else {
-        colorSlot.style.display = 'none';
-      }
+      const resolvedColor = getLibraryHighlightColor(hl);
+      dot.style.backgroundColor = resolvedColor;
+      dot.title = getLibraryPresetForHighlight(hl).name || resolvedColor;
+      colorSlot.appendChild(dot);
 
       const trashBtns = document.createElement('div');
       trashBtns.className = 'snippet-trash-actions';
@@ -1840,13 +2009,10 @@ function renderHighlights(pages, totalCount, options = {}) {
       colorSlot.className = 'snippet-color-slot';
       const dot = document.createElement('span');
       dot.className = 'snippet-color-dot';
-      if (typeof hl.color === 'string' && hl.color.trim() !== '') {
-        dot.style.backgroundColor = hl.color;
-        dot.title = hl.color;
-        colorSlot.appendChild(dot);
-      } else {
-        colorSlot.style.display = 'none';
-      }
+      const resolvedColor = getLibraryHighlightColor(hl);
+      dot.style.backgroundColor = resolvedColor;
+      dot.title = getLibraryPresetForHighlight(hl).name || resolvedColor;
+      colorSlot.appendChild(dot);
 
       const star = createStarButton(page.url, hl);
 

@@ -20,7 +20,7 @@
 - The FAB can be toggled on/off from the popup or Settings
 
 ### Color Presets & Tags
-Four named presets — **General, Important, Reference, Question** — each with separate light and dark mode colors. Presets double as tags: highlights are automatically grouped by preset in the Library's Tags view.
+Four named presets — **General, Important, Reference, Question** — are included by default, and custom tags can be added in Settings. Each preset has separate light and dark mode colors. Presets double as tags: highlights reference their preset and are automatically grouped by it in the Library's Tags view. Changing a preset color updates every highlight linked to it.
 
 ### Library
 A full-page options view (`options.html`) with a collapsible sidebar and six views:
@@ -42,7 +42,7 @@ A full-page options view (`options.html`) with a collapsible sidebar and six vie
 
 ### Settings
 - **Appearance** — customize light and dark highlight colors with a color picker and hex input; live preview updates as you type
-- **Tag Presets** — rename presets and set per-theme colors; auto-match derives a harmonious dark color from a light one (and vice versa) using HSL math
+- **Tag Presets** — add or rename presets and set per-theme colors; auto-match derives a harmonious dark color from a light one (and vice versa) using HSL math
 - **FAB Builder** — drag preset chips and action buttons into a 2×4 grid; drag within the grid to reorder; drop onto the remove zone to clear a slot
 - **Behaviour** — toggle the floating action button
 - **Shortcuts** — view the current keyboard shortcut; button opens browser shortcut settings

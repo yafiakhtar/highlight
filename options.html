@@ -615,6 +615,12 @@
       font-size: 12px;
     }
 
+    #presetsEditorRows {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
     .presets-col {
       min-width: 0;
       display: flex;
@@ -652,6 +658,8 @@
       align-items: center;
       gap: 10px;
       flex-shrink: 0;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .btn-small {
@@ -1523,6 +1531,9 @@
             <div class="presets-toolbar">
               <div class="section-title" style="margin-bottom: 0;">Tag Presets</div>
               <div class="presets-toolbar-actions">
+                <button type="button" id="addTagPreset" class="btn btn-primary btn-small">
+                  Add Tag
+                </button>
                 <button type="button" id="autoMatchAllLightToDark" class="btn btn-secondary btn-small" title="Auto-match all (Light → Dark)">
                   Auto-match all (Light → Dark)
                 </button>
@@ -1537,80 +1548,9 @@
                 <div class="presets-col presets-col-light">Light</div>
                 <div class="presets-col presets-col-dark">Dark</div>
               </div>
+              <div id="presetsEditorRows"></div>
 
-              <div class="presets-grid">
-                <div class="presets-col presets-col-name">
-                  <span class="presets-row-label">Preset 1</span>
-                  <input type="text" id="presetName1" class="text-input" placeholder="General" maxlength="32">
-                </div>
-                <div class="presets-col presets-col-light">
-                  <input type="color" id="presetLight1" class="color-swatch">
-                  <input type="text" id="presetLightHex1" class="color-hex" maxlength="7" value="#FFEA99">
-                </div>
-                <div class="presets-col presets-col-dark">
-                  <input type="color" id="presetDark1" class="color-swatch">
-                  <input type="text" id="presetDarkHex1" class="color-hex" maxlength="7" value="#7C6129">
-                  <button type="button" id="autoMatchPreset1" class="btn btn-secondary btn-small" title="Auto-match this preset">
-                    Auto-match
-                  </button>
-                </div>
-              </div>
-
-              <div class="presets-grid">
-                <div class="presets-col presets-col-name">
-                  <span class="presets-row-label">Preset 2</span>
-                  <input type="text" id="presetName2" class="text-input" placeholder="Important" maxlength="32">
-                </div>
-                <div class="presets-col presets-col-light">
-                  <input type="color" id="presetLight2" class="color-swatch">
-                  <input type="text" id="presetLightHex2" class="color-hex" maxlength="7">
-                </div>
-                <div class="presets-col presets-col-dark">
-                  <input type="color" id="presetDark2" class="color-swatch">
-                  <input type="text" id="presetDarkHex2" class="color-hex" maxlength="7">
-                  <button type="button" id="autoMatchPreset2" class="btn btn-secondary btn-small" title="Auto-match this preset">
-                    Auto-match
-                  </button>
-                </div>
-              </div>
-
-              <div class="presets-grid">
-                <div class="presets-col presets-col-name">
-                  <span class="presets-row-label">Preset 3</span>
-                  <input type="text" id="presetName3" class="text-input" placeholder="Reference" maxlength="32">
-                </div>
-                <div class="presets-col presets-col-light">
-                  <input type="color" id="presetLight3" class="color-swatch">
-                  <input type="text" id="presetLightHex3" class="color-hex" maxlength="7">
-                </div>
-                <div class="presets-col presets-col-dark">
-                  <input type="color" id="presetDark3" class="color-swatch">
-                  <input type="text" id="presetDarkHex3" class="color-hex" maxlength="7">
-                  <button type="button" id="autoMatchPreset3" class="btn btn-secondary btn-small" title="Auto-match this preset">
-                    Auto-match
-                  </button>
-                </div>
-              </div>
-
-              <div class="presets-grid">
-                <div class="presets-col presets-col-name">
-                  <span class="presets-row-label">Preset 4</span>
-                  <input type="text" id="presetName4" class="text-input" placeholder="Question" maxlength="32">
-                </div>
-                <div class="presets-col presets-col-light">
-                  <input type="color" id="presetLight4" class="color-swatch">
-                  <input type="text" id="presetLightHex4" class="color-hex" maxlength="7">
-                </div>
-                <div class="presets-col presets-col-dark">
-                  <input type="color" id="presetDark4" class="color-swatch">
-                  <input type="text" id="presetDarkHex4" class="color-hex" maxlength="7">
-                  <button type="button" id="autoMatchPreset4" class="btn btn-secondary btn-small" title="Auto-match this preset">
-                    Auto-match
-                  </button>
-                </div>
-              </div>
-
-              <div class="muted-hint">Tip: these names are the tag folders in Library → Tags.</div>
+              <div class="muted-hint">Tag names and colors save automatically and update linked highlights. These names are the folders in Library → Tags.</div>
             </div>
           </div>
         </div>

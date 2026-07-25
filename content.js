@@ -85,6 +85,48 @@ function isExtensionContextValid() {
   }
 }
 
+function normalizePresets(presets) {
+  const defaults = DEFAULT_SETTINGS.presets.map(p => ({ ...p }));
+  const source = Array.isArray(presets) && presets.length > 0 ? presets : defaults;
+  const seen = new Set();
+  const normalized = [];
+
+  source.forEach((raw, index) => {
+    if (!raw || typeof raw !== 'object') return;
+    const fallback = defaults.find(p => p.id === raw.id) || defaults[index] || defaults[0];
+    const id = typeof raw.id === 'string' && raw.id.trim() !== '' ? raw.id.trim() : fallback.id;
+    if (seen.has(id)) return;
+    seen.add(id);
+    normalized.push({
+      id,
+      name: typeof raw.name === 'string' ? raw.name : fallback.name,
+      colorLight: typeof raw.colorLight === 'string' ? raw.colorLight : fallback.colorLight,
+      colorDark: typeof raw.colorDark === 'string' ? raw.colorDark : fallback.colorDark
+    });
+  });
+
+  defaults.forEach(preset => {
+    if (!seen.has(preset.id)) normalized.push({ ...preset });
+  });
+  return normalized.length > 0 ? normalized : defaults;
+}
+
+function getPresets() {
+  return normalizePresets(userSettings.presets);
+}
+
+function getPresetById(presetId) {
+  const presets = getPresets();
+  return presets.find(preset => preset.id === presetId) || presets[0] || DEFAULT_SETTINGS.presets[0];
+}
+
+function getPresetColor(presetId, theme = getPageTheme()) {
+  const preset = getPresetById(presetId);
+  return theme === 'dark'
+    ? (preset.colorDark || DEFAULT_SETTINGS.colorDark)
+    : (preset.colorLight || DEFAULT_SETTINGS.colorLight);
+}
+
 // Load user settings from storage
 function loadUserSettings() {
   return new Promise((resolve) => {
@@ -117,6 +159,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.highlightSettings) {
     const newVal = changes.highlightSettings.newValue;
     userSettings = { ...DEFAULT_SETTINGS, ...newVal };
+    rebuildHighlightFab();
     applyCustomColors();
     updateFabVisibility();
   }
@@ -164,15 +207,24 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // Apply custom highlight colors to existing marks / FAB palette
 function applyCustomColors() {
-  // Only update FAB palette colors; existing marks keep their stored colors
-  if (!highlightFab || !Array.isArray(highlightFabButtons) || highlightFabButtons.length === 0) return;
   const theme = getPageTheme();
   const isDark = theme === 'dark';
-  const presets = Array.isArray(userSettings.presets) && userSettings.presets.length
-    ? userSettings.presets
-    : DEFAULT_SETTINGS.presets;
+  const presets = getPresets();
 
-  highlightFabButtons.forEach((btn, index) => {
+  // Preset IDs are authoritative: recolor every existing mark immediately.
+  document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
+    const preset = getPresetById(mark.dataset.presetId);
+    mark.dataset.presetId = preset.id;
+    mark.classList.toggle('hl-dark', isDark);
+    mark.classList.toggle('hl-light', !isDark);
+    mark.style.backgroundColor = isDark
+      ? (preset.colorDark || DEFAULT_SETTINGS.colorDark)
+      : (preset.colorLight || DEFAULT_SETTINGS.colorLight);
+  });
+
+  if (!highlightFab || !Array.isArray(highlightFabButtons) || highlightFabButtons.length === 0) return;
+
+  highlightFabButtons.forEach((btn) => {
     if (!btn) return;
     if (btn.dataset.fabKind !== 'preset') return;
     const presetId = btn.dataset.presetId;
@@ -241,6 +293,15 @@ function normalizeStoredHighlights(raw) {
     if (items.length === 1 && Array.isArray(items[0].parts) && items[0].parts.length > 0) {
       // Ensure text is normalized
       const one = { ...items[0] };
+      const normalizedPresetId = getPresetById(one.presetId).id;
+      if (one.presetId !== normalizedPresetId) {
+        one.presetId = normalizedPresetId;
+        changed = true;
+      }
+      if (Object.prototype.hasOwnProperty.call(one, 'color')) {
+        delete one.color;
+        changed = true;
+      }
       const collapsed = collapseWhitespace(
         (one.parts || []).map(p => (p && p.text) || '').join(' ')
       );
@@ -283,12 +344,10 @@ function normalizeStoredHighlights(raw) {
     const combinedText = parts.length > 1 ? tightenPunctuation(collapsed) : collapsed;
     const createdAt = Math.min(...items.map(it => (typeof it.createdAt === 'number' ? it.createdAt : Date.now())));
     const favorited = items.some(it => it && it.favorited === true);
-    const color = items.find(it => typeof it.color === 'string' && it.color.trim() !== '')?.color
-      || base.color
-      || null;
-    const presetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
+    const rawPresetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
       || base.presetId
-      || null;
+      || DEFAULT_SETTINGS.presets[0].id;
+    const presetId = getPresetById(rawPresetId).id;
 
     const firstPart = parts[0] || { xpath: base.xpath || '', offset: base.offset || 0 };
 
@@ -299,10 +358,10 @@ function normalizeStoredHighlights(raw) {
       text: combinedText,
       xpath: firstPart.xpath,
       offset: firstPart.offset,
-      color,
       createdAt,
       parts
     };
+    delete out.color;
 
     if (favorited) out.favorited = true;
     else delete out.favorited;
@@ -340,8 +399,7 @@ function saveHighlights() {
 
     const collapsed = collapseWhitespace(parts.map(p => p.text).join(' '));
     const combinedText = parts.length > 1 ? tightenPunctuation(collapsed) : collapsed;
-    const presetId = first.dataset.presetId || null;
-    const color = first.style.backgroundColor || null;
+    const presetId = first.dataset.presetId || DEFAULT_SETTINGS.presets[0].id;
 
     // Keep xpath/offset for older readers; points at first part.
     const firstPart = parts[0] || { xpath: '', offset: 0, text: '' };
@@ -352,7 +410,6 @@ function saveHighlights() {
       text: combinedText,
       xpath: firstPart.xpath,
       offset: firstPart.offset,
-      color,
       parts
     });
   }
@@ -456,7 +513,7 @@ function getPageTheme() {
 }
 
 // Highlight the current selection
-async function highlightSelection(presetIndex = 0) {
+async function highlightSelection(presetIdOrIndex = 0) {
   await loadUserSettings();
   const selection = window.getSelection();
   
@@ -478,10 +535,10 @@ async function highlightSelection(presetIndex = 0) {
   const highlightId = generateId();
   const theme = getPageTheme();
   const themeClass = theme === 'dark' ? 'hl-dark' : 'hl-light';
-  const presets = Array.isArray(userSettings.presets) && userSettings.presets.length
-    ? userSettings.presets
-    : DEFAULT_SETTINGS.presets;
-  const preset = presets[presetIndex] || presets[0];
+  const presets = getPresets();
+  const preset = typeof presetIdOrIndex === 'string'
+    ? (presets.find(item => item.id === presetIdOrIndex) || presets[0])
+    : (presets[presetIdOrIndex] || presets[0]);
   const presetId = preset && typeof preset.id === 'string' ? preset.id : null;
   const appliedColor = theme === 'dark'
     ? (preset.colorDark || userSettings.colorDark)
@@ -788,9 +845,6 @@ function restoreHighlights() {
 
     const theme = getPageTheme();
     const themeClass = theme === 'dark' ? 'hl-dark' : 'hl-light';
-    const fallbackColor = theme === 'dark' ? userSettings.colorDark : userSettings.colorLight;
-    let needsColorBackfill = false;
-
     highlights.forEach(highlight => {
       try {
         if (document.querySelector(`.text-highlighter-mark[data-highlight-id="${highlight.id}"]`)) {
@@ -800,9 +854,8 @@ function restoreHighlights() {
           ? highlight.parts
           : [{ xpath: highlight.xpath, offset: highlight.offset, text: highlight.text }];
 
-        const hasStoredColor = typeof highlight.color === 'string' && highlight.color.trim() !== '';
-        const appliedColor = hasStoredColor ? highlight.color : fallbackColor;
-        if (!hasStoredColor) needsColorBackfill = true;
+        const preset = getPresetById(highlight.presetId);
+        const appliedColor = getPresetColor(preset.id, theme);
 
         parts.forEach(part => {
           if (!part || !part.xpath) return;
@@ -850,9 +903,7 @@ function restoreHighlights() {
                 const mark = document.createElement('mark');
                 mark.className = 'text-highlighter-mark ' + themeClass;
                 mark.dataset.highlightId = highlight.id;
-                if (typeof highlight.presetId === 'string' && highlight.presetId.trim() !== '') {
-                  mark.dataset.presetId = highlight.presetId;
-                }
+                mark.dataset.presetId = preset.id;
                 if (appliedColor) {
                   mark.style.backgroundColor = appliedColor;
                 }
@@ -876,11 +927,6 @@ function restoreHighlights() {
       }
     });
 
-    // Self-heal: if any restored highlight lacked a stored color, persist the
-    // colors currently on the DOM marks so future reloads remain stable.
-    if (needsColorBackfill) {
-      saveHighlights();
-    }
     });
   } catch {
     // ignore
@@ -957,9 +1003,8 @@ function buildFabButtonsInto(container) {
       return;
     }
 
-    if (slotId.startsWith('preset')) {
-      const preset = presets.find(p => p && p.id === slotId) || presets[0];
-      const presetIndex = presets.indexOf(preset);
+    const preset = presets.find(p => p && p.id === slotId);
+    if (preset) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'text-highlighter-fab-color';
@@ -990,7 +1035,7 @@ function buildFabButtonsInto(container) {
         } catch {
           // ignore
         }
-        highlightSelection(presetIndex >= 0 ? presetIndex : 0);
+        highlightSelection(preset.id);
         hideHighlightFab();
       });
 
