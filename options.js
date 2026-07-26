@@ -95,12 +95,14 @@ function resetSidebarForTab(tabName) {
   // Remove active state from all sidebar items in this tab
   sidebar.querySelectorAll('.sidebar-item').forEach(item => {
     item.classList.remove('active');
+    item.removeAttribute('aria-current');
   });
   
   // Set first sidebar item as active
   const firstItem = sidebar.querySelector('.sidebar-item');
   if (firstItem) {
     firstItem.classList.add('active');
+    firstItem.setAttribute('aria-current', 'page');
     switchSidebarView(tabName, firstItem.dataset.view);
   }
 }
@@ -131,7 +133,10 @@ function switchSidebarView(tabName, viewName) {
     }
     const sidebar = panel.querySelector('.sidebar');
     sidebar.querySelectorAll('.sidebar-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.view === viewName);
+      const isActive = item.dataset.view === viewName;
+      item.classList.toggle('active', isActive);
+      if (isActive) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
     });
     refreshLibrary();
   } else if (tabName === 'settings') {
@@ -143,7 +148,10 @@ function switchSidebarView(tabName, viewName) {
     // Update sidebar active state
     const sidebar = panel.querySelector('.sidebar');
     sidebar.querySelectorAll('.sidebar-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.view === viewName);
+      const isActive = item.dataset.view === viewName;
+      item.classList.toggle('active', isActive);
+      if (isActive) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
     });
   }
 }
@@ -235,8 +243,10 @@ let selectedAppearancePreviewPresetId = 'preset1';
 const showFabToggle = document.getElementById('showFab');
 const previewMarkLight = document.getElementById('previewMarkLight');
 const previewMarkDark = document.getElementById('previewMarkDark');
-const saveBtn = document.getElementById('saveBtn');
 const resetBtn = document.getElementById('resetBtn');
+const resetConfirmDialog = document.getElementById('resetConfirmDialog');
+const cancelResetBtn = document.getElementById('cancelResetBtn');
+const confirmResetBtn = document.getElementById('confirmResetBtn');
 const openShortcuts = document.getElementById('openShortcuts');
 const shortcutDisplay = document.getElementById('shortcutDisplay');
 const toast = document.getElementById('toast');
@@ -1377,8 +1387,7 @@ function syncPresetsEditor(presets) {
     const autoMatch = document.createElement('button');
     autoMatch.type = 'button';
     autoMatch.className = 'btn btn-small preset-match-btn';
-    autoMatch.title = 'Auto-match this preset';
-    autoMatch.textContent = 'Match';
+    autoMatch.textContent = 'Match Dark';
     darkControl.append(dark, darkHex);
     darkCol.append(darkControl, autoMatch);
 
@@ -1387,6 +1396,7 @@ function syncPresetsEditor(presets) {
 
     const row = { presetId: preset.id, name, light, lightHex, dark, darkHex, autoMatch };
     bindPresetRow(row);
+    syncPresetMatchButton(row);
     return row;
   });
 }
@@ -1461,6 +1471,8 @@ function autoMatchRowLightToDark(presetId) {
   if (!pendingSettings) return;
   const row = presetRows.find(item => item.presetId === presetId);
   if (!row || !row.light || !row.dark || !row.darkHex) return;
+  lastChangedSideByPreset.set(presetId, 'light');
+  syncPresetMatchButton(row);
   const light = row.light.value;
   if (!isValidHex(light)) return;
   const dark = deriveDarkFromLight(light);
@@ -1475,6 +1487,8 @@ function autoMatchRowDarkToLight(presetId) {
   if (!pendingSettings) return;
   const row = presetRows.find(item => item.presetId === presetId);
   if (!row || !row.light || !row.lightHex || !row.dark) return;
+  lastChangedSideByPreset.set(presetId, 'dark');
+  syncPresetMatchButton(row);
   const dark = row.dark.value;
   if (!isValidHex(dark)) return;
   const light = deriveLightFromDark(dark);
@@ -1491,6 +1505,17 @@ function autoMatchRow(presetId) {
   } else {
     autoMatchRowLightToDark(presetId);
   }
+}
+
+function syncPresetMatchButton(row) {
+  if (!row || !row.autoMatch) return;
+  const sourceSide = lastChangedSideByPreset.get(row.presetId) === 'dark' ? 'dark' : 'light';
+  const targetLabel = sourceSide === 'dark' ? 'Light' : 'Dark';
+  const sourceLabel = sourceSide === 'dark' ? 'Dark' : 'Light';
+  const accessibleLabel = `Match ${targetLabel.toLowerCase()} color from ${sourceLabel.toLowerCase()} color`;
+  row.autoMatch.textContent = `Match ${targetLabel}`;
+  row.autoMatch.title = accessibleLabel;
+  row.autoMatch.setAttribute('aria-label', accessibleLabel);
 }
 
 // Validate hex color input
@@ -1572,6 +1597,7 @@ function bindPresetRow(row) {
   row.light.addEventListener('input', (e) => {
     const hex = e.target.value;
     lastChangedSideByPreset.set(presetId, 'light');
+    syncPresetMatchButton(row);
     row.lightHex.value = hex.toUpperCase();
     updatePendingPreset(presetId, preset => {
       preset.colorLight = hex;
@@ -1581,6 +1607,7 @@ function bindPresetRow(row) {
   row.dark.addEventListener('input', (e) => {
     const hex = e.target.value;
     lastChangedSideByPreset.set(presetId, 'dark');
+    syncPresetMatchButton(row);
     row.darkHex.value = hex.toUpperCase();
     updatePendingPreset(presetId, preset => {
       preset.colorDark = hex;
@@ -1592,6 +1619,7 @@ function bindPresetRow(row) {
     if (!val.startsWith('#')) val = '#' + val;
     if (!isValidHex(val)) return;
     lastChangedSideByPreset.set(presetId, 'light');
+    syncPresetMatchButton(row);
     row.light.value = val;
     updatePendingPreset(presetId, preset => {
       preset.colorLight = val;
@@ -1603,6 +1631,7 @@ function bindPresetRow(row) {
     if (!val.startsWith('#')) val = '#' + val;
     if (!isValidHex(val)) return;
     lastChangedSideByPreset.set(presetId, 'dark');
+    syncPresetMatchButton(row);
     row.dark.value = val;
     updatePendingPreset(presetId, preset => {
       preset.colorDark = val;
@@ -1675,18 +1704,6 @@ function showToast(message) {
   setTimeout(() => toast.classList.remove('show'), 2000);
 }
 
-function saveSettings() {
-  if (!pendingSettings) return;
-  cancelScopedSettingsAutosave();
-  queueScopedSettingsBarrier((done) => {
-    const settingsToSave = normalizeScopedSettingsWrite({}, pendingSettings);
-    chrome.storage.local.set({ highlightSettings: settingsToSave }, () => {
-      showToast('Settings saved');
-      done();
-    });
-  });
-}
-
 function loadSettings() {
   chrome.storage.local.get('highlightSettings', (result) => {
     const s = result.highlightSettings || DEFAULTS;
@@ -1728,12 +1745,34 @@ function resetSettings() {
 
 // ---- Button handlers ----
 
-saveBtn.addEventListener('click', saveSettings);
-resetBtn.addEventListener('click', resetSettings);
+resetBtn.addEventListener('click', () => {
+  if (!resetConfirmDialog || typeof resetConfirmDialog.showModal !== 'function') {
+    if (window.confirm('Reset settings and remove custom tag presets? Saved highlights and Library records will remain.')) {
+      resetSettings();
+    }
+    return;
+  }
+  resetConfirmDialog.showModal();
+  requestAnimationFrame(() => cancelResetBtn?.focus({ preventScroll: true }));
+});
+
+cancelResetBtn?.addEventListener('click', () => {
+  resetConfirmDialog?.close('cancel');
+});
+
+confirmResetBtn?.addEventListener('click', () => {
+  resetConfirmDialog?.close('confirm');
+  resetSettings();
+});
+
+resetConfirmDialog?.addEventListener('close', () => {
+  resetBtn.focus({ preventScroll: true });
+});
 
 showFabToggle.addEventListener('change', () => {
   if (!pendingSettings) return;
   pendingSettings.showFab = showFabToggle.checked;
+  scheduleScopedSettingsPatch({ showFab: pendingSettings.showFab });
 });
 
 openShortcuts.addEventListener('click', () => {
