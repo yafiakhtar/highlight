@@ -257,9 +257,6 @@ const fabBuilderEl = document.getElementById('fabBuilder');
 const fabToolboxEl = document.getElementById('fabToolbox');
 const fabGridEl = document.getElementById('fabGrid');
 const fabPreviewEl = document.getElementById('fabPreview');
-const fabContextPreviewEl = document.getElementById('fabContextPreview');
-const fabPagePreviewEl = document.getElementById('fabPagePreview');
-const fabPreviewStatusEl = document.getElementById('fabPreviewStatus');
 const fabRemoveZoneEl = document.getElementById('fabRemoveZone');
 const fabPopoverLayerEl = document.getElementById('fabPopoverLayer');
 
@@ -357,10 +354,6 @@ function getPresetColorsForId(presetId) {
     dark: p.colorDark || DEFAULTS.colorDark,
     current: isDark ? (p.colorDark || DEFAULTS.colorDark) : (p.colorLight || DEFAULTS.colorLight)
   };
-}
-
-function showFabPreviewToast(message) {
-  showToast(message);
 }
 
 function persistFabLayout() {
@@ -847,59 +840,48 @@ function renderFabGrid() {
 }
 
 function renderFabPreview() {
-  if (!fabPreviewEl || !fabContextPreviewEl || !fabLayoutState) return;
-  const previewContainers = [fabPreviewEl, fabContextPreviewEl];
-  previewContainers.forEach(container => {
-    container.innerHTML = '';
-    container.style.gridTemplateColumns = `repeat(${fabLayoutState.cols}, 28px)`;
-  });
-  fabContextPreviewEl.style.gridTemplateColumns = `repeat(${fabLayoutState.cols}, 32px)`;
+  if (!fabPreviewEl || !fabLayoutState) return;
+  fabPreviewEl.innerHTML = '';
+  fabPreviewEl.style.gridTemplateColumns = `repeat(${fabLayoutState.cols}, 32px)`;
 
-  fabLayoutState.slots.forEach((slotId) => {
+  const secondRowStart = fabLayoutState.cols;
+  const hasSecondRow = fabLayoutState.slots
+    .slice(secondRowStart, secondRowStart * 2)
+    .some(Boolean);
+  const visibleSlots = fabLayoutState.slots.slice(
+    0,
+    hasSecondRow ? secondRowStart * 2 : secondRowStart
+  );
+
+  visibleSlots.forEach((slotId) => {
     const def = slotId ? getFabButtonDef(slotId) : null;
 
-    previewContainers.forEach(container => {
-      if (!def) {
-        const spacer = document.createElement('div');
-        spacer.className = 'fab-preview-spacer';
-        spacer.setAttribute('aria-hidden', 'true');
-        container.appendChild(spacer);
-        return;
-      }
+    if (!def) {
+      const spacer = document.createElement('div');
+      spacer.className = 'fab-preview-spacer';
+      spacer.setAttribute('aria-hidden', 'true');
+      fabPreviewEl.appendChild(spacer);
+      return;
+    }
 
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'fab-preview-btn';
-      btn.title = def.label;
-      btn.setAttribute('aria-label', `Preview ${def.label}`);
+    const btn = document.createElement('span');
+    btn.className = 'fab-preview-btn';
+    btn.title = def.label;
+    btn.setAttribute('role', 'img');
+    btn.setAttribute('aria-label', def.label);
 
-      if (def.type === 'preset') {
-        btn.style.backgroundColor = getPresetColorsForId(def.id).current;
-      } else {
-        btn.textContent = def.glyph || '⋯';
-      }
+    if (def.type === 'preset') {
+      btn.style.backgroundColor = getPresetColorsForId(def.id).current;
+    } else {
+      btn.textContent = def.glyph || '⋯';
+    }
 
-      btn.addEventListener('click', () => showFabPreviewToast(`Preview: ${def.label}`));
-      container.appendChild(btn);
-    });
+    fabPreviewEl.appendChild(btn);
   });
-
-  updateFabVisibilityPresentation();
-}
-
-function updateFabVisibilityPresentation() {
-  if (!showFabToggle) return;
-  const isVisible = showFabToggle.checked;
-  if (fabPagePreviewEl) {
-    fabPagePreviewEl.classList.toggle('is-hidden', !isVisible);
-  }
-  if (fabPreviewStatusEl) {
-    fabPreviewStatusEl.textContent = isVisible ? 'Preview: visible' : 'Preview: hidden';
-  }
 }
 
 function rerenderFabBuilder() {
-  if (!fabToolboxEl || !fabGridEl || !fabPreviewEl || !fabContextPreviewEl) return;
+  if (!fabToolboxEl || !fabGridEl || !fabPreviewEl) return;
   closeFabPopover();
   renderFabToolbox();
   renderFabGrid();
@@ -1751,7 +1733,6 @@ resetBtn.addEventListener('click', resetSettings);
 showFabToggle.addEventListener('change', () => {
   if (!pendingSettings) return;
   pendingSettings.showFab = showFabToggle.checked;
-  updateFabVisibilityPresentation();
 });
 
 openShortcuts.addEventListener('click', () => {

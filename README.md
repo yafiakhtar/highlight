@@ -42,7 +42,7 @@ A full-page options view (`options.html`) with a collapsible sidebar and several
 ### Settings
 - **Appearance** — edit the default tag’s linked light/dark colors with autosave and preview every tag across light and dark webpages
 - **Tag Presets** — add or rename presets and set per-theme colors; auto-match derives a harmonious dark color from a light one (and vice versa) using HSL math
-- **FAB Builder** — toggle the floating button, click empty slots or drag presets and actions into a 2×4 layout, reorder or manage placed buttons, and review compact and on-page previews
+- **FAB Builder** — toggle the floating button, click empty slots or drag presets and actions into a 2×4 layout, reorder or manage placed buttons, and review a compact layout preview
 - **Shortcuts** — view the current keyboard shortcut; button opens browser shortcut settings
 - **Data** — save or reset all settings to defaults
 - **Sync** — placeholder for cross-device sync (coming soon)
