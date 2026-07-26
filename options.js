@@ -13,7 +13,7 @@ document.getElementById('optionsThemeToggle').addEventListener('click', () => {
   const isDark = document.body.classList.contains('dark');
   chrome.storage.local.set({ popupTheme: isDark ? 'dark' : 'light' });
   if (pendingSettings) {
-    syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
+    syncAppearanceFromPresets(pendingSettings.presets || DEFAULTS.presets);
   }
   // Refresh every FAB builder surface for this theme.
   rerenderFabBuilder();
@@ -35,10 +35,11 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (changes.highlightSettings) {
     const s = changes.highlightSettings.newValue;
     if (s) {
-      const presetSignature = JSON.stringify(normalizePresets(s.presets));
-      if (selfPersistedPresetSignatures.has(presetSignature)) {
-        selfPersistedPresetSignatures.delete(presetSignature);
+      const settingsSignature = getHighlightSettingsSignature(s);
+      if (selfPersistedSettingsSignatures.has(settingsSignature)) {
+        selfPersistedSettingsSignatures.delete(settingsSignature);
         reconcileCurrentFabLayout(!hasFabLayoutChange);
+        syncAppearanceFromPresets(pendingSettings?.presets || s.presets);
         rerenderFabBuilder();
         if (isLibraryTabActive()) refreshLibrary();
         return;
@@ -47,8 +48,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       syncLightColor(pendingSettings.colorLight ?? DEFAULTS.colorLight);
       syncDarkColor(pendingSettings.colorDark ?? DEFAULTS.colorDark);
       if (pendingSettings.showFab !== undefined) showFabToggle.checked = pendingSettings.showFab;
-      syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
+      syncAppearanceFromPresets(pendingSettings.presets || DEFAULTS.presets);
       syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
+      repairDefaultPresetMirrorsIfNeeded(s);
       // Keep FAB builder colors in sync with preset edits
       reconcileCurrentFabLayout(!hasFabLayoutChange);
       rerenderFabBuilder();
@@ -224,12 +226,12 @@ const colorLightPicker = document.getElementById('colorLight');
 const colorLightHex = document.getElementById('colorLightHex');
 const colorDarkPicker = document.getElementById('colorDark');
 const colorDarkHex = document.getElementById('colorDarkHex');
-const fabPresetSwatches = [
-  document.getElementById('fabPreset1'),
-  document.getElementById('fabPreset2'),
-  document.getElementById('fabPreset3'),
-  document.getElementById('fabPreset4')
-];
+const appearanceSaveStatusEl = document.getElementById('appearanceSaveStatus');
+const appearancePresetSummaryEl = document.getElementById('appearancePresetSummary');
+const defaultPresetNameLightEl = document.getElementById('defaultPresetNameLight');
+const defaultPresetNameDarkEl = document.getElementById('defaultPresetNameDark');
+const manageTagPresetsBtn = document.getElementById('manageTagPresets');
+let selectedAppearancePreviewPresetId = 'preset1';
 const showFabToggle = document.getElementById('showFab');
 const previewMarkLight = document.getElementById('previewMarkLight');
 const previewMarkDark = document.getElementById('previewMarkDark');
@@ -1033,29 +1035,104 @@ function initFabBuilder() {
 // ---- Color sync helpers ----
 
 function syncLightColor(hex) {
+  if (!colorLightPicker || !colorLightHex) return;
   colorLightPicker.value = hex;
   colorLightHex.value = hex.toUpperCase();
-  previewMarkLight.style.backgroundColor = hex;
-  previewMarkLight.style.color = '#1a1a1a';
 }
 
 function syncDarkColor(hex) {
+  if (!colorDarkPicker || !colorDarkHex) return;
   colorDarkPicker.value = hex;
   colorDarkHex.value = hex.toUpperCase();
-  previewMarkDark.style.backgroundColor = hex;
-  previewMarkDark.style.color = '#fff';
 }
 
-// Sync FAB preset swatches for the current theme
-function syncPresetSwatches(presets) {
-  if (!Array.isArray(presets) || presets.length === 0) return;
-  const isDark = document.body.classList.contains('dark');
-  fabPresetSwatches.forEach((swatch, index) => {
-    if (!swatch) return;
-    const preset = presets[index] || presets[0];
-    const color = isDark ? (preset.colorDark || DEFAULTS.colorDark) : (preset.colorLight || DEFAULTS.colorLight);
-    swatch.value = color;
+function getDefaultPreset(presets) {
+  const normalized = normalizePresets(presets);
+  return normalized.find(preset => preset.id === 'preset1')
+    || DEFAULTS.presets.find(preset => preset.id === 'preset1');
+}
+
+function getAppearancePreviewPreset(presets) {
+  const normalized = normalizePresets(presets);
+  const selectedPreset = normalized.find(preset => preset.id === selectedAppearancePreviewPresetId);
+  if (selectedPreset) return selectedPreset;
+
+  selectedAppearancePreviewPresetId = 'preset1';
+  return getDefaultPreset(normalized);
+}
+
+function syncAppearancePreview(presets) {
+  const previewPreset = getAppearancePreviewPreset(presets);
+  if (!previewPreset) return;
+
+  if (previewMarkLight) {
+    previewMarkLight.style.backgroundColor = previewPreset.colorLight;
+    previewMarkLight.style.color = '#1a1a1a';
+  }
+  if (previewMarkDark) {
+    previewMarkDark.style.backgroundColor = previewPreset.colorDark;
+    previewMarkDark.style.color = '#fff';
+  }
+  if (defaultPresetNameLightEl) {
+    defaultPresetNameLightEl.textContent = previewPreset.name || 'Untitled';
+  }
+  if (defaultPresetNameDarkEl) {
+    defaultPresetNameDarkEl.textContent = previewPreset.name || 'Untitled';
+  }
+}
+
+function renderAppearancePresetSummary(presets) {
+  if (!appearancePresetSummaryEl) return;
+  const normalized = normalizePresets(presets);
+  getAppearancePreviewPreset(normalized);
+  appearancePresetSummaryEl.innerHTML = '';
+
+  normalized.forEach(preset => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'appearance-palette-item';
+    item.dataset.presetId = preset.id;
+    item.title = `${preset.name}: ${preset.colorLight.toUpperCase()} / ${preset.colorDark.toUpperCase()}`;
+    item.setAttribute('aria-label', `Preview ${preset.name || 'Untitled'} colors`);
+    item.setAttribute('aria-pressed', String(preset.id === selectedAppearancePreviewPresetId));
+    item.addEventListener('click', () => {
+      selectedAppearancePreviewPresetId = preset.id;
+      syncAppearancePreview(normalized);
+      appearancePresetSummaryEl.querySelectorAll('.appearance-palette-item').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.presetId === preset.id));
+      });
+    });
+
+    const swatch = document.createElement('span');
+    swatch.className = 'appearance-palette-swatch';
+    swatch.setAttribute('aria-hidden', 'true');
+
+    const lightHalf = document.createElement('span');
+    lightHalf.className = 'appearance-palette-half is-light';
+    lightHalf.style.backgroundColor = preset.colorLight;
+    const darkHalf = document.createElement('span');
+    darkHalf.className = 'appearance-palette-half is-dark';
+    darkHalf.style.backgroundColor = preset.colorDark;
+    swatch.append(lightHalf, darkHalf);
+
+    const name = document.createElement('span');
+    name.className = 'appearance-palette-name';
+    name.textContent = preset.name || 'Untitled';
+
+    item.append(swatch, name);
+    appearancePresetSummaryEl.appendChild(item);
   });
+}
+
+function syncAppearanceFromPresets(presets) {
+  const normalized = normalizePresets(presets);
+  const defaultPreset = getDefaultPreset(normalized);
+  if (!defaultPreset) return;
+
+  syncLightColor(defaultPreset.colorLight);
+  syncDarkColor(defaultPreset.colorDark);
+  syncAppearancePreview(normalized);
+  renderAppearancePresetSummary(normalized);
 }
 
 function cloneDefaults() {
@@ -1091,7 +1168,8 @@ function normalizePresets(presets) {
     });
   });
 
-  // Preserve the four built-ins for old or partially populated settings.
+  // Preserve the built-ins for old or partially populated settings. In
+  // particular, preset1 is the permanent default and must never disappear.
   base.forEach(def => {
     if (!seen.has(def.id)) {
       normalized.push({ ...def });
@@ -1104,37 +1182,136 @@ function normalizePresets(presets) {
 
 function setPending(next) {
   const source = next || {};
+  const presets = normalizePresets(source.presets);
+  const defaultPreset = getDefaultPreset(presets);
   pendingSettings = {
     ...cloneDefaults(),
     ...source,
-    presets: normalizePresets(source.presets)
+    colorLight: defaultPreset.colorLight,
+    colorDark: defaultPreset.colorDark,
+    presets
   };
 }
 
-let tagPresetSaveTimer = null;
-let tagPresetSaveGeneration = 0;
-const selfPersistedPresetSignatures = new Set();
+let scopedSettingsSaveTimer = null;
+let scopedSettingsWriteInFlight = false;
+let pendingScopedSettingsPatch = {};
+const selfPersistedSettingsSignatures = new Set();
+let scopedSettingsBarrierInFlight = false;
+const scopedSettingsBarrierQueue = [];
+
+function getHighlightSettingsSignature(settings) {
+  const source = settings || {};
+  return JSON.stringify({
+    colorLight: source.colorLight || '',
+    colorDark: source.colorDark || '',
+    showFab: source.showFab,
+    presets: normalizePresets(source.presets)
+  });
+}
+
+function setAppearanceSaveStatus(status) {
+  if (!appearanceSaveStatusEl) return;
+  appearanceSaveStatusEl.classList.toggle('is-saving', status === 'saving');
+  if (status === 'saving') appearanceSaveStatusEl.textContent = 'Saving…';
+  else if (status === 'error') appearanceSaveStatusEl.textContent = 'Could not save';
+  else appearanceSaveStatusEl.textContent = 'Saved automatically';
+}
+
+function normalizeScopedSettingsWrite(stored, patch) {
+  const next = {
+    ...cloneDefaults(),
+    ...(stored || {}),
+    ...patch
+  };
+  const presets = normalizePresets(next.presets).map(preset => ({ ...preset }));
+  const defaultPreset = getDefaultPreset(presets);
+  next.presets = presets;
+  next.colorLight = defaultPreset.colorLight;
+  next.colorDark = defaultPreset.colorDark;
+  return next;
+}
+
+function flushScopedSettingsPatch() {
+  if (scopedSettingsWriteInFlight || scopedSettingsBarrierInFlight) return;
+  if (Object.keys(pendingScopedSettingsPatch).length === 0) return;
+
+  const patch = pendingScopedSettingsPatch;
+  pendingScopedSettingsPatch = {};
+  scopedSettingsWriteInFlight = true;
+
+  chrome.storage.local.get('highlightSettings', (result) => {
+    const next = normalizeScopedSettingsWrite(result.highlightSettings, patch);
+    const signature = getHighlightSettingsSignature(next);
+    selfPersistedSettingsSignatures.add(signature);
+    chrome.storage.local.set({ highlightSettings: next }, () => {
+      scopedSettingsWriteInFlight = false;
+      const failed = !!(chrome.runtime && chrome.runtime.lastError);
+      if (failed) selfPersistedSettingsSignatures.delete(signature);
+      setAppearanceSaveStatus(failed ? 'error' : 'saved');
+      pumpScopedSettingsWork();
+    });
+  });
+}
+
+function pumpScopedSettingsWork() {
+  if (scopedSettingsWriteInFlight || scopedSettingsBarrierInFlight) return;
+  if (scopedSettingsBarrierQueue.length > 0) {
+    const task = scopedSettingsBarrierQueue.shift();
+    scopedSettingsBarrierInFlight = true;
+    task(() => {
+      scopedSettingsBarrierInFlight = false;
+      pumpScopedSettingsWork();
+    });
+    return;
+  }
+  flushScopedSettingsPatch();
+}
+
+function scheduleScopedSettingsPatch(patch) {
+  pendingScopedSettingsPatch = {
+    ...pendingScopedSettingsPatch,
+    ...patch
+  };
+  setAppearanceSaveStatus('saving');
+  if (scopedSettingsSaveTimer) clearTimeout(scopedSettingsSaveTimer);
+  scopedSettingsSaveTimer = setTimeout(() => {
+    scopedSettingsSaveTimer = null;
+    pumpScopedSettingsWork();
+  }, 120);
+}
+
+function cancelScopedSettingsAutosave() {
+  if (scopedSettingsSaveTimer) {
+    clearTimeout(scopedSettingsSaveTimer);
+    scopedSettingsSaveTimer = null;
+  }
+  pendingScopedSettingsPatch = {};
+}
+
+function queueScopedSettingsBarrier(task) {
+  scopedSettingsBarrierQueue.push(task);
+  pumpScopedSettingsWork();
+}
 
 function schedulePresetSettingsSave() {
   if (!pendingSettings) return;
-  if (tagPresetSaveTimer) clearTimeout(tagPresetSaveTimer);
-  const generation = ++tagPresetSaveGeneration;
-  tagPresetSaveTimer = setTimeout(() => {
-    tagPresetSaveTimer = null;
-    const presets = normalizePresets(pendingSettings.presets).map(p => ({ ...p }));
-    const signature = JSON.stringify(presets);
-    chrome.storage.local.get('highlightSettings', (result) => {
-      if (generation !== tagPresetSaveGeneration) return;
-      const stored = result.highlightSettings || cloneDefaults();
-      selfPersistedPresetSignatures.add(signature);
-      chrome.storage.local.set({
-        highlightSettings: {
-          ...stored,
-          presets
-        }
-      });
-    });
-  }, 120);
+  scheduleScopedSettingsPatch({
+    presets: normalizePresets(pendingSettings.presets).map(preset => ({ ...preset }))
+  });
+}
+
+function repairDefaultPresetMirrorsIfNeeded(rawSettings) {
+  if (!rawSettings) return;
+  const defaultPreset = getDefaultPreset(rawSettings.presets);
+  if (
+    rawSettings.colorLight === defaultPreset.colorLight
+    && rawSettings.colorDark === defaultPreset.colorDark
+  ) return;
+  scheduleScopedSettingsPatch({
+    colorLight: defaultPreset.colorLight,
+    colorDark: defaultPreset.colorDark
+  });
 }
 
 function updatePendingPreset(presetId, update) {
@@ -1144,7 +1321,12 @@ function updatePendingPreset(presetId, update) {
   if (!preset) return null;
   update(preset);
   pendingSettings.presets = presets;
-  syncPresetSwatches(presets);
+  if (presetId === 'preset1') {
+    const defaultPreset = getDefaultPreset(presets);
+    pendingSettings.colorLight = defaultPreset.colorLight;
+    pendingSettings.colorDark = defaultPreset.colorDark;
+  }
+  syncAppearanceFromPresets(presets);
   rerenderFabBuilder();
   refreshTagsLibraryIfLive();
   schedulePresetSettingsSave();
@@ -1333,115 +1515,63 @@ function isValidHex(str) {
   return /^#[0-9A-Fa-f]{6}$/.test(str);
 }
 
-// ---- Event listeners for color inputs ----
-let skipCrossUpdate = false;
+// ---- Appearance color handlers ----
+
+function updateAppearanceDefaultColors(light, dark) {
+  if (!pendingSettings || !isValidHex(light) || !isValidHex(dark)) return;
+  const presets = normalizePresets(pendingSettings.presets);
+  const defaultPreset = presets.find(preset => preset.id === 'preset1');
+  if (!defaultPreset) return;
+
+  defaultPreset.colorLight = light;
+  defaultPreset.colorDark = dark;
+  pendingSettings.presets = presets;
+  pendingSettings.colorLight = light;
+  pendingSettings.colorDark = dark;
+
+  syncAppearanceFromPresets(presets);
+  syncPresetsEditor(presets);
+  rerenderFabBuilder();
+  refreshTagsLibraryIfLive();
+  schedulePresetSettingsSave();
+}
 
 colorLightPicker.addEventListener('input', (e) => {
-  if (skipCrossUpdate) { skipCrossUpdate = false; return; }
   const hex = e.target.value;
-  syncLightColor(hex);
-  skipCrossUpdate = true;
-  syncDarkColor(deriveDarkFromLight(hex));
-  setTimeout(() => { skipCrossUpdate = false; }, 0);
-  if (pendingSettings) {
-    pendingSettings.colorLight = colorLightPicker.value;
-    pendingSettings.colorDark = colorDarkPicker.value;
-  }
+  updateAppearanceDefaultColors(hex, deriveDarkFromLight(hex));
 });
 
 colorLightHex.addEventListener('input', (e) => {
-  if (skipCrossUpdate) { skipCrossUpdate = false; return; }
   let val = e.target.value;
   if (!val.startsWith('#')) val = '#' + val;
   if (isValidHex(val)) {
-    syncLightColor(val);
-    skipCrossUpdate = true;
-    syncDarkColor(deriveDarkFromLight(val));
-    setTimeout(() => { skipCrossUpdate = false; }, 0);
-    if (pendingSettings) {
-      pendingSettings.colorLight = colorLightPicker.value;
-      pendingSettings.colorDark = colorDarkPicker.value;
-    }
+    updateAppearanceDefaultColors(val, deriveDarkFromLight(val));
   }
 });
 
-colorLightHex.addEventListener('blur', (e) => {
-  let val = e.target.value;
-  if (!val.startsWith('#')) val = '#' + val;
-  if (!isValidHex(val)) {
-    syncLightColor(colorLightPicker.value);
-    skipCrossUpdate = true;
-    syncDarkColor(deriveDarkFromLight(colorLightPicker.value));
-    setTimeout(() => { skipCrossUpdate = false; }, 0);
-    if (pendingSettings) {
-      pendingSettings.colorLight = colorLightPicker.value;
-      pendingSettings.colorDark = colorDarkPicker.value;
-    }
+colorLightHex.addEventListener('blur', () => {
+  if (!isValidHex(colorLightHex.value)) {
+    syncAppearanceFromPresets(pendingSettings?.presets || DEFAULTS.presets);
   }
 });
 
 colorDarkPicker.addEventListener('input', (e) => {
-  if (skipCrossUpdate) { skipCrossUpdate = false; return; }
   const hex = e.target.value;
-  syncDarkColor(hex);
-  skipCrossUpdate = true;
-  syncLightColor(deriveLightFromDark(hex));
-  setTimeout(() => { skipCrossUpdate = false; }, 0);
-  if (pendingSettings) {
-    pendingSettings.colorLight = colorLightPicker.value;
-    pendingSettings.colorDark = colorDarkPicker.value;
-  }
+  updateAppearanceDefaultColors(deriveLightFromDark(hex), hex);
 });
 
 colorDarkHex.addEventListener('input', (e) => {
-  if (skipCrossUpdate) { skipCrossUpdate = false; return; }
   let val = e.target.value;
   if (!val.startsWith('#')) val = '#' + val;
   if (isValidHex(val)) {
-    syncDarkColor(val);
-    skipCrossUpdate = true;
-    syncLightColor(deriveLightFromDark(val));
-    setTimeout(() => { skipCrossUpdate = false; }, 0);
-    if (pendingSettings) {
-      pendingSettings.colorLight = colorLightPicker.value;
-      pendingSettings.colorDark = colorDarkPicker.value;
-    }
+    updateAppearanceDefaultColors(deriveLightFromDark(val), val);
   }
 });
 
-colorDarkHex.addEventListener('blur', (e) => {
-  let val = e.target.value;
-  if (!val.startsWith('#')) val = '#' + val;
-  if (!isValidHex(val)) {
-    syncDarkColor(colorDarkPicker.value);
-    skipCrossUpdate = true;
-    syncLightColor(deriveLightFromDark(colorDarkPicker.value));
-    setTimeout(() => { skipCrossUpdate = false; }, 0);
-    if (pendingSettings) {
-      pendingSettings.colorLight = colorLightPicker.value;
-      pendingSettings.colorDark = colorDarkPicker.value;
-    }
+colorDarkHex.addEventListener('blur', () => {
+  if (!isValidHex(colorDarkHex.value)) {
+    syncAppearanceFromPresets(pendingSettings?.presets || DEFAULTS.presets);
   }
-});
-
-// ---- FAB preset swatch handlers ----
-
-fabPresetSwatches.forEach((swatch, index) => {
-  if (!swatch) return;
-  swatch.addEventListener('input', (e) => {
-    const newColor = e.target.value;
-    if (!pendingSettings) return;
-    const presets = normalizePresets(pendingSettings.presets);
-    const preset = presets[index] || presets[0];
-    const isDark = document.body.classList.contains('dark');
-    if (isDark) preset.colorDark = newColor;
-    else preset.colorLight = newColor;
-    pendingSettings.presets = presets;
-    syncPresetsEditor(pendingSettings.presets);
-    rerenderFabBuilder();
-    refreshTagsLibraryIfLive();
-    schedulePresetSettingsSave();
-  });
 });
 
 // ---- Tag Presets editor handlers ----
@@ -1529,7 +1659,7 @@ if (addTagPresetBtn) {
       newTagNameInput.focus();
       newTagNameInput.select();
     }
-    syncPresetSwatches(presets);
+    syncAppearanceFromPresets(presets);
     rerenderFabBuilder();
     refreshTagsLibraryIfLive();
     schedulePresetSettingsSave();
@@ -1548,6 +1678,12 @@ if (autoMatchAllDarkToLightBtn) {
   });
 }
 
+if (manageTagPresetsBtn) {
+  manageTagPresetsBtn.addEventListener('click', () => {
+    switchSidebarView('settings', 'presets-tags');
+  });
+}
+
 // ---- Save / Load / Reset ----
 
 function showToast(message) {
@@ -1558,13 +1694,13 @@ function showToast(message) {
 
 function saveSettings() {
   if (!pendingSettings) return;
-  tagPresetSaveGeneration++;
-  if (tagPresetSaveTimer) {
-    clearTimeout(tagPresetSaveTimer);
-    tagPresetSaveTimer = null;
-  }
-  chrome.storage.local.set({ highlightSettings: pendingSettings }, () => {
-    showToast('Settings saved');
+  cancelScopedSettingsAutosave();
+  queueScopedSettingsBarrier((done) => {
+    const settingsToSave = normalizeScopedSettingsWrite({}, pendingSettings);
+    chrome.storage.local.set({ highlightSettings: settingsToSave }, () => {
+      showToast('Settings saved');
+      done();
+    });
   });
 }
 
@@ -1573,11 +1709,10 @@ function loadSettings() {
     const s = result.highlightSettings || DEFAULTS;
 
     setPending(s);
-    syncLightColor(pendingSettings.colorLight || DEFAULTS.colorLight);
-    syncDarkColor(pendingSettings.colorDark || DEFAULTS.colorDark);
     showFabToggle.checked = pendingSettings.showFab !== undefined ? pendingSettings.showFab : DEFAULTS.showFab;
-    syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
+    syncAppearanceFromPresets(pendingSettings.presets || DEFAULTS.presets);
     syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
+    repairDefaultPresetMirrorsIfNeeded(s);
 
     // Init FAB builder once settings are ready (so preset colors are available)
     initFabBuilder();
@@ -1585,28 +1720,26 @@ function loadSettings() {
 }
 
 function resetSettings() {
-  tagPresetSaveGeneration++;
-  selfPersistedPresetSignatures.clear();
-  if (tagPresetSaveTimer) {
-    clearTimeout(tagPresetSaveTimer);
-    tagPresetSaveTimer = null;
-  }
+  cancelScopedSettingsAutosave();
+  selfPersistedSettingsSignatures.clear();
   const resetSettingsValue = cloneDefaults();
   const resetFabLayout = defaultFabLayout();
-  syncLightColor(resetSettingsValue.colorLight);
-  syncDarkColor(resetSettingsValue.colorDark);
-  showFabToggle.checked = resetSettingsValue.showFab;
   setPending(resetSettingsValue);
-  syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
+  showFabToggle.checked = pendingSettings.showFab;
+  syncAppearanceFromPresets(pendingSettings.presets || DEFAULTS.presets);
   syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
   fabLayoutState = resetFabLayout;
   rerenderFabBuilder();
 
-  chrome.storage.local.set({
-    highlightSettings: resetSettingsValue,
-    [FAB_LAYOUT_KEY]: resetFabLayout
-  }, () => {
-    showToast('Reset to defaults');
+  queueScopedSettingsBarrier((done) => {
+    chrome.storage.local.set({
+      highlightSettings: resetSettingsValue,
+      [FAB_LAYOUT_KEY]: resetFabLayout
+    }, () => {
+      showToast('Reset to defaults');
+      setAppearanceSaveStatus('saved');
+      done();
+    });
   });
 }
 

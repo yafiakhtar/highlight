@@ -533,12 +533,6 @@
 
     /* ---- Color picker ---- */
 
-    .color-input-wrap {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
     .color-swatch {
       width: 24px;
       height: 24px;
@@ -1825,32 +1819,376 @@
       border: 1px solid var(--opt-hover);
     }
 
-    /* ---- Preview ---- */
+    /* ---- Appearance ---- */
 
-    .preview-area {
-      margin-top: 16px;
-      padding: 16px;
-      border-radius: 8px;
+    .appearance-section {
+      padding: 4px 0 32px;
+      border: none;
+      background: transparent;
+    }
+
+    .appearance-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 28px;
+    }
+
+    .appearance-title {
+      margin: 0 0 6px;
+      color: var(--opt-text-strong);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: -0.2px;
+    }
+
+    .appearance-description {
+      max-width: 590px;
+      margin: 0;
+      color: var(--opt-text-muted);
+      font-size: 12.5px;
+      line-height: 1.65;
+    }
+
+    .appearance-save-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      flex-shrink: 0;
+      padding-top: 4px;
+      color: var(--opt-text-muted);
+      font-size: 10.5px;
+    }
+
+    .appearance-save-status::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #4f9d69;
+      transition: background 0.18s ease, opacity 0.18s ease;
+    }
+
+    .appearance-save-status.is-saving::before {
+      background: var(--opt-accent);
+      opacity: 0.72;
+    }
+
+    .appearance-preview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    .appearance-preview {
+      display: grid;
+      grid-template-columns: minmax(88px, auto) minmax(0, 1fr) minmax(72px, auto);
+      align-items: center;
+      gap: 20px;
+      min-width: 0;
+      min-height: 68px;
+      padding: 0 18px;
+      overflow: hidden;
+      border: 1px solid;
+      border-radius: 11px;
+    }
+
+    .appearance-preview.is-light {
+      border-color: #dedede;
+      background: #fafaf9;
+      color: #232323;
+    }
+
+    .appearance-preview.is-dark {
+      border-color: #303136;
+      background: #1c1d20;
+      color: #e2e2e2;
+    }
+
+    .appearance-preview-label {
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.65px;
+    }
+
+    .appearance-preview.is-light .appearance-preview-label,
+    .appearance-preview.is-light .appearance-preview-tag {
+      color: #747474;
+    }
+
+    .appearance-preview.is-dark .appearance-preview-label,
+    .appearance-preview.is-dark .appearance-preview-tag {
+      color: #96979d;
+    }
+
+    .appearance-preview-tag {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 10.5px;
+      text-align: right;
+    }
+
+    .appearance-preview-line {
+      min-width: 0;
+      margin: 0;
+      font-family: Georgia, serif;
       font-size: 13px;
-      line-height: 1.7;
-    }
-
-    .preview-area.preview-light {
-      background: #fafafa;
-      color: #1a1a1a;
-      border: 1px solid #e0e0e0;
-    }
-
-    .preview-area.preview-dark {
-      background: #1a1a1a;
-      color: #cccccc;
-      border: 1px solid #2a2a2a;
+      line-height: 1.6;
+      overflow: hidden;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .preview-mark {
-      padding: 1px 3px;
-      border-radius: 2px;
+      padding: 2px 3px;
+      border-radius: 3px;
       cursor: default;
+      transition: background-color 0.18s ease, color 0.18s ease;
+    }
+
+    .appearance-controls {
+      margin-top: 28px;
+      padding: 18px 0 20px;
+      border-top: 1px solid var(--opt-border);
+      border-bottom: 1px solid var(--opt-border);
+    }
+
+    .appearance-section-heading {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    .appearance-section-title {
+      margin: 0 0 4px;
+      color: var(--opt-text-strong);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .appearance-section-description {
+      margin: 0;
+      color: var(--opt-text-muted);
+      font-size: 11.5px;
+      line-height: 1.55;
+    }
+
+    .appearance-linked-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: var(--opt-surface-alt);
+      color: var(--opt-text-muted);
+      font-size: 10px;
+    }
+
+    .appearance-linked-badge svg {
+      width: 12px;
+      height: 12px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+    }
+
+    .appearance-color-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+
+    .appearance-color-control {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-width: 0;
+      padding: 8px 0;
+    }
+
+    .appearance-color-label {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .appearance-color-label strong {
+      color: var(--opt-text);
+      font-size: 12.5px;
+      font-weight: 500;
+    }
+
+    .appearance-color-label span {
+      color: var(--opt-text-muted);
+      font-size: 10.5px;
+    }
+
+    .appearance-color-inputs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .appearance-color-inputs .color-swatch {
+      width: 32px;
+      height: 32px;
+      border-width: 1px;
+    }
+
+    .appearance-color-inputs .color-hex {
+      width: 78px;
+      padding: 7px 6px;
+      background: transparent;
+    }
+
+    .appearance-color-inputs .color-hex:hover,
+    .appearance-color-inputs .color-hex:focus {
+      border-color: var(--opt-hover);
+      background: var(--opt-surface-alt);
+      outline: none;
+    }
+
+    .appearance-palette {
+      padding-top: 24px;
+    }
+
+    .appearance-manage-btn {
+      flex-shrink: 0;
+      padding: 5px 8px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--opt-text-muted);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 11px;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .appearance-manage-btn:hover,
+    .appearance-manage-btn:focus-visible {
+      background: var(--opt-surface-alt);
+      color: var(--opt-text-strong);
+      outline: none;
+    }
+
+    .appearance-palette-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .appearance-palette-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      max-width: 220px;
+      padding: 6px 9px 6px 7px;
+      border: 1px solid var(--opt-border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--opt-text);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 11px;
+      text-align: left;
+      transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .appearance-palette-item:hover {
+      border-color: var(--opt-hover);
+      background: var(--opt-surface-alt);
+      color: var(--opt-text-strong);
+    }
+
+    .appearance-palette-item:focus-visible {
+      border-color: var(--opt-accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--opt-accent) 18%, transparent);
+      outline: none;
+    }
+
+    .appearance-palette-item[aria-pressed="true"] {
+      border-color: var(--opt-accent);
+      background: color-mix(in srgb, var(--opt-accent) 9%, transparent);
+      color: var(--opt-text-strong);
+    }
+
+    .appearance-palette-swatch {
+      position: relative;
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.12);
+      border-radius: 999px;
+    }
+
+    body.dark .appearance-palette-swatch {
+      border-color: rgba(255,255,255,0.14);
+    }
+
+    .appearance-palette-half {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 50%;
+    }
+
+    .appearance-palette-half.is-light {
+      left: 0;
+    }
+
+    .appearance-palette-half.is-dark {
+      right: 0;
+    }
+
+    .appearance-palette-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 820px) {
+      .appearance-header,
+      .appearance-section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .appearance-color-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .appearance-preview {
+        grid-template-columns: minmax(74px, auto) minmax(0, 1fr) minmax(62px, auto);
+        gap: 12px;
+        padding: 0 13px;
+      }
+
+      .appearance-color-grid {
+        gap: 4px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .appearance-save-status::before,
+      .preview-mark,
+      .appearance-manage-btn,
+      .appearance-palette-item {
+        transition: none;
+      }
     }
 
     /* ---- Buttons ---- */
@@ -2269,50 +2607,75 @@
       <main class="content-area">
         <!-- Appearance View -->
         <div class="settings-view active" data-view="appearance">
-          <div class="section">
-            <div class="section-title">Highlight Colors</div>
-
-            <div class="setting-row">
-              <div class="setting-label">
-                <span>Light mode</span>
-                <small>Used on light backgrounds</small>
+          <div class="section appearance-section">
+            <div class="appearance-header">
+              <div>
+                <h2 class="appearance-title">Highlight appearance</h2>
+                <p class="appearance-description">Set the light and dark colors for your default tag. Existing highlights linked to it update automatically.</p>
               </div>
-              <div class="color-input-wrap">
-                <input type="color" id="colorLight" class="color-swatch" value="#FFEA99">
-                <input type="text" id="colorLightHex" class="color-hex" value="#FFEA99" maxlength="7">
+              <span class="appearance-save-status" id="appearanceSaveStatus" role="status">Saved automatically</span>
+            </div>
+
+            <div class="appearance-preview-grid">
+              <article class="appearance-preview is-light" id="previewLight">
+                <span class="appearance-preview-label">Light webpage</span>
+                <p class="appearance-preview-line"><span class="preview-mark" id="previewMarkLight">Capture the ideas that matter</span></p>
+                <span class="appearance-preview-tag" id="defaultPresetNameLight">General</span>
+              </article>
+
+              <article class="appearance-preview is-dark" id="previewDark">
+                <span class="appearance-preview-label">Dark webpage</span>
+                <p class="appearance-preview-line"><span class="preview-mark" id="previewMarkDark">Capture the ideas that matter</span></p>
+                <span class="appearance-preview-tag" id="defaultPresetNameDark">General</span>
+              </article>
+            </div>
+
+            <div class="appearance-controls">
+              <div class="appearance-section-heading">
+                <div>
+                  <h3 class="appearance-section-title">Default tag colors</h3>
+                  <p class="appearance-section-description">Editing either color automatically creates a matching color for the other theme.</p>
+                </div>
+                <span class="appearance-linked-badge" title="Uses the same color matching as Tag Presets">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07.07l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15"/><path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 12 20l1.15-1.15"/></svg>
+                  Linked
+                </span>
+              </div>
+
+              <div class="appearance-color-grid">
+                <div class="appearance-color-control">
+                  <div class="appearance-color-label">
+                    <strong>Light webpages</strong>
+                    <span>Used on bright backgrounds</span>
+                  </div>
+                  <div class="appearance-color-inputs">
+                    <input type="color" id="colorLight" class="color-swatch" value="#FFEA99" aria-label="Default tag color for light webpages">
+                    <input type="text" id="colorLightHex" class="color-hex" value="#FFEA99" maxlength="7" aria-label="Default light webpage hex color">
+                  </div>
+                </div>
+
+                <div class="appearance-color-control">
+                  <div class="appearance-color-label">
+                    <strong>Dark webpages</strong>
+                    <span>Used on dark backgrounds</span>
+                  </div>
+                  <div class="appearance-color-inputs">
+                    <input type="color" id="colorDark" class="color-swatch" value="#7C6129" aria-label="Default tag color for dark webpages">
+                    <input type="text" id="colorDarkHex" class="color-hex" value="#7C6129" maxlength="7" aria-label="Default dark webpage hex color">
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div class="setting-row">
-              <div class="setting-label">
-                <span>Dark mode</span>
-                <small>Used on dark backgrounds</small>
+            <div class="appearance-palette">
+              <div class="appearance-section-heading">
+                <div>
+                  <h3 class="appearance-section-title">Tag palette</h3>
+                  <p class="appearance-section-description">Select a tag to preview its paired webpage colors. Manage colors and names in Tag Presets.</p>
+                </div>
+                <button type="button" class="appearance-manage-btn" id="manageTagPresets">Manage in Tag Presets</button>
               </div>
-              <div class="color-input-wrap">
-                <input type="color" id="colorDark" class="color-swatch" value="#7C6129">
-                <input type="text" id="colorDarkHex" class="color-hex" value="#7C6129" maxlength="7">
-              </div>
-            </div>
-
-            <!-- Preview -->
-            <div class="preview-area preview-light" id="previewLight">
-              The quick brown fox <span class="preview-mark" id="previewMarkLight">jumps over</span> the lazy dog.
-            </div>
-            <div class="preview-area preview-dark" id="previewDark">
-              The quick brown fox <span class="preview-mark" id="previewMarkDark">jumps over</span> the lazy dog.
-            </div>
-
-            <div class="setting-row">
-              <div class="setting-label">
-                <span>FAB colors</span>
-                <small>Quick highlight presets for the floating button</small>
-              </div>
-              <div class="color-input-wrap">
-                <input type="color" id="fabPreset1" class="color-swatch">
-                <input type="color" id="fabPreset2" class="color-swatch">
-                <input type="color" id="fabPreset3" class="color-swatch">
-                <input type="color" id="fabPreset4" class="color-swatch">
-              </div>
+              <div class="appearance-palette-list" id="appearancePresetSummary"></div>
             </div>
           </div>
         </div>
