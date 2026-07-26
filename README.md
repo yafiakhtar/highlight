@@ -23,14 +23,13 @@
 Four named presets — **General, Important, Reference, Question** — are included by default, and custom tags can be added in Settings. Each preset has separate light and dark mode colors. Presets double as tags: highlights reference their preset and are automatically grouped by it in the Library's Tags view. Changing a preset color updates every highlight linked to it.
 
 ### Library
-A full-page options view (`options.html`) with a collapsible sidebar and six views:
+A full-page options view (`options.html`) with a collapsible sidebar and several views:
 
 | View | Description |
 |---|---|
 | **All** | Every highlight, grouped by page, sorted by most recently updated |
 | **Favorites** | Highlights you've starred, across all pages |
 | **Tags** | Color presets as tag folders; click any folder to see its highlights |
-| **History** | *(coming soon)* |
 | **Recently Deleted** | Soft-deleted highlights; restore or permanently delete |
 | **Folders** | *(coming soon)* |
 
