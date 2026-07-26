@@ -238,6 +238,7 @@ const previewMarkDark = document.getElementById('previewMarkDark');
 const saveBtn = document.getElementById('saveBtn');
 const resetBtn = document.getElementById('resetBtn');
 const openShortcuts = document.getElementById('openShortcuts');
+const shortcutDisplay = document.getElementById('shortcutDisplay');
 const toast = document.getElementById('toast');
 
 const presetsEditorRowsEl = document.getElementById('presetsEditorRows');
@@ -1747,12 +1748,99 @@ openShortcuts.addEventListener('click', () => {
 
 // ---- Detect shortcut ----
 
-chrome.commands.getAll((commands) => {
-  const hlCmd = commands.find(c => c.name === 'highlight-selection');
-  if (hlCmd && hlCmd.shortcut) {
-    document.getElementById('shortcutDisplay').textContent = hlCmd.shortcut;
+let lastRenderedShortcut = null;
+
+function isMacShortcutPlatform() {
+  const platform = navigator.userAgentData?.platform || navigator.platform || '';
+  return /mac|iphone|ipad|ipod/i.test(platform);
+}
+
+function formatShortcutToken(token, useMacSymbols) {
+  const value = token.trim();
+  const normalized = value.toLowerCase();
+
+  if (useMacSymbols) {
+    const macSymbols = {
+      command: '⌘',
+      cmd: '⌘',
+      meta: '⌘',
+      shift: '⇧',
+      option: '⌥',
+      alt: '⌥',
+      control: '⌃',
+      ctrl: '⌃',
+      macctrl: '⌃'
+    };
+    if (macSymbols[normalized]) return macSymbols[normalized];
+  } else {
+    const modifierLabels = {
+      command: 'Meta',
+      cmd: 'Meta',
+      meta: 'Meta',
+      shift: 'Shift',
+      option: 'Alt',
+      alt: 'Alt',
+      control: 'Ctrl',
+      ctrl: 'Ctrl',
+      macctrl: 'Ctrl'
+    };
+    if (modifierLabels[normalized]) return modifierLabels[normalized];
   }
-});
+
+  return value.length === 1 ? value.toUpperCase() : value;
+}
+
+function parseShortcutTokens(shortcut) {
+  const value = typeof shortcut === 'string' ? shortcut.trim() : '';
+  if (!value) return [];
+
+  const parts = value.includes('+')
+    ? value.split(/\s*\+\s*/)
+    : value.split(/\s+/);
+
+  return parts.flatMap(part => {
+    const symbolAndKeyTokens = part.match(/[⌘⇧⌥⌃]|[^⌘⇧⌥⌃]+/g) || [];
+    return symbolAndKeyTokens.map(token => token.trim()).filter(Boolean);
+  });
+}
+
+function renderShortcutKeys(shortcut) {
+  if (!shortcutDisplay) return;
+  const normalizedShortcut = typeof shortcut === 'string' ? shortcut.trim() : '';
+  if (normalizedShortcut === lastRenderedShortcut) return;
+  lastRenderedShortcut = normalizedShortcut;
+
+  const tokens = parseShortcutTokens(normalizedShortcut);
+  const displayTokens = tokens.length > 0
+    ? tokens.map(token => formatShortcutToken(token, isMacShortcutPlatform()))
+    : ['Not set'];
+
+  const fragment = document.createDocumentFragment();
+  displayTokens.forEach(token => {
+    const key = document.createElement('kbd');
+    key.className = 'shortcut-key';
+    key.textContent = token;
+    key.setAttribute('aria-hidden', 'true');
+    fragment.appendChild(key);
+  });
+
+  shortcutDisplay.classList.toggle('is-empty', tokens.length === 0);
+  shortcutDisplay.setAttribute(
+    'aria-label',
+    normalizedShortcut ? `Keyboard shortcut: ${normalizedShortcut}` : 'Keyboard shortcut: Not set'
+  );
+  shortcutDisplay.replaceChildren(fragment);
+}
+
+function refreshShortcutDisplay() {
+  chrome.commands.getAll((commands) => {
+    const hlCmd = commands.find(c => c.name === 'highlight-selection');
+    renderShortcutKeys(hlCmd?.shortcut || '');
+  });
+}
+
+refreshShortcutDisplay();
+window.addEventListener('focus', refreshShortcutDisplay);
 
 // ============================================
 // Highlights list

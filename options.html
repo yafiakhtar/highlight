@@ -1691,18 +1691,57 @@
     }
 
     .shortcut {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: 100%;
+      color: var(--opt-text);
+    }
+
+    .shortcut-key {
       display: inline-flex;
       align-items: center;
-      flex-shrink: 0;
-      min-height: 30px;
-      padding: 5px 10px;
-      border: 1px solid var(--opt-hover);
-      border-radius: 6px;
-      background: var(--opt-surface-alt);
-      color: var(--opt-text);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 10.5px;
-      letter-spacing: 0.1px;
+      justify-content: center;
+      flex: 0 0 auto;
+      min-width: 34px;
+      height: 34px;
+      padding: 0 11px;
+      border: 1px solid var(--opt-border-subtle);
+      border-radius: 9px;
+      background: linear-gradient(180deg, var(--opt-surface) 0%, var(--opt-surface-alt) 100%);
+      box-shadow: 0 2px 0 var(--opt-border), 0 4px 10px rgba(0,0,0,0.06);
+      color: var(--opt-text-strong);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1;
+      white-space: nowrap;
+      animation: shortcut-key-in 0.15s ease-out both;
+    }
+
+    body.dark .shortcut-key {
+      box-shadow: 0 2px 0 #151515, 0 4px 10px rgba(0,0,0,0.2);
+    }
+
+    .shortcut.is-empty .shortcut-key {
+      color: var(--opt-text-muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    @keyframes shortcut-key-in {
+      from {
+        opacity: 0;
+        transform: translateY(2px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
     }
 
     .simple-settings-status {
@@ -1726,6 +1765,17 @@
 
       .simple-settings-action {
         align-self: flex-start;
+      }
+
+      .shortcut {
+        justify-content: flex-start;
+        width: 100%;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .shortcut-key {
+        animation: none;
       }
     }
 
@@ -2598,7 +2648,11 @@
                   <strong>Highlight selection</strong>
                   <span>Your current keyboard command</span>
                 </div>
-                <span class="shortcut" id="shortcutDisplay">Ctrl+Shift+H</span>
+                <span class="shortcut" id="shortcutDisplay" role="status" aria-live="polite" aria-label="Keyboard shortcut: Ctrl+Shift+H">
+                  <kbd class="shortcut-key" aria-hidden="true">Ctrl</kbd>
+                  <kbd class="shortcut-key" aria-hidden="true">Shift</kbd>
+                  <kbd class="shortcut-key" aria-hidden="true">H</kbd>
+                </span>
               </div>
 
               <div class="simple-settings-row">
