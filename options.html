@@ -859,41 +859,50 @@
     /* ---- Tags folders (Library → Tags) ---- */
 
     .tag-folders {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      border-top: 1px solid var(--opt-border);
     }
 
     .tag-folder {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 12px 14px;
-      border: 1px solid var(--opt-border);
-      border-radius: 14px;
-      background: var(--opt-surface-alt);
+      width: 100%;
+      gap: 12px;
+      padding: 14px 6px;
+      border: none;
+      border-bottom: 1px solid var(--opt-border);
+      border-radius: 0;
+      background: transparent;
       color: var(--opt-text);
       cursor: pointer;
       text-align: left;
-      transition: transform 0.12s ease, border-color 0.12s ease;
+      transition: color 0.15s ease, padding 0.15s ease;
     }
 
     .tag-folder:hover {
-      transform: translateY(-1px);
-      border-color: rgba(124, 97, 41, 0.35);
+      color: var(--opt-text-strong);
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+
+    .tag-folder:focus-visible {
+      outline: 2px solid var(--opt-accent);
+      outline-offset: -2px;
     }
 
     .tag-dot {
-      width: 10px;
-      height: 10px;
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
       flex-shrink: 0;
       border: 1px solid rgba(0,0,0,0.12);
     }
 
     .tag-name {
-      font-size: 13px;
-      font-weight: 500;
+      font-size: 13.5px;
+      font-weight: 400;
       flex: 1;
       min-width: 0;
       white-space: nowrap;
@@ -905,6 +914,8 @@
       font-size: 12px;
       color: var(--opt-text-muted);
       flex-shrink: 0;
+      min-width: 24px;
+      text-align: right;
     }
 
     .tags-toolbar {
