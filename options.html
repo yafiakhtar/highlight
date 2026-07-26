@@ -494,43 +494,6 @@
       border: 1px solid var(--opt-border-subtle);
     }
 
-    .section-title {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: var(--opt-text-muted);
-      margin-bottom: 20px;
-    }
-
-    .setting-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 0;
-    }
-
-    .setting-row + .setting-row {
-      border-top: 1px solid var(--opt-border);
-    }
-
-    .setting-label {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-
-    .setting-label span {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--opt-text);
-    }
-
-    .setting-label small {
-      font-size: 12px;
-      color: var(--opt-text-muted);
-    }
-
     /* ---- Color picker ---- */
 
     .color-swatch {
@@ -1649,16 +1612,121 @@
       transform: translateX(20px);
     }
 
-    /* ---- Shortcut badge ---- */
+    /* ---- Simple settings views ---- */
+
+    .simple-settings-section {
+      padding: 4px 0 32px;
+      border: none;
+      background: transparent;
+    }
+
+    .simple-settings-header {
+      margin-bottom: 28px;
+    }
+
+    .simple-settings-title {
+      margin: 0 0 6px;
+      color: var(--opt-text-strong);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: -0.2px;
+    }
+
+    .simple-settings-description {
+      max-width: 590px;
+      margin: 0;
+      color: var(--opt-text-muted);
+      font-size: 12.5px;
+      line-height: 1.65;
+    }
+
+    .simple-settings-list {
+      border-top: 1px solid var(--opt-border);
+      border-bottom: 1px solid var(--opt-border);
+    }
+
+    .simple-settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+      min-height: 68px;
+      padding: 15px 4px;
+    }
+
+    .simple-settings-row + .simple-settings-row {
+      border-top: 1px solid var(--opt-border);
+    }
+
+    .simple-settings-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .simple-settings-copy strong {
+      color: var(--opt-text);
+      font-size: 12.5px;
+      font-weight: 500;
+    }
+
+    .simple-settings-copy span {
+      max-width: 590px;
+      color: var(--opt-text-muted);
+      font-size: 10.5px;
+      line-height: 1.55;
+    }
+
+    .simple-settings-action {
+      flex-shrink: 0;
+      min-width: 104px;
+      padding: 7px 12px;
+      font-size: 11.5px;
+    }
+
+    .simple-settings-action:focus-visible {
+      outline: 2px solid var(--opt-accent);
+      outline-offset: 2px;
+    }
 
     .shortcut {
-      display: inline-block;
-      background: var(--opt-surface-alt);
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 11px;
-      color: var(--opt-text);
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      min-height: 30px;
+      padding: 5px 10px;
       border: 1px solid var(--opt-hover);
+      border-radius: 6px;
+      background: var(--opt-surface-alt);
+      color: var(--opt-text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 10.5px;
+      letter-spacing: 0.1px;
+    }
+
+    .simple-settings-status {
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: var(--opt-surface-alt);
+      color: var(--opt-text-muted);
+      font-size: 10px;
+      font-weight: 500;
+    }
+
+    @media (max-width: 720px) {
+      .simple-settings-row {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .simple-settings-action {
+        align-self: flex-start;
+      }
     }
 
     /* ---- Appearance ---- */
@@ -2034,12 +2102,6 @@
     }
 
     /* ---- Buttons ---- */
-
-    .btn-row {
-      display: flex;
-      gap: 10px;
-      margin-top: 8px;
-    }
 
     .btn {
       padding: 10px 20px;
@@ -2524,24 +2586,30 @@
 
         <!-- Shortcuts View -->
         <div class="settings-view" data-view="shortcuts">
-          <div class="section">
-            <div class="section-title">Keyboard Shortcuts</div>
-
-            <div class="setting-row">
-              <div class="setting-label">
-                <span>Highlight selection</span>
-              </div>
-              <span class="shortcut" id="shortcutDisplay">Ctrl+Shift+H</span>
+          <div class="section simple-settings-section">
+            <div class="simple-settings-header">
+              <h2 class="simple-settings-title">Keyboard shortcuts</h2>
+              <p class="simple-settings-description">Review the command used to highlight selected text or manage it in Chrome.</p>
             </div>
 
-            <div class="setting-row">
-              <div class="setting-label">
-                <span>Change shortcuts</span>
-                <small>Managed by your browser</small>
+            <div class="simple-settings-list">
+              <div class="simple-settings-row">
+                <div class="simple-settings-copy">
+                  <strong>Highlight selection</strong>
+                  <span>Your current keyboard command</span>
+                </div>
+                <span class="shortcut" id="shortcutDisplay">Ctrl+Shift+H</span>
               </div>
-              <button type="button" id="openShortcuts" class="btn btn-secondary" style="padding: 6px 14px; font-size: 12px;">
-                Open settings
-              </button>
+
+              <div class="simple-settings-row">
+                <div class="simple-settings-copy">
+                  <strong>Browser shortcut settings</strong>
+                  <span>Extension keyboard commands are managed by Chrome.</span>
+                </div>
+                <button type="button" id="openShortcuts" class="btn btn-secondary simple-settings-action">
+                  Open settings
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2648,23 +2716,48 @@
 
         <!-- Data View -->
         <div class="settings-view" data-view="data">
-          <div class="section">
-            <div class="section-title">Data Management</div>
+          <div class="section simple-settings-section">
+            <div class="simple-settings-header">
+              <h2 class="simple-settings-title">Data management</h2>
+              <p class="simple-settings-description">Save your current configuration or restore extension settings to their defaults.</p>
+            </div>
 
-            <div class="btn-row">
-              <button class="btn btn-primary" id="saveBtn">Save settings</button>
-              <button class="btn btn-secondary" id="resetBtn">Reset to defaults</button>
+            <div class="simple-settings-list">
+              <div class="simple-settings-row">
+                <div class="simple-settings-copy">
+                  <strong>Save settings</strong>
+                  <span>Write your current extension configuration immediately.</span>
+                </div>
+                <button type="button" class="btn btn-primary simple-settings-action" id="saveBtn">Save settings</button>
+              </div>
+
+              <div class="simple-settings-row">
+                <div class="simple-settings-copy">
+                  <strong>Reset to defaults</strong>
+                  <span>Restore default colors, tag presets, FAB visibility, and layout. Highlights and Library data are not removed.</span>
+                </div>
+                <button type="button" class="btn btn-secondary simple-settings-action" id="resetBtn">Reset to defaults</button>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Sync View -->
         <div class="settings-view" data-view="sync">
-          <div class="section">
-            <div class="section-title">Sync</div>
-            <div class="empty-state">
-              <div class="empty-state-title">Sync coming soon</div>
-              Sync your highlights across devices will be available in a future update.
+          <div class="section simple-settings-section">
+            <div class="simple-settings-header">
+              <h2 class="simple-settings-title">Sync</h2>
+              <p class="simple-settings-description">Cross-device access for your highlights is planned for a future update.</p>
+            </div>
+
+            <div class="simple-settings-list">
+              <div class="simple-settings-row">
+                <div class="simple-settings-copy">
+                  <strong>Cross-device sync</strong>
+                  <span>Sync is not available yet. Your highlights currently remain in this browser profile.</span>
+                </div>
+                <span class="simple-settings-status">Coming soon</span>
+              </div>
             </div>
           </div>
         </div>
