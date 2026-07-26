@@ -5,6 +5,7 @@ chrome.storage.local.get('popupTheme', (data) => {
   } else {
     document.body.classList.remove('dark');
   }
+  rerenderFabBuilder();
 });
 
 document.getElementById('optionsThemeToggle').addEventListener('click', () => {
@@ -14,14 +15,13 @@ document.getElementById('optionsThemeToggle').addEventListener('click', () => {
   if (pendingSettings) {
     syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
   }
-  // Refresh FAB builder preview colors for this theme
-  renderFabToolbox();
-  renderFabGrid();
-  renderFabPreview();
+  // Refresh every FAB builder surface for this theme.
+  rerenderFabBuilder();
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
+  const hasFabLayoutChange = Object.prototype.hasOwnProperty.call(changes, FAB_LAYOUT_KEY);
   if (changes.popupTheme) {
     const theme = changes.popupTheme.newValue;
     if (theme === 'dark') {
@@ -29,6 +29,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     } else {
       document.body.classList.remove('dark');
     }
+    rerenderFabBuilder();
     if (isLibraryTabActive()) refreshLibrary();
   }
   if (changes.highlightSettings) {
@@ -37,6 +38,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       const presetSignature = JSON.stringify(normalizePresets(s.presets));
       if (selfPersistedPresetSignatures.has(presetSignature)) {
         selfPersistedPresetSignatures.delete(presetSignature);
+        reconcileCurrentFabLayout(!hasFabLayoutChange);
+        rerenderFabBuilder();
         if (isLibraryTabActive()) refreshLibrary();
         return;
       }
@@ -47,19 +50,26 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
       syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
       // Keep FAB builder colors in sync with preset edits
-      renderFabToolbox();
-      renderFabGrid();
-      renderFabPreview();
+      reconcileCurrentFabLayout(!hasFabLayoutChange);
+      rerenderFabBuilder();
       if (isLibraryTabActive()) {
         refreshLibrary();
       }
     }
+  }
+  if (hasFabLayoutChange) {
+    const next = changes[FAB_LAYOUT_KEY] && changes[FAB_LAYOUT_KEY].newValue;
+    const reconciled = reconcileFabLayout(next);
+    fabLayoutState = reconciled.layout;
+    if (reconciled.changed) persistFabLayout();
+    rerenderFabBuilder();
   }
 });
 
 // ---- Tab switching ----
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    closeFabPopover();
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
@@ -140,6 +150,7 @@ function switchSidebarView(tabName, viewName) {
 function initSidebarNavigation() {
   document.querySelectorAll('.sidebar-item').forEach(item => {
     item.addEventListener('click', () => {
+      closeFabPopover();
       const panel = item.closest('.tab-panel');
       if (!panel) return;
       
@@ -240,19 +251,32 @@ const autoMatchAllDarkToLightBtn = document.getElementById('autoMatchAllDarkToLi
 // ============================================
 
 const FAB_LAYOUT_KEY = 'fabLayoutV1';
+const fabBuilderEl = document.getElementById('fabBuilder');
 const fabToolboxEl = document.getElementById('fabToolbox');
 const fabGridEl = document.getElementById('fabGrid');
 const fabPreviewEl = document.getElementById('fabPreview');
+const fabContextPreviewEl = document.getElementById('fabContextPreview');
+const fabPagePreviewEl = document.getElementById('fabPagePreview');
+const fabPreviewStatusEl = document.getElementById('fabPreviewStatus');
 const fabRemoveZoneEl = document.getElementById('fabRemoveZone');
+const fabPopoverLayerEl = document.getElementById('fabPopoverLayer');
 
 const FAB_ACTION_DEFS = [
-  { id: 'favorite', label: 'Favorite', type: 'placeholder', glyph: '★' },
-  { id: 'comment', label: 'Comment', type: 'placeholder', glyph: '💬' },
-  { id: 'copyLink', label: 'Copy link', type: 'placeholder', glyph: '⧉' },
-  { id: 'share', label: 'Share', type: 'placeholder', glyph: '↗' }
+  { id: 'favorite', label: 'Favorite', type: 'placeholder', glyph: '⋯', paletteGlyph: '☆' },
+  { id: 'comment', label: 'Comment', type: 'placeholder', glyph: '⋯', paletteGlyph: '✎' },
+  { id: 'copyLink', label: 'Copy link', type: 'placeholder', glyph: '⋯', paletteGlyph: '⧉' },
+  { id: 'share', label: 'Share', type: 'placeholder', glyph: '⋯', paletteGlyph: '↗' }
 ];
 
 let fabLayoutState = null;
+let draggedFabToolboxItem = null;
+let draggedFabSlotButton = null;
+let activeFabSlotIndex = null;
+let currentFabPopover = null;
+let currentFabPopoverAnchor = null;
+let fabPopoverCleanupTimer = null;
+let fabPopoverListenersInitialized = false;
+let pendingFabAnimatedSlotIndexes = new Set();
 
 function defaultFabLayout() {
   return { rows: 2, cols: 4, slots: ['preset1', 'preset2', 'preset3', 'preset4', null, null, null, null] };
@@ -271,22 +295,49 @@ function getFabButtonDefs() {
   return [...presetDefs, ...FAB_ACTION_DEFS];
 }
 
-function normalizeFabLayout(raw) {
+function reconcileFabLayout(raw) {
   const base = defaultFabLayout();
-  if (!raw || typeof raw !== 'object') return base;
-  const rows = raw.rows === 2 ? 2 : 2;
-  const cols = raw.cols === 4 ? 4 : 4;
-  const expected = rows * cols;
-  const slots = Array.isArray(raw.slots) ? raw.slots.slice(0, expected) : [];
-  while (slots.length < expected) slots.push(null);
+  const expected = base.rows * base.cols;
+  const rawSlots = raw && Array.isArray(raw.slots) ? raw.slots.slice(0, expected) : [];
+  while (rawSlots.length < expected) rawSlots.push(null);
 
-  // Only keep known button IDs; everything else becomes null.
   const allowed = new Set(getFabButtonDefs().map(d => d.id));
-  for (let i = 0; i < slots.length; i++) {
-    if (slots[i] == null) continue;
-    if (!allowed.has(slots[i])) slots[i] = null;
+  const presentValidIds = new Set(rawSlots.filter(id => typeof id === 'string' && allowed.has(id)));
+  const slots = rawSlots.map((slotId, index) => {
+    if (slotId == null) return null;
+    if (typeof slotId === 'string' && allowed.has(slotId)) return slotId;
+
+    // Repair a stale built-in slot only when its canonical preset is missing
+    // everywhere else. Other unknown IDs are safer as empty slots.
+    const expectedPresetId = index < 4 ? `preset${index + 1}` : null;
+    if (expectedPresetId && allowed.has(expectedPresetId) && !presentValidIds.has(expectedPresetId)) {
+      presentValidIds.add(expectedPresetId);
+      return expectedPresetId;
+    }
+    return null;
+  });
+
+  const layout = { rows: base.rows, cols: base.cols, slots };
+  const changed =
+    !raw ||
+    typeof raw !== 'object' ||
+    raw.rows !== layout.rows ||
+    raw.cols !== layout.cols ||
+    !Array.isArray(raw.slots) ||
+    raw.slots.length !== expected ||
+    slots.some((slotId, index) => raw.slots[index] !== slotId);
+
+  return { layout, changed };
+}
+
+function reconcileCurrentFabLayout(shouldPersist = false) {
+  if (!fabLayoutState) return false;
+  const reconciled = reconcileFabLayout(fabLayoutState);
+  fabLayoutState = reconciled.layout;
+  if (shouldPersist && reconciled.changed) {
+    persistFabLayout();
   }
-  return { rows, cols, slots };
+  return reconciled.changed;
 }
 
 function getFabButtonDef(id) {
@@ -315,37 +366,367 @@ function persistFabLayout() {
   chrome.storage.local.set({ [FAB_LAYOUT_KEY]: fabLayoutState });
 }
 
-function renderFabToolbox() {
-  if (!fabToolboxEl) return;
-  fabToolboxEl.innerHTML = '';
-  getFabButtonDefs().forEach(def => {
-    const chip = document.createElement('div');
-    chip.className = 'fab-toolbox-item';
-    chip.draggable = true;
-    chip.dataset.fabButtonId = def.id;
+function prefersReducedFabMotion() {
+  return typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function syncActiveFabSlot() {
+  if (!fabGridEl) return;
+  Array.from(fabGridEl.children).forEach((slot, index) => {
+    slot.classList.toggle('is-active', index === activeFabSlotIndex);
+  });
+}
+
+function closeFabPopover({ immediate = false, restoreFocus = false } = {}) {
+  if (fabPopoverCleanupTimer) {
+    clearTimeout(fabPopoverCleanupTimer);
+    fabPopoverCleanupTimer = null;
+  }
+
+  const popover = currentFabPopover;
+  const anchor = currentFabPopoverAnchor;
+  currentFabPopover = null;
+  currentFabPopoverAnchor = null;
+  activeFabSlotIndex = null;
+  syncActiveFabSlot();
+
+  if (anchor) anchor.setAttribute('aria-expanded', 'false');
+  if (restoreFocus && anchor && typeof anchor.focus === 'function' && anchor.isConnected) {
+    anchor.focus({ preventScroll: true });
+  }
+
+  if (!popover) {
+    if (immediate && fabPopoverLayerEl) fabPopoverLayerEl.innerHTML = '';
+    return;
+  }
+
+  const removePopover = () => {
+    if (popover.parentNode) popover.parentNode.removeChild(popover);
+  };
+
+  if (immediate || prefersReducedFabMotion()) {
+    removePopover();
+    return;
+  }
+
+  popover.classList.remove('is-open');
+  popover.classList.add('is-closing');
+  popover.setAttribute('aria-hidden', 'true');
+  popover.addEventListener('transitionend', removePopover, { once: true });
+  fabPopoverCleanupTimer = setTimeout(removePopover, 220);
+}
+
+function positionFabPopover(popover, anchor) {
+  const viewportPadding = 12;
+  const anchorGap = 8;
+  const anchorRect = anchor.getBoundingClientRect();
+  const popoverWidth = popover.offsetWidth || 238;
+  const popoverHeight = popover.offsetHeight || 260;
+  const maxLeft = Math.max(viewportPadding, window.innerWidth - popoverWidth - viewportPadding);
+  const left = Math.min(Math.max(anchorRect.right - popoverWidth, viewportPadding), maxLeft);
+  const belowTop = anchorRect.bottom + anchorGap;
+  const aboveTop = anchorRect.top - popoverHeight - anchorGap;
+  const shouldOpenUp = belowTop + popoverHeight > window.innerHeight - viewportPadding
+    && aboveTop >= viewportPadding;
+  const maxTop = Math.max(viewportPadding, window.innerHeight - popoverHeight - viewportPadding);
+  const top = shouldOpenUp ? aboveTop : Math.min(Math.max(belowTop, viewportPadding), maxTop);
+
+  popover.style.left = `${Math.round(left)}px`;
+  popover.style.top = `${Math.round(top)}px`;
+  popover.classList.toggle('opens-up', shouldOpenUp);
+}
+
+function createFabPopoverOption({ label, icon, color, danger = false, onSelect }) {
+  const option = document.createElement('button');
+  option.type = 'button';
+  option.className = 'fab-popover-option';
+  if (danger) option.classList.add('is-danger');
+
+  const visual = document.createElement('span');
+  visual.className = 'fab-popover-option-icon';
+  if (color) visual.style.backgroundColor = color;
+  else visual.textContent = icon || '';
+
+  const text = document.createElement('span');
+  text.className = 'fab-popover-option-label';
+  text.textContent = label;
+
+  option.appendChild(visual);
+  option.appendChild(text);
+  option.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onSelect();
+  });
+  return option;
+}
+
+function createFabPickerGroup(title, defs, badgeText = '') {
+  const group = document.createElement('div');
+  group.className = 'fab-popover-group';
+
+  const heading = document.createElement('div');
+  heading.className = 'fab-popover-group-title';
+  const headingText = document.createElement('span');
+  headingText.textContent = title;
+  heading.appendChild(headingText);
+
+  if (badgeText) {
+    const badge = document.createElement('span');
+    badge.textContent = badgeText;
+    heading.appendChild(badge);
+  }
+
+  group.appendChild(heading);
+  defs.forEach(def => {
+    group.appendChild(createFabPopoverOption({
+      label: def.label,
+      icon: def.paletteGlyph || def.glyph,
+      color: def.type === 'preset' ? getPresetColorsForId(def.id).current : '',
+      onSelect: () => placeFabItemInSlot(activeFabSlotIndex, def.id)
+    }));
+  });
+  return group;
+}
+
+function mountFabPopover(popover, anchor, slotIndex) {
+  if (!fabPopoverLayerEl || !anchor) return;
+  closeFabPopover({ immediate: true });
+  fabPopoverLayerEl.innerHTML = '';
+  fabPopoverLayerEl.appendChild(popover);
+  currentFabPopover = popover;
+  currentFabPopoverAnchor = anchor;
+  activeFabSlotIndex = slotIndex;
+  syncActiveFabSlot();
+  anchor.setAttribute('aria-expanded', 'true');
+  positionFabPopover(popover, anchor);
+
+  requestAnimationFrame(() => {
+    if (currentFabPopover !== popover) return;
+    popover.classList.add('is-open');
+    const firstOption = popover.querySelector('.fab-popover-option');
+    if (firstOption) firstOption.focus({ preventScroll: true });
+  });
+}
+
+function openFabPicker(slotIndex, anchor) {
+  if (!fabLayoutState || slotIndex < 0 || slotIndex >= fabLayoutState.slots.length) return;
+  if (currentFabPopoverAnchor === anchor && currentFabPopover?.classList.contains('fab-picker-popover')) {
+    closeFabPopover();
+    return;
+  }
+  const popover = document.createElement('div');
+  popover.className = 'fab-popover fab-picker-popover';
+  popover.setAttribute('role', 'dialog');
+  popover.setAttribute('aria-label', `${fabLayoutState.slots[slotIndex] ? 'Replace' : 'Add to'} Slot ${slotIndex + 1}`);
+
+  const title = document.createElement('div');
+  title.className = 'fab-popover-title';
+  title.textContent = `${fabLayoutState.slots[slotIndex] ? 'Replace' : 'Add to'} Slot ${slotIndex + 1}`;
+  popover.appendChild(title);
+
+  const defs = getFabButtonDefs();
+  popover.appendChild(createFabPickerGroup(
+    'Tag presets',
+    defs.filter(def => def.type === 'preset')
+  ));
+  popover.appendChild(createFabPickerGroup(
+    'Actions',
+    defs.filter(def => def.type !== 'preset'),
+    'Coming soon'
+  ));
+
+  mountFabPopover(popover, anchor, slotIndex);
+}
+
+function openFabSlotMenu(slotIndex, anchor) {
+  if (!fabLayoutState || !fabLayoutState.slots[slotIndex]) return;
+  if (currentFabPopoverAnchor === anchor && currentFabPopover?.classList.contains('fab-slot-menu')) {
+    closeFabPopover();
+    return;
+  }
+  const popover = document.createElement('div');
+  popover.className = 'fab-popover fab-slot-menu';
+  popover.setAttribute('role', 'menu');
+  popover.setAttribute('aria-label', `Slot ${slotIndex + 1} options`);
+
+  const replaceOption = createFabPopoverOption({
+    label: 'Replace…',
+    icon: '↻',
+    onSelect: () => openFabPicker(slotIndex, anchor.closest('.fab-slot') || anchor)
+  });
+  replaceOption.setAttribute('role', 'menuitem');
+  popover.appendChild(replaceOption);
+
+  const removeOption = createFabPopoverOption({
+    label: 'Remove',
+    icon: '×',
+    danger: true,
+    onSelect: () => clearFabSlot(slotIndex)
+  });
+  removeOption.setAttribute('role', 'menuitem');
+  popover.appendChild(removeOption);
+
+  mountFabPopover(popover, anchor, slotIndex);
+}
+
+function initFabPopoverInteractions() {
+  if (fabPopoverListenersInitialized) return;
+  fabPopoverListenersInitialized = true;
+
+  document.addEventListener('pointerdown', (event) => {
+    if (!currentFabPopover) return;
+    if (currentFabPopover.contains(event.target)) return;
+    if (currentFabPopoverAnchor && currentFabPopoverAnchor.contains(event.target)) return;
+    closeFabPopover();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && currentFabPopover) {
+      event.preventDefault();
+      closeFabPopover({ restoreFocus: true });
+    }
+  });
+  window.addEventListener('resize', () => closeFabPopover());
+  window.addEventListener('scroll', (event) => {
+    if (currentFabPopover && !currentFabPopover.contains(event.target)) {
+      closeFabPopover();
+    }
+  }, true);
+}
+
+function setFabDragMode(mode) {
+  if (!fabBuilderEl) return;
+  if (mode) closeFabPopover({ immediate: true });
+  const isSlotDrag = mode === 'slot';
+  fabBuilderEl.classList.toggle('is-dragging-slot', isSlotDrag);
+  fabBuilderEl.classList.toggle('is-dragging-toolbox', mode === 'toolbox');
+  if (fabRemoveZoneEl) {
+    fabRemoveZoneEl.setAttribute('aria-hidden', isSlotDrag ? 'false' : 'true');
+    if (!isSlotDrag) fabRemoveZoneEl.classList.remove('is-over');
+  }
+}
+
+function endFabDrag() {
+  if (draggedFabToolboxItem) {
+    draggedFabToolboxItem.classList.remove('is-dragging');
+    draggedFabToolboxItem = null;
+  }
+  if (draggedFabSlotButton) {
+    draggedFabSlotButton.classList.remove('is-dragging');
+    draggedFabSlotButton = null;
+  }
+  setFabDragMode(null);
+}
+
+function createFabToolboxGroup(title, defs, badgeText = '') {
+  const group = document.createElement('section');
+  group.className = 'fab-toolbox-group';
+
+  const header = document.createElement('div');
+  header.className = 'fab-toolbox-group-header';
+
+  const heading = document.createElement('h4');
+  heading.className = 'fab-toolbox-group-title';
+  heading.textContent = title;
+  header.appendChild(heading);
+
+  if (badgeText) {
+    const badge = document.createElement('span');
+    badge.className = 'fab-toolbox-badge';
+    badge.textContent = badgeText;
+    header.appendChild(badge);
+  }
+
+  const list = document.createElement('div');
+  list.className = 'fab-toolbox-list';
+
+  defs.forEach(def => {
+    const item = document.createElement('div');
+    item.className = 'fab-toolbox-item';
+    item.draggable = true;
+    item.tabIndex = 0;
+    item.dataset.fabButtonId = def.id;
+    item.setAttribute('role', 'button');
+    item.setAttribute('aria-label', `Drag ${def.label} into the FAB layout`);
 
     const swatch = document.createElement('span');
     swatch.className = 'fab-toolbox-swatch';
     if (def.type === 'preset') {
       swatch.style.backgroundColor = getPresetColorsForId(def.id).current;
     } else {
-      swatch.style.backgroundColor = 'transparent';
-      swatch.style.borderStyle = 'solid';
+      swatch.textContent = def.paletteGlyph || def.glyph || '⋯';
     }
 
     const label = document.createElement('span');
+    label.className = 'fab-toolbox-label';
     label.textContent = def.label;
 
-    chip.appendChild(swatch);
-    chip.appendChild(label);
+    const grip = document.createElement('span');
+    grip.className = 'fab-toolbox-grip';
+    grip.textContent = '⠿';
+    grip.setAttribute('aria-hidden', 'true');
 
-    chip.addEventListener('dragstart', (e) => {
+    item.appendChild(swatch);
+    item.appendChild(label);
+    item.appendChild(grip);
+
+    item.addEventListener('dragstart', (e) => {
+      draggedFabToolboxItem = item;
+      item.classList.add('is-dragging');
+      setFabDragMode('toolbox');
       e.dataTransfer.effectAllowed = 'copyMove';
       e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'toolbox', id: def.id }));
     });
+    item.addEventListener('dragend', endFabDrag);
 
-    fabToolboxEl.appendChild(chip);
+    list.appendChild(item);
   });
+
+  group.appendChild(header);
+  group.appendChild(list);
+  return group;
+}
+
+function renderFabToolbox() {
+  if (!fabToolboxEl) return;
+  fabToolboxEl.innerHTML = '';
+  const defs = getFabButtonDefs();
+  fabToolboxEl.appendChild(createFabToolboxGroup(
+    'Tag presets',
+    defs.filter(def => def.type === 'preset')
+  ));
+  fabToolboxEl.appendChild(createFabToolboxGroup(
+    'Actions',
+    defs.filter(def => def.type !== 'preset'),
+    'Coming soon'
+  ));
+}
+
+function appendFabEmptySlotControl(slot, slotIndex) {
+  const empty = document.createElement('button');
+  empty.type = 'button';
+  empty.className = 'fab-slot-empty';
+  empty.setAttribute('aria-haspopup', 'dialog');
+  empty.setAttribute('aria-expanded', 'false');
+  empty.setAttribute('aria-label', `Add action to FAB position ${slotIndex + 1}`);
+
+  const mark = document.createElement('span');
+  mark.className = 'fab-slot-empty-mark';
+  mark.textContent = '+';
+  mark.setAttribute('aria-hidden', 'true');
+
+  const label = document.createElement('span');
+  label.textContent = 'Add action';
+
+  empty.appendChild(mark);
+  empty.appendChild(label);
+  empty.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openFabPicker(slotIndex, empty);
+  });
+  slot.appendChild(empty);
 }
 
 function renderFabGrid() {
@@ -356,7 +737,14 @@ function renderFabGrid() {
   fabLayoutState.slots.forEach((slotId, idx) => {
     const slot = document.createElement('div');
     slot.className = 'fab-slot';
+    if (pendingFabAnimatedSlotIndexes.has(idx)) slot.classList.add('is-changing');
     slot.dataset.slotIndex = String(idx);
+    slot.setAttribute('aria-label', `FAB position ${idx + 1}`);
+
+    const indexLabel = document.createElement('span');
+    indexLabel.className = 'fab-slot-index';
+    indexLabel.textContent = String(idx + 1).padStart(2, '0');
+    slot.appendChild(indexLabel);
 
     const setOver = (on) => slot.classList.toggle('is-over', on);
 
@@ -374,66 +762,143 @@ function renderFabGrid() {
 
     if (slotId) {
       const def = getFabButtonDef(slotId);
+      if (!def) {
+        appendFabEmptySlotControl(slot, idx);
+        fabGridEl.appendChild(slot);
+        return;
+      }
+      slot.classList.add('has-item');
       const btn = document.createElement('div');
       btn.className = 'fab-slot-btn';
       btn.draggable = true;
+      btn.tabIndex = 0;
       btn.dataset.fabButtonId = slotId;
-      btn.title = def ? def.label : slotId;
+      btn.title = def.label;
+      btn.setAttribute('role', 'button');
+      btn.setAttribute('aria-label', `${def.label}, position ${idx + 1}. Drag to reorder or remove.`);
 
-      if (def && def.type === 'preset') {
-        btn.style.backgroundColor = getPresetColorsForId(def.id).current;
+      const visual = document.createElement('span');
+      visual.className = 'fab-slot-visual';
+      if (def.type === 'preset') {
+        visual.style.backgroundColor = getPresetColorsForId(def.id).current;
       } else {
-        btn.textContent = def && def.glyph ? def.glyph : '⋯';
+        visual.textContent = def.glyph || '⋯';
       }
 
+      const label = document.createElement('span');
+      label.className = 'fab-slot-label';
+      label.textContent = def.label;
+
+      const menuBtn = document.createElement('button');
+      menuBtn.type = 'button';
+      menuBtn.className = 'fab-slot-menu-btn';
+      menuBtn.draggable = false;
+      menuBtn.textContent = '⋮';
+      menuBtn.title = `${def.label} options`;
+      menuBtn.setAttribute('aria-label', `${def.label} options`);
+      menuBtn.setAttribute('aria-haspopup', 'menu');
+      menuBtn.setAttribute('aria-expanded', 'false');
+      menuBtn.addEventListener('pointerdown', event => event.stopPropagation());
+      menuBtn.addEventListener('mousedown', event => event.stopPropagation());
+      menuBtn.addEventListener('dragstart', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      menuBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openFabSlotMenu(idx, menuBtn);
+      });
+
+      btn.appendChild(visual);
+      btn.appendChild(label);
+      btn.appendChild(menuBtn);
+
       btn.addEventListener('dragstart', (ev) => {
+        draggedFabSlotButton = btn;
+        btn.classList.add('is-dragging');
+        setFabDragMode('slot');
         ev.dataTransfer.effectAllowed = 'move';
         ev.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'slot', fromIndex: idx, id: slotId }));
       });
+      btn.addEventListener('dragend', endFabDrag);
 
       slot.appendChild(btn);
     } else {
-      slot.textContent = 'Empty';
+      appendFabEmptySlotControl(slot, idx);
     }
 
     fabGridEl.appendChild(slot);
   });
+  syncActiveFabSlot();
+
+  const animatedIndexes = [...pendingFabAnimatedSlotIndexes];
+  pendingFabAnimatedSlotIndexes.clear();
+  if (animatedIndexes.length > 0) {
+    requestAnimationFrame(() => {
+      animatedIndexes.forEach(index => {
+        const slot = fabGridEl.children[index];
+        if (slot) slot.classList.remove('is-changing');
+      });
+    });
+  }
 }
 
 function renderFabPreview() {
-  if (!fabPreviewEl || !fabLayoutState) return;
-  fabPreviewEl.innerHTML = '';
-  fabPreviewEl.style.gridTemplateColumns = `repeat(${fabLayoutState.cols}, 32px)`;
+  if (!fabPreviewEl || !fabContextPreviewEl || !fabLayoutState) return;
+  const previewContainers = [fabPreviewEl, fabContextPreviewEl];
+  previewContainers.forEach(container => {
+    container.innerHTML = '';
+    container.style.gridTemplateColumns = `repeat(${fabLayoutState.cols}, 28px)`;
+  });
+  fabContextPreviewEl.style.gridTemplateColumns = `repeat(${fabLayoutState.cols}, 32px)`;
 
   fabLayoutState.slots.forEach((slotId) => {
-    if (!slotId) {
-      const spacer = document.createElement('div');
-      spacer.style.width = '32px';
-      spacer.style.height = '32px';
-      fabPreviewEl.appendChild(spacer);
-      return;
-    }
+    const def = slotId ? getFabButtonDef(slotId) : null;
 
-    const def = getFabButtonDef(slotId);
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'fab-preview-btn';
-    btn.title = def ? def.label : slotId;
+    previewContainers.forEach(container => {
+      if (!def) {
+        const spacer = document.createElement('div');
+        spacer.className = 'fab-preview-spacer';
+        spacer.setAttribute('aria-hidden', 'true');
+        container.appendChild(spacer);
+        return;
+      }
 
-    if (def && def.type === 'preset') {
-      btn.style.backgroundColor = getPresetColorsForId(def.id).current;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fab-preview-btn';
+      btn.title = def.label;
+      btn.setAttribute('aria-label', `Preview ${def.label}`);
+
+      if (def.type === 'preset') {
+        btn.style.backgroundColor = getPresetColorsForId(def.id).current;
+      } else {
+        btn.textContent = def.glyph || '⋯';
+      }
+
       btn.addEventListener('click', () => showFabPreviewToast(`Preview: ${def.label}`));
-    } else {
-      btn.textContent = def && def.glyph ? def.glyph : '⋯';
-      btn.addEventListener('click', () => showFabPreviewToast(`Preview: ${def ? def.label : 'Action'}`));
-    }
-
-    fabPreviewEl.appendChild(btn);
+      container.appendChild(btn);
+    });
   });
+
+  updateFabVisibilityPresentation();
+}
+
+function updateFabVisibilityPresentation() {
+  if (!showFabToggle) return;
+  const isVisible = showFabToggle.checked;
+  if (fabPagePreviewEl) {
+    fabPagePreviewEl.classList.toggle('is-hidden', !isVisible);
+  }
+  if (fabPreviewStatusEl) {
+    fabPreviewStatusEl.textContent = isVisible ? 'Preview: visible' : 'Preview: hidden';
+  }
 }
 
 function rerenderFabBuilder() {
-  if (!fabToolboxEl || !fabGridEl || !fabPreviewEl) return;
+  if (!fabToolboxEl || !fabGridEl || !fabPreviewEl || !fabContextPreviewEl) return;
+  closeFabPopover();
   renderFabToolbox();
   renderFabGrid();
   renderFabPreview();
@@ -442,6 +907,69 @@ function rerenderFabBuilder() {
 function setFabSlot(index, idOrNull) {
   if (!fabLayoutState) return;
   fabLayoutState.slots[index] = idOrNull;
+}
+
+function commitFabLayoutChange() {
+  persistFabLayout();
+  rerenderFabBuilder();
+}
+
+function markFabSlotsForAnimation(...indexes) {
+  if (prefersReducedFabMotion()) return;
+  if (fabBuilderEl && (
+    fabBuilderEl.classList.contains('is-dragging-slot')
+    || fabBuilderEl.classList.contains('is-dragging-toolbox')
+  )) return;
+  indexes.filter(Number.isInteger).forEach(index => pendingFabAnimatedSlotIndexes.add(index));
+}
+
+function placeFabItemInSlot(targetIndex, id) {
+  if (!fabLayoutState || !Number.isInteger(targetIndex)) return false;
+  if (targetIndex < 0 || targetIndex >= fabLayoutState.slots.length) return false;
+  if (!getFabButtonDef(id)) return false;
+
+  const existingIndex = fabLayoutState.slots.findIndex(slotId => slotId === id);
+  if (existingIndex === targetIndex) {
+    closeFabPopover();
+    return false;
+  }
+
+  const displacedId = fabLayoutState.slots[targetIndex] || null;
+  markFabSlotsForAnimation(targetIndex, existingIndex);
+  setFabSlot(targetIndex, id);
+  if (existingIndex !== -1) setFabSlot(existingIndex, displacedId);
+  commitFabLayoutChange();
+  return true;
+}
+
+function moveFabSlot(fromIndex, targetIndex) {
+  if (!fabLayoutState || !Number.isInteger(fromIndex) || !Number.isInteger(targetIndex)) return false;
+  if (fromIndex < 0 || targetIndex < 0) return false;
+  if (fromIndex >= fabLayoutState.slots.length || targetIndex >= fabLayoutState.slots.length) return false;
+  if (fromIndex === targetIndex) return false;
+
+  const sourceId = fabLayoutState.slots[fromIndex];
+  if (!sourceId) return false;
+  const displacedId = fabLayoutState.slots[targetIndex] || null;
+  markFabSlotsForAnimation(fromIndex, targetIndex);
+  setFabSlot(targetIndex, sourceId);
+  setFabSlot(fromIndex, displacedId);
+  commitFabLayoutChange();
+  return true;
+}
+
+function clearFabSlot(slotIndex) {
+  if (!fabLayoutState || !Number.isInteger(slotIndex)) return false;
+  if (slotIndex < 0 || slotIndex >= fabLayoutState.slots.length) return false;
+  if (!fabLayoutState.slots[slotIndex]) {
+    closeFabPopover();
+    return false;
+  }
+
+  markFabSlotsForAnimation(slotIndex);
+  setFabSlot(slotIndex, null);
+  commitFabLayoutChange();
+  return true;
 }
 
 function handleFabDropToSlot(targetIndex, e) {
@@ -456,26 +984,12 @@ function handleFabDropToSlot(targetIndex, e) {
   const id = payload.id;
 
   if (payload.kind === 'slot' && typeof payload.fromIndex === 'number') {
-    const from = payload.fromIndex;
-    if (from === targetIndex) return;
-    // swap/move
-    const tmp = fabLayoutState.slots[targetIndex];
-    setFabSlot(targetIndex, id);
-    setFabSlot(from, tmp || null);
+    moveFabSlot(payload.fromIndex, targetIndex);
   } else {
-    // toolbox copy into slot (but if it already exists elsewhere, we move it)
-    const existingIdx = fabLayoutState.slots.findIndex(x => x === id);
-    if (existingIdx !== -1) {
-      const tmp = fabLayoutState.slots[targetIndex];
-      setFabSlot(targetIndex, id);
-      setFabSlot(existingIdx, tmp || null);
-    } else {
-      setFabSlot(targetIndex, id);
-    }
+    placeFabItemInSlot(targetIndex, id);
   }
 
-  persistFabLayout();
-  rerenderFabBuilder();
+  endFabDrag();
 }
 
 function initFabRemoveZone() {
@@ -499,23 +1013,21 @@ function initFabRemoveZone() {
       payload = null;
     }
     if (!payload || payload.kind !== 'slot' || typeof payload.fromIndex !== 'number') return;
-    setFabSlot(payload.fromIndex, null);
-    persistFabLayout();
-    rerenderFabBuilder();
+    clearFabSlot(payload.fromIndex);
+    endFabDrag();
   });
 }
 
 function initFabBuilder() {
   if (!fabToolboxEl || !fabGridEl || !fabPreviewEl) return;
   chrome.storage.local.get(FAB_LAYOUT_KEY, (result) => {
-    fabLayoutState = normalizeFabLayout(result && result[FAB_LAYOUT_KEY]);
-    // Persist defaults if missing
-    if (!result || !result[FAB_LAYOUT_KEY]) {
-      persistFabLayout();
-    }
+    const reconciled = reconcileFabLayout(result && result[FAB_LAYOUT_KEY]);
+    fabLayoutState = reconciled.layout;
+    if (reconciled.changed) persistFabLayout();
     rerenderFabBuilder();
   });
   initFabRemoveZone();
+  initFabPopoverInteractions();
 }
 
 // ---- Color sync helpers ----
@@ -652,45 +1164,58 @@ function syncPresetsEditor(presets) {
     nameCol.className = 'presets-col presets-col-name';
     const label = document.createElement('span');
     label.className = 'presets-row-label';
-    label.textContent = `Tag ${idx + 1}`;
+    label.textContent = String(idx + 1).padStart(2, '0');
     const name = document.createElement('input');
     name.type = 'text';
     name.className = 'text-input';
     name.maxLength = 32;
     name.placeholder = 'Tag name';
     name.value = preset.name || '';
+    name.setAttribute('aria-label', `Tag ${idx + 1} name`);
     nameCol.append(label, name);
 
     const lightCol = document.createElement('div');
     lightCol.className = 'presets-col presets-col-light';
+    const lightControl = document.createElement('div');
+    lightControl.className = 'preset-color-control';
     const light = document.createElement('input');
     light.type = 'color';
     light.className = 'color-swatch';
     light.value = preset.colorLight;
+    light.title = `Choose the light webpage color for ${preset.name || `Tag ${idx + 1}`}`;
+    light.setAttribute('aria-label', `Light webpage color for Tag ${idx + 1}`);
     const lightHex = document.createElement('input');
     lightHex.type = 'text';
     lightHex.className = 'color-hex';
     lightHex.maxLength = 7;
     lightHex.value = preset.colorLight.toUpperCase();
-    lightCol.append(light, lightHex);
+    lightHex.setAttribute('aria-label', `Light webpage hex color for Tag ${idx + 1}`);
+    lightControl.append(light, lightHex);
+    lightCol.appendChild(lightControl);
 
     const darkCol = document.createElement('div');
     darkCol.className = 'presets-col presets-col-dark';
+    const darkControl = document.createElement('div');
+    darkControl.className = 'preset-color-control';
     const dark = document.createElement('input');
     dark.type = 'color';
     dark.className = 'color-swatch';
     dark.value = preset.colorDark;
+    dark.title = `Choose the dark webpage color for ${preset.name || `Tag ${idx + 1}`}`;
+    dark.setAttribute('aria-label', `Dark webpage color for Tag ${idx + 1}`);
     const darkHex = document.createElement('input');
     darkHex.type = 'text';
     darkHex.className = 'color-hex';
     darkHex.maxLength = 7;
     darkHex.value = preset.colorDark.toUpperCase();
+    darkHex.setAttribute('aria-label', `Dark webpage hex color for Tag ${idx + 1}`);
     const autoMatch = document.createElement('button');
     autoMatch.type = 'button';
-    autoMatch.className = 'btn btn-secondary btn-small';
+    autoMatch.className = 'btn btn-small preset-match-btn';
     autoMatch.title = 'Auto-match this preset';
-    autoMatch.textContent = 'Auto-match';
-    darkCol.append(dark, darkHex, autoMatch);
+    autoMatch.textContent = 'Match';
+    darkControl.append(dark, darkHex);
+    darkCol.append(darkControl, autoMatch);
 
     grid.append(nameCol, lightCol, darkCol);
     presetsEditorRowsEl.appendChild(grid);
@@ -999,6 +1524,11 @@ if (addTagPresetBtn) {
     });
     pendingSettings.presets = presets;
     syncPresetsEditor(presets);
+    const newTagNameInput = presetRows[presetRows.length - 1]?.name;
+    if (newTagNameInput) {
+      newTagNameInput.focus();
+      newTagNameInput.select();
+    }
     syncPresetSwatches(presets);
     rerenderFabBuilder();
     refreshTagsLibraryIfLive();
@@ -1056,18 +1586,26 @@ function loadSettings() {
 
 function resetSettings() {
   tagPresetSaveGeneration++;
+  selfPersistedPresetSignatures.clear();
   if (tagPresetSaveTimer) {
     clearTimeout(tagPresetSaveTimer);
     tagPresetSaveTimer = null;
   }
-  syncLightColor(DEFAULTS.colorLight);
-  syncDarkColor(DEFAULTS.colorDark);
-  showFabToggle.checked = DEFAULTS.showFab;
-  setPending(DEFAULTS);
+  const resetSettingsValue = cloneDefaults();
+  const resetFabLayout = defaultFabLayout();
+  syncLightColor(resetSettingsValue.colorLight);
+  syncDarkColor(resetSettingsValue.colorDark);
+  showFabToggle.checked = resetSettingsValue.showFab;
+  setPending(resetSettingsValue);
   syncPresetSwatches(pendingSettings.presets || DEFAULTS.presets);
   syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
+  fabLayoutState = resetFabLayout;
+  rerenderFabBuilder();
 
-  chrome.storage.local.set({ highlightSettings: DEFAULTS }, () => {
+  chrome.storage.local.set({
+    highlightSettings: resetSettingsValue,
+    [FAB_LAYOUT_KEY]: resetFabLayout
+  }, () => {
     showToast('Reset to defaults');
   });
 }
@@ -1080,6 +1618,7 @@ resetBtn.addEventListener('click', resetSettings);
 showFabToggle.addEventListener('change', () => {
   if (!pendingSettings) return;
   pendingSettings.showFab = showFabToggle.checked;
+  updateFabVisibilityPresentation();
 });
 
 openShortcuts.addEventListener('click', () => {

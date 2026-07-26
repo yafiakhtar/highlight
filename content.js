@@ -37,20 +37,63 @@ let userSettings = { ...DEFAULT_SETTINGS };
 let fabLayoutV1 = null;
 
 const FAB_LAYOUT_KEY = 'fabLayoutV1';
+const FAB_ACTION_IDS = new Set(['favorite', 'comment', 'copyLink', 'share']);
 
 function defaultFabLayoutV1() {
   return { rows: 2, cols: 4, slots: ['preset1', 'preset2', 'preset3', 'preset4', null, null, null, null] };
 }
 
-function normalizeFabLayoutV1(raw) {
+function reconcileFabLayoutV1(raw) {
   const base = defaultFabLayoutV1();
-  if (!raw || typeof raw !== 'object') return base;
-  const rows = raw.rows === 2 ? 2 : 2;
-  const cols = raw.cols === 4 ? 4 : 4;
-  const expected = rows * cols;
-  const slots = Array.isArray(raw.slots) ? raw.slots.slice(0, expected) : [];
-  while (slots.length < expected) slots.push(null);
-  return { rows, cols, slots };
+  const expected = base.rows * base.cols;
+  const rawSlots = raw && Array.isArray(raw.slots) ? raw.slots.slice(0, expected) : [];
+  while (rawSlots.length < expected) rawSlots.push(null);
+
+  const presetIds = new Set(getPresets().map(preset => preset.id));
+  const allowed = new Set([...presetIds, ...FAB_ACTION_IDS]);
+  const presentValidIds = new Set(rawSlots.filter(id => typeof id === 'string' && allowed.has(id)));
+  const slots = rawSlots.map((slotId, index) => {
+    if (slotId == null) return null;
+    if (typeof slotId === 'string' && allowed.has(slotId)) return slotId;
+
+    const expectedPresetId = index < 4 ? `preset${index + 1}` : null;
+    if (expectedPresetId && presetIds.has(expectedPresetId) && !presentValidIds.has(expectedPresetId)) {
+      presentValidIds.add(expectedPresetId);
+      return expectedPresetId;
+    }
+    return null;
+  });
+
+  const layout = { rows: base.rows, cols: base.cols, slots };
+  const changed =
+    !raw ||
+    typeof raw !== 'object' ||
+    raw.rows !== layout.rows ||
+    raw.cols !== layout.cols ||
+    !Array.isArray(raw.slots) ||
+    raw.slots.length !== expected ||
+    slots.some((slotId, index) => raw.slots[index] !== slotId);
+
+  return { layout, changed };
+}
+
+function persistFabLayoutRepair(layout) {
+  if (!isExtensionContextValid()) return;
+  try {
+    chrome.storage.local.set({ [FAB_LAYOUT_KEY]: layout });
+  } catch {
+    // ignore
+  }
+}
+
+function reconcileCurrentFabLayoutV1(shouldPersist = false) {
+  if (!fabLayoutV1) return false;
+  const reconciled = reconcileFabLayoutV1(fabLayoutV1);
+  fabLayoutV1 = reconciled.layout;
+  if (shouldPersist && reconciled.changed) {
+    persistFabLayoutRepair(fabLayoutV1);
+  }
+  return reconciled.changed;
 }
 
 function loadFabLayoutV1() {
@@ -67,7 +110,9 @@ function loadFabLayoutV1() {
           resolve(fabLayoutV1);
           return;
         }
-        fabLayoutV1 = normalizeFabLayoutV1(result && result[FAB_LAYOUT_KEY]);
+        const reconciled = reconcileFabLayoutV1(result && result[FAB_LAYOUT_KEY]);
+        fabLayoutV1 = reconciled.layout;
+        if (reconciled.changed) persistFabLayoutRepair(fabLayoutV1);
         resolve(fabLayoutV1);
       });
     } catch {
@@ -154,19 +199,23 @@ function loadUserSettings() {
 // Listen for storage changes in real time
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
+  const hasFabLayoutChange = Object.prototype.hasOwnProperty.call(changes, FAB_LAYOUT_KEY);
 
   // Settings changed (colors, FAB toggle)
   if (changes.highlightSettings) {
     const newVal = changes.highlightSettings.newValue;
     userSettings = { ...DEFAULT_SETTINGS, ...newVal };
+    reconcileCurrentFabLayoutV1(!hasFabLayoutChange);
     rebuildHighlightFab();
     applyCustomColors();
     updateFabVisibility();
   }
 
-  if (Object.prototype.hasOwnProperty.call(changes, FAB_LAYOUT_KEY)) {
+  if (hasFabLayoutChange) {
     const next = changes[FAB_LAYOUT_KEY] && changes[FAB_LAYOUT_KEY].newValue;
-    fabLayoutV1 = normalizeFabLayoutV1(next);
+    const reconciled = reconcileFabLayoutV1(next);
+    fabLayoutV1 = reconciled.layout;
+    if (reconciled.changed) persistFabLayoutRepair(fabLayoutV1);
     rebuildHighlightFab();
   }
 
@@ -951,9 +1000,7 @@ function rebuildHighlightFab() {
 
 function buildFabButtonsInto(container) {
   const layout = fabLayoutV1 || defaultFabLayoutV1();
-  const presets = Array.isArray(userSettings.presets) && userSettings.presets.length
-    ? userSettings.presets
-    : DEFAULT_SETTINGS.presets;
+  const presets = getPresets();
 
   container.style.display = 'grid';
   container.style.gridTemplateColumns = `repeat(${layout.cols}, 18px)`;
@@ -961,6 +1008,13 @@ function buildFabButtonsInto(container) {
   container.style.gap = '8px';
   container.style.alignItems = 'center';
   container.style.justifyContent = 'center';
+
+  const appendSpacer = () => {
+    const spacer = document.createElement('div');
+    spacer.style.width = '18px';
+    spacer.style.height = '18px';
+    container.appendChild(spacer);
+  };
 
   const makePlaceholderBtn = (slotId) => {
     const btn = document.createElement('button');
@@ -996,10 +1050,7 @@ function buildFabButtonsInto(container) {
 
   layout.slots.forEach((slotId) => {
     if (!slotId) {
-      const spacer = document.createElement('div');
-      spacer.style.width = '18px';
-      spacer.style.height = '18px';
-      container.appendChild(spacer);
+      appendSpacer();
       return;
     }
 
@@ -1044,9 +1095,14 @@ function buildFabButtonsInto(container) {
       return;
     }
 
-    const actionBtn = makePlaceholderBtn(slotId);
-    container.appendChild(actionBtn);
-    highlightFabButtons.push(actionBtn);
+    if (FAB_ACTION_IDS.has(slotId)) {
+      const actionBtn = makePlaceholderBtn(slotId);
+      container.appendChild(actionBtn);
+      highlightFabButtons.push(actionBtn);
+      return;
+    }
+
+    appendSpacer();
   });
 }
 

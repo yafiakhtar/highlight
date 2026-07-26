@@ -42,8 +42,7 @@ A full-page options view (`options.html`) with a collapsible sidebar and several
 ### Settings
 - **Appearance** — customize light and dark highlight colors with a color picker and hex input; live preview updates as you type
 - **Tag Presets** — add or rename presets and set per-theme colors; auto-match derives a harmonious dark color from a light one (and vice versa) using HSL math
-- **FAB Builder** — drag preset chips and action buttons into a 2×4 grid; drag within the grid to reorder; drop onto the remove zone to clear a slot
-- **Behaviour** — toggle the floating action button
+- **FAB Builder** — toggle the floating button, click empty slots or drag presets and actions into a 2×4 layout, reorder or manage placed buttons, and review compact and on-page previews
 - **Shortcuts** — view the current keyboard shortcut; button opens browser shortcut settings
 - **Data** — save or reset all settings to defaults
 - **Sync** — placeholder for cross-device sync (coming soon)
