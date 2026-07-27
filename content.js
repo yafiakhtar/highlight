@@ -150,9 +150,8 @@ function normalizePresets(presets) {
     });
   });
 
-  defaults.forEach(preset => {
-    if (!seen.has(preset.id)) normalized.push({ ...preset });
-  });
+  const defaultPreset = defaults.find(preset => preset.id === 'preset1') || defaults[0];
+  if (!seen.has(defaultPreset.id)) normalized.push({ ...defaultPreset });
   return normalized.length > 0 ? normalized : defaults;
 }
 
@@ -162,7 +161,9 @@ function getPresets() {
 
 function getPresetById(presetId) {
   const presets = getPresets();
-  return presets.find(preset => preset.id === presetId) || presets[0] || DEFAULT_SETTINGS.presets[0];
+  return presets.find(preset => preset.id === presetId)
+    || presets.find(preset => preset.id === 'preset1')
+    || DEFAULT_SETTINGS.presets[0];
 }
 
 function getPresetColor(presetId, theme = getPageTheme()) {

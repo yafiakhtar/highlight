@@ -348,7 +348,9 @@ const toast = document.getElementById('toast');
 
 const presetsEditorRowsEl = document.getElementById('presetsEditorRows');
 const addTagPresetBtn = document.getElementById('addTagPreset');
+const deleteTagPresetBtn = document.getElementById('deleteTagPreset');
 let presetRows = [];
+let presetDeleteMode = false;
 const lastChangedSideByPreset = new Map();
 
 const autoMatchAllLightToDarkBtn = document.getElementById('autoMatchAllLightToDark');
@@ -1256,14 +1258,10 @@ function normalizePresets(presets) {
     });
   });
 
-  // Preserve the built-ins for old or partially populated settings. In
-  // particular, preset1 is the permanent default and must never disappear.
-  base.forEach(def => {
-    if (!seen.has(def.id)) {
-      normalized.push({ ...def });
-      seen.add(def.id);
-    }
-  });
+  // preset1 is the permanent default and must never disappear. Other built-in
+  // presets may be removed by the user and return only after a full reset.
+  const defaultPreset = base.find(def => def.id === 'preset1') || base[0];
+  if (!seen.has(defaultPreset.id)) normalized.push({ ...defaultPreset });
 
   return normalized.length > 0 ? normalized : base;
 }
@@ -1425,6 +1423,17 @@ function syncPresetsEditor(presets) {
   const norm = normalizePresets(presets);
   if (!presetsEditorRowsEl) return;
 
+  const hasDeletablePreset = norm.some(preset => preset.id !== 'preset1');
+  if (!hasDeletablePreset) presetDeleteMode = false;
+  presetsEditorRowsEl.classList.toggle('is-delete-mode', presetDeleteMode);
+  if (deleteTagPresetBtn) {
+    deleteTagPresetBtn.disabled = !hasDeletablePreset;
+    deleteTagPresetBtn.setAttribute('aria-pressed', String(presetDeleteMode));
+    const deleteButtonLabel = presetDeleteMode ? 'Finish deleting tags' : 'Delete tags';
+    deleteTagPresetBtn.setAttribute('aria-label', deleteButtonLabel);
+    deleteTagPresetBtn.title = deleteButtonLabel;
+  }
+
   presetsEditorRowsEl.innerHTML = '';
   presetRows = norm.map((preset, idx) => {
     const grid = document.createElement('div');
@@ -1487,6 +1496,18 @@ function syncPresetsEditor(presets) {
     darkCol.append(darkControl, autoMatch);
 
     grid.append(nameCol, lightCol, darkCol);
+
+    if (presetDeleteMode && preset.id !== 'preset1') {
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'preset-delete-btn';
+      deleteButton.textContent = '×';
+      deleteButton.title = `Delete ${preset.name || `Tag ${idx + 1}`}`;
+      deleteButton.setAttribute('aria-label', `Delete ${preset.name || `Tag ${idx + 1}`}. Highlights using it will use the default tag.`);
+      deleteButton.addEventListener('click', () => removeTagPreset(preset.id));
+      grid.appendChild(deleteButton);
+    }
+
     presetsEditorRowsEl.appendChild(grid);
 
     const row = { presetId: preset.id, name, light, lightHex, dark, darkHex, autoMatch };
@@ -1770,6 +1791,38 @@ if (addTagPresetBtn) {
     rerenderFabBuilder();
     refreshTagsLibraryIfLive();
     schedulePresetSettingsSave();
+  });
+}
+
+function removeTagPreset(presetId) {
+  if (!pendingSettings || presetId === 'preset1') return;
+  const presets = normalizePresets(pendingSettings.presets);
+  const removedPreset = presets.find(preset => preset.id === presetId);
+  if (!removedPreset) return;
+
+  const nextPresets = presets.filter(preset => preset.id !== presetId);
+  pendingSettings.presets = nextPresets;
+  lastChangedSideByPreset.delete(presetId);
+  if (selectedAppearancePreviewPresetId === presetId) {
+    selectedAppearancePreviewPresetId = 'preset1';
+  }
+  if (currentTagPresetId === presetId) {
+    currentTagPresetId = null;
+  }
+
+  syncPresetsEditor(nextPresets);
+  syncAppearanceFromPresets(nextPresets);
+  reconcileCurrentFabLayout(true);
+  rerenderFabBuilder();
+  refreshTagsLibraryIfLive();
+  schedulePresetSettingsSave();
+  showToast(`${removedPreset.name || 'Tag'} deleted`);
+}
+
+if (deleteTagPresetBtn) {
+  deleteTagPresetBtn.addEventListener('click', () => {
+    presetDeleteMode = !presetDeleteMode;
+    syncPresetsEditor(pendingSettings?.presets || DEFAULTS.presets);
   });
 }
 
@@ -2175,7 +2228,8 @@ let activeLibraryPresets = DEFAULTS.presets.map(p => ({ ...p }));
 
 function normalizeLibraryPresetId(presetId) {
   const match = activeLibraryPresets.find(p => p.id === presetId);
-  return match ? match.id : (activeLibraryPresets[0] || DEFAULTS.presets[0]).id;
+  const defaultPreset = activeLibraryPresets.find(p => p.id === 'preset1') || DEFAULTS.presets[0];
+  return match ? match.id : defaultPreset.id;
 }
 
 function setActiveLibraryPresets(settings) {
@@ -2185,7 +2239,7 @@ function setActiveLibraryPresets(settings) {
 function getLibraryPresetForHighlight(hl) {
   const presetId = getHighlightPresetId(hl);
   return activeLibraryPresets.find(p => p.id === presetId)
-    || activeLibraryPresets[0]
+    || activeLibraryPresets.find(p => p.id === 'preset1')
     || DEFAULTS.presets[0];
 }
 
