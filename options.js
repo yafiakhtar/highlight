@@ -68,19 +68,141 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 });
 
-// ---- Tab switching ----
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    closeFabPopover();
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    const panel = document.getElementById('tab-' + btn.dataset.tab);
-    panel.classList.add('active');
-    
-    // Reset sidebar to default item when switching tabs
-    resetSidebarForTab(btn.dataset.tab);
+// ---- Main tabs and Settings section navigation ----
+
+const SETTINGS_SECTION_VIEW_ORDER = [
+  'appearance',
+  'presets-tags',
+  'fab',
+  'shortcuts',
+  'data',
+  'sync'
+];
+
+let settingsScrollPosition = 0;
+let settingsHasStoredScrollPosition = false;
+let currentSettingsSection = 'appearance';
+let settingsScrollFrame = null;
+
+function isSettingsTabActive() {
+  const panel = document.getElementById('tab-settings');
+  return !!(panel && panel.classList.contains('active'));
+}
+
+function getSettingsSection(viewName) {
+  return document.querySelector(`#tab-settings .settings-view[data-view="${viewName}"]`);
+}
+
+function setActiveSettingsSidebarItem(viewName) {
+  const sidebar = document.getElementById('sidebar-settings');
+  if (!sidebar || !SETTINGS_SECTION_VIEW_ORDER.includes(viewName)) return;
+  currentSettingsSection = viewName;
+  sidebar.querySelectorAll('.sidebar-item').forEach(item => {
+    const isActive = item.dataset.view === viewName;
+    item.classList.toggle('active', isActive);
+    if (isActive) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
   });
+}
+
+function updateSettingsScrollSpy() {
+  settingsScrollFrame = null;
+  if (!isSettingsTabActive()) return;
+
+  const sections = SETTINGS_SECTION_VIEW_ORDER
+    .map(viewName => ({ viewName, element: getSettingsSection(viewName) }))
+    .filter(item => item.element);
+  if (sections.length === 0) return;
+
+  const readingLine = Math.min(180, window.innerHeight * 0.25);
+  let activeViewName = sections[0].viewName;
+  sections.forEach(item => {
+    if (item.element.getBoundingClientRect().top <= readingLine) {
+      activeViewName = item.viewName;
+    }
+  });
+
+  const documentBottom = document.documentElement.scrollHeight;
+  if (Math.ceil(window.scrollY + window.innerHeight) >= documentBottom - 2) {
+    activeViewName = sections[sections.length - 1].viewName;
+  }
+  if (activeViewName !== currentSettingsSection) {
+    setActiveSettingsSidebarItem(activeViewName);
+  }
+}
+
+function scheduleSettingsScrollSpy() {
+  if (settingsScrollFrame !== null) return;
+  settingsScrollFrame = requestAnimationFrame(updateSettingsScrollSpy);
+}
+
+function scrollToSettingsSection(viewName, { focusHeading = false } = {}) {
+  const section = getSettingsSection(viewName);
+  if (!section) return;
+  closeFabPopover();
+  setActiveSettingsSidebarItem(viewName);
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  section.scrollIntoView({
+    behavior: reduceMotion ? 'auto' : 'smooth',
+    block: 'start'
+  });
+  if (focusHeading) {
+    const heading = section.querySelector('h2');
+    requestAnimationFrame(() => heading?.focus({ preventScroll: true }));
+  }
+}
+
+function captureSettingsScrollPosition() {
+  if (!isSettingsTabActive()) return;
+  settingsScrollPosition = window.scrollY;
+  settingsHasStoredScrollPosition = true;
+}
+
+function restoreSettingsScrollPosition() {
+  const targetPosition = settingsHasStoredScrollPosition ? settingsScrollPosition : 0;
+  requestAnimationFrame(() => {
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    window.scrollTo({ top: Math.min(targetPosition, maxScroll), behavior: 'auto' });
+    scheduleSettingsScrollSpy();
+  });
+}
+
+function activateMainTab(tabName) {
+  const tabBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  const panel = document.getElementById('tab-' + tabName);
+  if (!tabBtn || !panel) return;
+
+  const currentTab = document.querySelector('.tab-btn.active')?.dataset.tab;
+  closeFabPopover();
+  if (currentTab === tabName) {
+    if (tabName === 'settings') scheduleSettingsScrollSpy();
+    else resetSidebarForTab(tabName);
+    return;
+  }
+  if (currentTab === 'settings') captureSettingsScrollPosition();
+
+  document.querySelectorAll('.tab-btn').forEach(button => button.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(tabPanel => tabPanel.classList.remove('active'));
+  tabBtn.classList.add('active');
+  panel.classList.add('active');
+
+  if (tabName === 'settings') restoreSettingsScrollPosition();
+  else resetSidebarForTab(tabName);
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => activateMainTab(btn.dataset.tab));
+});
+
+window.addEventListener('scroll', () => {
+  if (!isSettingsTabActive()) return;
+  settingsScrollPosition = window.scrollY;
+  settingsHasStoredScrollPosition = true;
+  scheduleSettingsScrollSpy();
+}, { passive: true });
+
+window.addEventListener('resize', () => {
+  if (isSettingsTabActive()) scheduleSettingsScrollSpy();
 });
 
 // ---- Sidebar Navigation ----
@@ -88,17 +210,19 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 function resetSidebarForTab(tabName) {
   const panel = document.getElementById('tab-' + tabName);
   if (!panel) return;
-  
+  if (tabName === 'settings') {
+    scheduleSettingsScrollSpy();
+    return;
+  }
+
   const sidebar = panel.querySelector('.sidebar');
   if (!sidebar) return;
-  
-  // Remove active state from all sidebar items in this tab
+
   sidebar.querySelectorAll('.sidebar-item').forEach(item => {
     item.classList.remove('active');
     item.removeAttribute('aria-current');
   });
-  
-  // Set first sidebar item as active
+
   const firstItem = sidebar.querySelector('.sidebar-item');
   if (firstItem) {
     firstItem.classList.add('active');
@@ -140,19 +264,7 @@ function switchSidebarView(tabName, viewName) {
     });
     refreshLibrary();
   } else if (tabName === 'settings') {
-    // Settings tab: show/hide corresponding settings view
-    panel.querySelectorAll('.settings-view').forEach(view => {
-      view.classList.toggle('active', view.dataset.view === viewName);
-    });
-    
-    // Update sidebar active state
-    const sidebar = panel.querySelector('.sidebar');
-    sidebar.querySelectorAll('.sidebar-item').forEach(item => {
-      const isActive = item.dataset.view === viewName;
-      item.classList.toggle('active', isActive);
-      if (isActive) item.setAttribute('aria-current', 'page');
-      else item.removeAttribute('aria-current');
-    });
+    scrollToSettingsSection(viewName);
   }
 }
 
@@ -172,24 +284,7 @@ function initSidebarNavigation() {
 
 // ---- URL parameter handling ----
 function switchToTab(tabName) {
-  const tabBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
-  if (tabBtn) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    tabBtn.classList.add('active');
-    const panel = document.getElementById('tab-' + tabName);
-    panel.classList.add('active');
-    
-    // Reset sidebar to default item when switching tabs
-    resetSidebarForTab(tabName);
-  }
-}
-
-// Check for tab parameter in URL on load
-const urlParams = new URLSearchParams(window.location.search);
-const tabParam = urlParams.get('tab');
-if (tabParam) {
-  switchToTab(tabParam);
+  activateMainTab(tabName);
 }
 
 // Default settings
@@ -1692,7 +1787,7 @@ if (autoMatchAllDarkToLightBtn) {
 
 if (manageTagPresetsBtn) {
   manageTagPresetsBtn.addEventListener('click', () => {
-    switchSidebarView('settings', 'presets-tags');
+    scrollToSettingsSection('presets-tags', { focusHeading: true });
   });
 }
 
@@ -2970,9 +3065,16 @@ loadSidebarCollapsedState();
 initSidebarCollapseToggle();
 initSearchCollapsedBtn();
 
+const urlParams = new URLSearchParams(window.location.search);
+const tabParam = urlParams.get('tab');
+const hasValidTabParam = ['library', 'settings', 'about'].includes(tabParam);
+if (hasValidTabParam) {
+  switchToTab(tabParam);
+}
+
 // Initialize sidebar state for active tab on load
 const activeTab = document.querySelector('.tab-btn.active');
-if (activeTab) {
+if (activeTab && !hasValidTabParam) {
   resetSidebarForTab(activeTab.dataset.tab);
 }
 refreshLibrary();

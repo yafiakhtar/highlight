@@ -462,53 +462,150 @@
       #tab-settings .sidebar,
       #tab-settings .sidebar.collapsed,
       #tab-settings .sidebar:not(.collapsed) {
-        width: 64px;
-        overflow: hidden;
-      }
-
-      #tab-settings .sidebar-inner,
-      #tab-settings .sidebar.collapsed .sidebar-inner {
-        gap: 0;
-        padding: 12px 10px;
-      }
-
-      #tab-settings .sidebar-toggle {
-        display: none;
-      }
-
-      #tab-settings .sidebar-nav {
-        flex-direction: column;
-        gap: 4px;
-        overflow: visible;
-      }
-
-      #tab-settings .sidebar-item,
-      #tab-settings .sidebar.collapsed .sidebar-item {
-        width: 44px;
-        min-height: 44px;
-        padding: 10px;
-        justify-content: center;
-        border-radius: 0 7px 7px 0;
-      }
-
-      #tab-settings .sidebar-item .sidebar-label {
         display: none;
       }
 
       #tab-settings .content-area {
-        width: calc(100% - 64px);
+        width: 100%;
         min-width: 0;
         padding: 20px 16px 24px;
         overflow-x: hidden;
       }
+
     }
 
     .settings-view {
-      display: none;
+      display: block;
+      scroll-margin-top: 24px;
     }
 
-    .settings-view.active {
-      display: block;
+    #tab-settings {
+      align-items: flex-start;
+    }
+
+    #sidebar-settings {
+      position: sticky;
+      top: 16px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+    }
+
+    #tab-settings .content-area {
+      --settings-content-gutter-left: 24px;
+      --settings-content-gutter-right: 32px;
+      padding-bottom: 72px;
+    }
+
+    .settings-page-intro {
+      margin-bottom: 32px;
+    }
+
+    .settings-page-title {
+      margin: 0 0 7px;
+      color: var(--opt-text-strong);
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.3px;
+    }
+
+    .settings-page-description {
+      max-width: 680px;
+      margin: 0;
+      color: var(--opt-text-muted);
+      font-size: 12.5px;
+      line-height: 1.65;
+    }
+
+    #tab-settings .settings-view + .settings-view {
+      margin-top: 32px;
+      padding-top: 0;
+      border-top: none;
+    }
+
+    #tab-settings .settings-view > .section {
+      margin-bottom: 0;
+    }
+
+    .settings-section-surface,
+    #tab-settings .simple-settings-list {
+      --settings-surface-divider: color-mix(in srgb, var(--opt-text) 11%, transparent);
+      margin-right: calc(-1 * var(--settings-content-gutter-right));
+      margin-left: calc(-1 * var(--settings-content-gutter-left));
+      border: none;
+      border-radius: 0;
+      background: var(--opt-surface-alt);
+    }
+
+    .settings-section-surface {
+      padding: 24px var(--settings-content-gutter-right) 24px var(--settings-content-gutter-left);
+    }
+
+    .settings-surface-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .presets-surface-toolbar {
+      margin-bottom: 4px;
+    }
+
+    .fab-surface-toolbar {
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid color-mix(in srgb, var(--opt-text) 11%, transparent);
+    }
+
+    #tab-settings .simple-settings-list {
+      padding: 0 var(--settings-content-gutter-right) 0 var(--settings-content-gutter-left);
+    }
+
+    .settings-section-surface .presets-tools {
+      padding-top: 0;
+      border-top: none;
+    }
+
+    .settings-section-surface .fab-builder {
+      padding-top: 0;
+      border-top: none;
+    }
+
+    .settings-section-surface .appearance-controls,
+    .settings-section-surface .presets-tools,
+    .settings-section-surface .presets-grid,
+    .settings-section-surface .fab-builder,
+    .settings-section-surface .fab-toolbox-group-header,
+    #tab-settings .simple-settings-row + .simple-settings-row {
+      border-color: var(--settings-surface-divider);
+    }
+
+    .settings-section-surface .presets-editor .text-input:focus,
+    .settings-section-surface .presets-editor .color-hex:hover,
+    .settings-section-surface .presets-editor .color-hex:focus,
+    .settings-section-surface .fab-toolbox-item:hover,
+    .settings-section-surface .fab-toolbox-item:focus-visible {
+      background: var(--opt-surface);
+    }
+
+    #tab-settings .appearance-title,
+    #tab-settings .presets-title,
+    #tab-settings .fab-title,
+    #tab-settings .simple-settings-title {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      text-transform: none;
+    }
+
+    #tab-settings .appearance-description,
+    #tab-settings .presets-description,
+    #tab-settings .fab-description,
+    #tab-settings .simple-settings-description {
+      font-size: 10.5px;
+      font-weight: 500;
+      line-height: 1.65;
+      letter-spacing: 0.65px;
+      text-transform: uppercase;
     }
 
     /* ---- Tabs ---- */
@@ -618,7 +715,7 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 24px;
-      margin-bottom: 28px;
+      margin-bottom: 14px;
     }
 
     .presets-heading {
@@ -908,7 +1005,7 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 32px;
-      margin-bottom: 30px;
+      margin-bottom: 14px;
     }
 
     .fab-header-copy {
@@ -1746,7 +1843,7 @@
     }
 
     .simple-settings-header {
-      margin-bottom: 28px;
+      margin-bottom: 14px;
     }
 
     .simple-settings-title {
@@ -1918,7 +2015,7 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 28px;
-      margin-bottom: 28px;
+      margin-bottom: 14px;
     }
 
     .appearance-title {
@@ -2650,6 +2747,24 @@
     }
 
     @media (max-width: 768px) {
+      #tab-settings .content-area {
+        --settings-content-gutter-left: 16px;
+        --settings-content-gutter-right: 16px;
+      }
+
+      #tab-settings .settings-view + .settings-view {
+        margin-top: 28px;
+        padding-top: 0;
+      }
+
+      .settings-section-surface {
+        padding: 16px var(--settings-content-gutter-right) 16px var(--settings-content-gutter-left);
+      }
+
+      #tab-settings .simple-settings-list {
+        padding: 0 var(--settings-content-gutter-right) 0 var(--settings-content-gutter-left);
+      }
+
       #tab-settings .btn,
       #tab-settings .text-input,
       #tab-settings .color-hex,
@@ -2884,86 +2999,205 @@
         </div>
       </aside>
       <main class="content-area">
+        <header class="settings-page-intro">
+          <h1 class="settings-page-title">Settings</h1>
+          <p class="settings-page-description">Customize how highlights look, organize your tag palette, and control how the extension behaves.</p>
+        </header>
+
         <!-- Appearance View -->
-        <div class="settings-view active" data-view="appearance">
+        <section class="settings-view" id="settings-appearance" data-view="appearance" aria-labelledby="settingsAppearanceHeading">
           <div class="section appearance-section">
             <div class="appearance-header">
               <div>
-                <h2 class="appearance-title">Highlight appearance</h2>
+                <h2 class="appearance-title" id="settingsAppearanceHeading" tabindex="-1">Highlight Appearance</h2>
                 <p class="appearance-description">Set the light and dark colors for your default tag. Existing highlights linked to it update automatically.</p>
               </div>
               <span class="appearance-save-status" id="appearanceSaveStatus" role="status">Saved automatically</span>
             </div>
 
-            <div class="appearance-preview-grid">
-              <article class="appearance-preview is-light" id="previewLight">
-                <span class="appearance-preview-label">Light<span class="appearance-preview-label-detail"> webpage</span></span>
-                <p class="appearance-preview-line"><span class="preview-mark" id="previewMarkLight">Capture the ideas that matter</span></p>
-                <span class="appearance-preview-tag" id="defaultPresetNameLight">General</span>
-              </article>
+            <div class="settings-section-surface">
+              <div class="appearance-preview-grid">
+                <article class="appearance-preview is-light" id="previewLight">
+                  <span class="appearance-preview-label">Light<span class="appearance-preview-label-detail"> webpage</span></span>
+                  <p class="appearance-preview-line"><span class="preview-mark" id="previewMarkLight">Capture the ideas that matter</span></p>
+                  <span class="appearance-preview-tag" id="defaultPresetNameLight">General</span>
+                </article>
 
-              <article class="appearance-preview is-dark" id="previewDark">
-                <span class="appearance-preview-label">Dark<span class="appearance-preview-label-detail"> webpage</span></span>
-                <p class="appearance-preview-line"><span class="preview-mark" id="previewMarkDark">Capture the ideas that matter</span></p>
-                <span class="appearance-preview-tag" id="defaultPresetNameDark">General</span>
-              </article>
-            </div>
-
-            <div class="appearance-controls">
-              <div class="appearance-section-heading">
-                <div>
-                  <h3 class="appearance-section-title">Default tag colors</h3>
-                  <p class="appearance-section-description">Editing either color automatically creates a matching color for the other theme.</p>
-                </div>
-                <span class="appearance-linked-badge" title="Uses the same color matching as Tag Presets">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07.07l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15"/><path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 12 20l1.15-1.15"/></svg>
-                  Linked
-                </span>
+                <article class="appearance-preview is-dark" id="previewDark">
+                  <span class="appearance-preview-label">Dark<span class="appearance-preview-label-detail"> webpage</span></span>
+                  <p class="appearance-preview-line"><span class="preview-mark" id="previewMarkDark">Capture the ideas that matter</span></p>
+                  <span class="appearance-preview-tag" id="defaultPresetNameDark">General</span>
+                </article>
               </div>
 
-              <div class="appearance-color-grid">
-                <div class="appearance-color-control">
-                  <div class="appearance-color-label">
-                    <strong>Light webpages</strong>
-                    <span>Used on bright backgrounds</span>
+              <div class="appearance-controls">
+                <div class="appearance-section-heading">
+                  <div>
+                    <h3 class="appearance-section-title">Default tag colors</h3>
+                    <p class="appearance-section-description">Editing either color automatically creates a matching color for the other theme.</p>
                   </div>
-                  <div class="appearance-color-inputs">
-                    <input type="color" id="colorLight" class="color-swatch" value="#FFEA99" aria-label="Default tag color for light webpages">
-                    <input type="text" id="colorLightHex" class="color-hex" value="#FFEA99" maxlength="7" aria-label="Default light webpage hex color">
-                  </div>
+                  <span class="appearance-linked-badge" title="Uses the same color matching as Tag Presets">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07.07l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15"/><path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 12 20l1.15-1.15"/></svg>
+                    Linked
+                  </span>
                 </div>
 
-                <div class="appearance-color-control">
-                  <div class="appearance-color-label">
-                    <strong>Dark webpages</strong>
-                    <span>Used on dark backgrounds</span>
+                <div class="appearance-color-grid">
+                  <div class="appearance-color-control">
+                    <div class="appearance-color-label">
+                      <strong>Light webpages</strong>
+                      <span>Used on bright backgrounds</span>
+                    </div>
+                    <div class="appearance-color-inputs">
+                      <input type="color" id="colorLight" class="color-swatch" value="#FFEA99" aria-label="Default tag color for light webpages">
+                      <input type="text" id="colorLightHex" class="color-hex" value="#FFEA99" maxlength="7" aria-label="Default light webpage hex color">
+                    </div>
                   </div>
-                  <div class="appearance-color-inputs">
-                    <input type="color" id="colorDark" class="color-swatch" value="#7C6129" aria-label="Default tag color for dark webpages">
-                    <input type="text" id="colorDarkHex" class="color-hex" value="#7C6129" maxlength="7" aria-label="Default dark webpage hex color">
+
+                  <div class="appearance-color-control">
+                    <div class="appearance-color-label">
+                      <strong>Dark webpages</strong>
+                      <span>Used on dark backgrounds</span>
+                    </div>
+                    <div class="appearance-color-inputs">
+                      <input type="color" id="colorDark" class="color-swatch" value="#7C6129" aria-label="Default tag color for dark webpages">
+                      <input type="text" id="colorDarkHex" class="color-hex" value="#7C6129" maxlength="7" aria-label="Default dark webpage hex color">
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div class="appearance-palette">
-              <div class="appearance-section-heading">
-                <div>
-                  <h3 class="appearance-section-title">Tag palette</h3>
-                  <p class="appearance-section-description">Select a tag to preview its paired webpage colors. Manage colors and names in Tag Presets.</p>
+              <div class="appearance-palette">
+                <div class="appearance-section-heading">
+                  <div>
+                    <h3 class="appearance-section-title">Tag palette</h3>
+                    <p class="appearance-section-description">Select a tag to preview its paired webpage colors. Manage colors and names in Tag Presets.</p>
+                  </div>
+                  <button type="button" class="appearance-manage-btn" id="manageTagPresets">Manage in Tag Presets</button>
                 </div>
-                <button type="button" class="appearance-manage-btn" id="manageTagPresets">Manage in Tag Presets</button>
+                <div class="appearance-palette-list" id="appearancePresetSummary"></div>
               </div>
-              <div class="appearance-palette-list" id="appearancePresetSummary"></div>
             </div>
           </div>
-        </div>
+        </section>
+
+        <!-- Tag Presets view -->
+        <section class="settings-view" id="settings-presets-tags" data-view="presets-tags" aria-labelledby="settingsPresetsHeading">
+          <div class="section presets-section">
+            <div class="presets-header">
+              <div class="presets-heading">
+                <h2 class="presets-title" id="settingsPresetsHeading" tabindex="-1">Tag Presets</h2>
+                <p class="presets-description">Organize highlights with reusable names and colors. Each tag has a color for light and dark webpages.</p>
+              </div>
+            </div>
+
+            <div class="settings-section-surface">
+              <div class="settings-surface-toolbar presets-surface-toolbar">
+                <button type="button" id="addTagPreset" class="btn btn-primary btn-small">
+                  Add Tag
+                </button>
+              </div>
+
+              <div class="presets-tools">
+                <span class="presets-tools-label">Match colors across themes</span>
+                <div class="presets-tools-actions">
+                  <button type="button" id="autoMatchAllLightToDark" class="btn btn-secondary btn-small" title="Auto-match all (Light → Dark)">
+                    Light → Dark
+                  </button>
+                  <button type="button" id="autoMatchAllDarkToLight" class="btn btn-secondary btn-small" title="Auto-match all (Dark → Light)">
+                    Dark → Light
+                  </button>
+                </div>
+              </div>
+
+              <div class="presets-editor">
+                <div class="presets-grid presets-grid-header">
+                  <div class="presets-col presets-col-name">Tag name</div>
+                  <div class="presets-col presets-col-light">Light webpages</div>
+                  <div class="presets-col presets-col-dark">Dark webpages</div>
+                </div>
+                <div id="presetsEditorRows"></div>
+
+                <div class="presets-save-note">Changes save automatically and update linked highlights.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- FAB Builder view -->
+        <section class="settings-view" id="settings-fab" data-view="fab" aria-labelledby="settingsFabHeading">
+          <div class="section fab-section">
+            <div class="fab-header">
+              <div class="fab-header-copy">
+                <h2 class="fab-title" id="settingsFabHeading" tabindex="-1">Floating Action Button</h2>
+                <p class="fab-description">Build the button that appears beside selected text. Add or drag presets and actions into any of the eight positions below.</p>
+              </div>
+            </div>
+
+            <div class="settings-section-surface">
+              <div class="settings-surface-toolbar fab-surface-toolbar">
+                <div class="fab-visibility-control">
+                  <div class="fab-visibility-copy">
+                    <strong>Show highlight button</strong>
+                    <span>Appears when text is selected</span>
+                  </div>
+                  <label class="toggle">
+                    <input type="checkbox" id="showFab" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="fab-builder" id="fabBuilder">
+                <div class="fab-editor-panel">
+                  <div class="fab-panel-heading">
+                    <div>
+                      <h3 class="fab-panel-title">Arrange your layout</h3>
+                      <p class="fab-panel-description">Click an empty slot, or drag to place, move, and swap buttons.</p>
+                    </div>
+                    <span class="fab-dimensions">2 × 4</span>
+                  </div>
+                  <div class="fab-grid-viewport" tabindex="0" role="region" aria-label="Floating action button layout editor. Scroll horizontally on narrow screens.">
+                    <div class="fab-grid" id="fabGrid"></div>
+                  </div>
+                  <div class="fab-remove-zone" id="fabRemoveZone" title="Drop here to remove from the grid" aria-hidden="true">
+                    <svg class="fab-remove-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6"/>
+                    </svg>
+                    Remove from FAB
+                  </div>
+                  <p class="fab-hint">Changes apply immediately. Use the slot menu or drag a button toward the remove area to clear it.</p>
+                </div>
+
+                <aside class="fab-toolbox-panel">
+                  <div class="fab-panel-heading">
+                    <div>
+                      <h3 class="fab-panel-title">Toolbox</h3>
+                      <p class="fab-panel-description">Available buttons for your layout.</p>
+                    </div>
+                  </div>
+                  <div class="fab-toolbox" id="fabToolbox"></div>
+                </aside>
+              </div>
+
+              <div class="fab-previews">
+                <div class="fab-previews-heading">
+                  <div>
+                    <h3 class="fab-panel-title">Preview</h3>
+                    <p class="fab-panel-description">A compact view of your current button layout.</p>
+                  </div>
+                </div>
+                <div class="fab-preview" id="fabPreview" aria-label="Floating action button layout preview"></div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <!-- Shortcuts View -->
-        <div class="settings-view" data-view="shortcuts">
+        <section class="settings-view" id="settings-shortcuts" data-view="shortcuts" aria-labelledby="settingsShortcutsHeading">
           <div class="section simple-settings-section">
             <div class="simple-settings-header">
-              <h2 class="simple-settings-title">Keyboard shortcuts</h2>
+              <h2 class="simple-settings-title" id="settingsShortcutsHeading" tabindex="-1">Keyboard Shortcuts</h2>
               <p class="simple-settings-description">Review the command used to highlight selected text or manage it in Chrome.</p>
             </div>
 
@@ -2991,115 +3225,13 @@
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- Tag Presets view -->
-        <div class="settings-view" data-view="presets-tags">
-          <div class="section presets-section">
-            <div class="presets-header">
-              <div class="presets-heading">
-                <h2 class="presets-title">Tag presets</h2>
-                <p class="presets-description">Organize highlights with reusable names and colors. Each tag has a color for light and dark webpages.</p>
-              </div>
-              <button type="button" id="addTagPreset" class="btn btn-primary btn-small">
-                Add Tag
-              </button>
-            </div>
-
-            <div class="presets-tools">
-              <span class="presets-tools-label">Match colors across themes</span>
-              <div class="presets-tools-actions">
-                <button type="button" id="autoMatchAllLightToDark" class="btn btn-secondary btn-small" title="Auto-match all (Light → Dark)">
-                  Light → Dark
-                </button>
-                <button type="button" id="autoMatchAllDarkToLight" class="btn btn-secondary btn-small" title="Auto-match all (Dark → Light)">
-                  Dark → Light
-                </button>
-              </div>
-            </div>
-
-            <div class="presets-editor">
-              <div class="presets-grid presets-grid-header">
-                <div class="presets-col presets-col-name">Tag name</div>
-                <div class="presets-col presets-col-light">Light webpages</div>
-                <div class="presets-col presets-col-dark">Dark webpages</div>
-              </div>
-              <div id="presetsEditorRows"></div>
-
-              <div class="presets-save-note">Changes save automatically and update linked highlights.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- FAB Builder view -->
-        <div class="settings-view" data-view="fab">
-          <div class="section fab-section">
-            <div class="fab-header">
-              <div class="fab-header-copy">
-                <h2 class="fab-title">Floating action button</h2>
-                <p class="fab-description">Build the button that appears beside selected text. Add or drag presets and actions into any of the eight positions below.</p>
-              </div>
-              <div class="fab-visibility-control">
-                <div class="fab-visibility-copy">
-                  <strong>Show highlight button</strong>
-                  <span>Appears when text is selected</span>
-                </div>
-                <label class="toggle">
-                  <input type="checkbox" id="showFab" checked>
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
-
-            <div class="fab-builder" id="fabBuilder">
-              <div class="fab-editor-panel">
-                <div class="fab-panel-heading">
-                  <div>
-                    <h3 class="fab-panel-title">Arrange your layout</h3>
-                    <p class="fab-panel-description">Click an empty slot, or drag to place, move, and swap buttons.</p>
-                  </div>
-                  <span class="fab-dimensions">2 × 4</span>
-                </div>
-                <div class="fab-grid-viewport" tabindex="0" role="region" aria-label="Floating action button layout editor. Scroll horizontally on narrow screens.">
-                  <div class="fab-grid" id="fabGrid"></div>
-                </div>
-                <div class="fab-remove-zone" id="fabRemoveZone" title="Drop here to remove from the grid" aria-hidden="true">
-                  <svg class="fab-remove-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6"/>
-                  </svg>
-                  Remove from FAB
-                </div>
-                <p class="fab-hint">Changes apply immediately. Use the slot menu or drag a button toward the remove area to clear it.</p>
-              </div>
-
-              <aside class="fab-toolbox-panel">
-                <div class="fab-panel-heading">
-                  <div>
-                    <h3 class="fab-panel-title">Toolbox</h3>
-                    <p class="fab-panel-description">Available buttons for your layout.</p>
-                  </div>
-                </div>
-                <div class="fab-toolbox" id="fabToolbox"></div>
-              </aside>
-            </div>
-
-            <div class="fab-previews">
-              <div class="fab-previews-heading">
-                <div>
-                  <h3 class="fab-panel-title">Preview</h3>
-                  <p class="fab-panel-description">A compact view of your current button layout.</p>
-                </div>
-              </div>
-              <div class="fab-preview" id="fabPreview" aria-label="Floating action button layout preview"></div>
-            </div>
-          </div>
-        </div>
+        </section>
 
         <!-- Reset Settings View -->
-        <div class="settings-view" data-view="data">
+        <section class="settings-view" id="settings-data" data-view="data" aria-labelledby="settingsDataHeading">
           <div class="section simple-settings-section">
             <div class="simple-settings-header">
-              <h2 class="simple-settings-title">Reset settings</h2>
+              <h2 class="simple-settings-title" id="settingsDataHeading" tabindex="-1">Reset Settings</h2>
               <p class="simple-settings-description">Restore extension preferences to their defaults without deleting saved highlights or Library records.</p>
             </div>
 
@@ -3113,13 +3245,13 @@
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- Sync View -->
-        <div class="settings-view" data-view="sync">
+        <section class="settings-view" id="settings-sync" data-view="sync" aria-labelledby="settingsSyncHeading">
           <div class="section simple-settings-section">
             <div class="simple-settings-header">
-              <h2 class="simple-settings-title">Sync</h2>
+              <h2 class="simple-settings-title" id="settingsSyncHeading" tabindex="-1">Sync</h2>
               <p class="simple-settings-description">Cross-device access for highlights is planned for a future update.</p>
             </div>
 
@@ -3133,7 +3265,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </section>
       </main>
     </div>
 
