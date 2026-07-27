@@ -500,12 +500,24 @@
       margin-bottom: 32px;
     }
 
+    .settings-page-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 7px;
+    }
+
     .settings-page-title {
-      margin: 0 0 7px;
+      margin: 0;
       color: var(--opt-text-strong);
       font-size: 22px;
       font-weight: 500;
       letter-spacing: -0.3px;
+    }
+
+    .settings-page-heading .appearance-save-status {
+      padding-top: 0;
     }
 
     .settings-page-description {
@@ -889,24 +901,6 @@
     .preset-match-btn:hover {
       background: var(--opt-surface-alt);
       color: var(--opt-text-strong);
-    }
-
-    .presets-save-note {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      margin-top: 14px;
-      color: var(--opt-text-muted);
-      font-size: 12px;
-    }
-
-    .presets-save-note::before {
-      content: '';
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #4f9d69;
-      flex-shrink: 0;
     }
 
     @media (max-width: 900px) {
@@ -2752,6 +2746,12 @@
         --settings-content-gutter-right: 16px;
       }
 
+      .settings-page-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+      }
+
       #tab-settings .settings-view + .settings-view {
         margin-top: 28px;
         padding-top: 0;
@@ -3000,7 +3000,10 @@
       </aside>
       <main class="content-area">
         <header class="settings-page-intro">
-          <h1 class="settings-page-title">Settings</h1>
+          <div class="settings-page-heading">
+            <h1 class="settings-page-title">Settings</h1>
+            <span class="appearance-save-status" id="appearanceSaveStatus" role="status" aria-live="polite">All changes save automatically</span>
+          </div>
           <p class="settings-page-description">Customize how highlights look, organize your tag palette, and control how the extension behaves.</p>
         </header>
 
@@ -3012,7 +3015,6 @@
                 <h2 class="appearance-title" id="settingsAppearanceHeading" tabindex="-1">Highlight Appearance</h2>
                 <p class="appearance-description">Set the light and dark colors for your default tag. Existing highlights linked to it update automatically.</p>
               </div>
-              <span class="appearance-save-status" id="appearanceSaveStatus" role="status">Saved automatically</span>
             </div>
 
             <div class="settings-section-surface">
@@ -3117,8 +3119,6 @@
                   <div class="presets-col presets-col-dark">Dark webpages</div>
                 </div>
                 <div id="presetsEditorRows"></div>
-
-                <div class="presets-save-note">Changes save automatically and update linked highlights.</div>
               </div>
             </div>
           </div>

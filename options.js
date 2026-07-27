@@ -1301,9 +1301,9 @@ function getHighlightSettingsSignature(settings) {
 function setAppearanceSaveStatus(status) {
   if (!appearanceSaveStatusEl) return;
   appearanceSaveStatusEl.classList.toggle('is-saving', status === 'saving');
-  if (status === 'saving') appearanceSaveStatusEl.textContent = 'Saving…';
+  if (status === 'saving') appearanceSaveStatusEl.textContent = 'Saving changes…';
   else if (status === 'error') appearanceSaveStatusEl.textContent = 'Could not save';
-  else appearanceSaveStatusEl.textContent = 'Saved automatically';
+  else appearanceSaveStatusEl.textContent = 'All changes save automatically';
 }
 
 function normalizeScopedSettingsWrite(stored, patch) {
