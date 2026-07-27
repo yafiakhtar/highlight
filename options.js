@@ -1936,6 +1936,7 @@ openShortcuts.addEventListener('click', () => {
 // ---- Detect shortcut ----
 
 let lastRenderedShortcut = null;
+const pressedShortcutKeys = new Set();
 
 function isMacShortcutPlatform() {
   const platform = navigator.userAgentData?.platform || navigator.platform || '';
@@ -1991,6 +1992,55 @@ function parseShortcutTokens(shortcut) {
   });
 }
 
+function normalizeShortcutTokenForKeyboard(token) {
+  const value = typeof token === 'string' ? token.trim() : '';
+  const normalized = value.toLowerCase();
+  const aliases = {
+    command: 'meta',
+    cmd: 'meta',
+    meta: 'meta',
+    '⌘': 'meta',
+    shift: 'shift',
+    '⇧': 'shift',
+    option: 'alt',
+    alt: 'alt',
+    '⌥': 'alt',
+    control: 'control',
+    ctrl: 'control',
+    macctrl: 'control',
+    '⌃': 'control',
+    space: 'space',
+    spacebar: 'space',
+    esc: 'escape',
+    return: 'enter'
+  };
+  return aliases[normalized] || normalized;
+}
+
+function normalizeKeyboardEventKey(event) {
+  if (!event || typeof event.key !== 'string') return '';
+  if (event.key === ' ') return 'space';
+  return normalizeShortcutTokenForKeyboard(event.key);
+}
+
+function updatePressedShortcutKey(keyName, isPressed) {
+  if (!shortcutDisplay || !keyName) return;
+  if (isPressed) pressedShortcutKeys.add(keyName);
+  else pressedShortcutKeys.delete(keyName);
+
+  shortcutDisplay.querySelectorAll('.shortcut-key[data-shortcut-key]').forEach(keycap => {
+    const pressed = pressedShortcutKeys.has(keycap.dataset.shortcutKey);
+    keycap.classList.toggle('is-pressed', pressed);
+  });
+}
+
+function releaseAllShortcutKeys() {
+  pressedShortcutKeys.clear();
+  shortcutDisplay?.querySelectorAll('.shortcut-key.is-pressed').forEach(keycap => {
+    keycap.classList.remove('is-pressed');
+  });
+}
+
 function renderShortcutKeys(shortcut) {
   if (!shortcutDisplay) return;
   const normalizedShortcut = typeof shortcut === 'string' ? shortcut.trim() : '';
@@ -1998,15 +2048,22 @@ function renderShortcutKeys(shortcut) {
   lastRenderedShortcut = normalizedShortcut;
 
   const tokens = parseShortcutTokens(normalizedShortcut);
-  const displayTokens = tokens.length > 0
-    ? tokens.map(token => formatShortcutToken(token, isMacShortcutPlatform()))
-    : ['Not set'];
+  const renderedTokens = tokens.length > 0
+    ? tokens.map(token => ({
+      display: formatShortcutToken(token, isMacShortcutPlatform()),
+      keyboardKey: normalizeShortcutTokenForKeyboard(token)
+    }))
+    : [{ display: 'Not set', keyboardKey: '' }];
 
   const fragment = document.createDocumentFragment();
-  displayTokens.forEach(token => {
+  renderedTokens.forEach(({ display, keyboardKey }) => {
     const key = document.createElement('kbd');
     key.className = 'shortcut-key';
-    key.textContent = token;
+    key.textContent = display;
+    if (keyboardKey) {
+      key.dataset.shortcutKey = keyboardKey;
+      key.classList.toggle('is-pressed', pressedShortcutKeys.has(keyboardKey));
+    }
     key.setAttribute('aria-hidden', 'true');
     fragment.appendChild(key);
   });
@@ -2028,6 +2085,15 @@ function refreshShortcutDisplay() {
 
 refreshShortcutDisplay();
 window.addEventListener('focus', refreshShortcutDisplay);
+window.addEventListener('keydown', (event) => {
+  updatePressedShortcutKey(normalizeKeyboardEventKey(event), true);
+});
+window.addEventListener('keyup', (event) => {
+  const keyName = normalizeKeyboardEventKey(event);
+  updatePressedShortcutKey(keyName, false);
+  if (keyName === 'meta') releaseAllShortcutKeys();
+});
+window.addEventListener('blur', releaseAllShortcutKeys);
 
 // ============================================
 // Highlights list

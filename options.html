@@ -2025,10 +2025,25 @@
       line-height: 1;
       white-space: nowrap;
       animation: shortcut-key-in 0.15s ease-out both;
+      transition:
+        transform 0.09s ease-out,
+        box-shadow 0.09s ease-out,
+        background 0.09s ease-out,
+        border-color 0.09s ease-out;
+      will-change: transform;
     }
 
     body.dark .shortcut-key {
       box-shadow: 0 2px 0 #151515, 0 4px 10px rgba(0,0,0,0.2);
+    }
+
+    .shortcut-key.is-pressed,
+    body.dark .shortcut-key.is-pressed {
+      animation: none;
+      border-color: var(--opt-border);
+      background: var(--opt-surface-alt);
+      box-shadow: 0 0 0 var(--opt-border), inset 0 1px 2px rgba(0,0,0,0.12);
+      transform: translateY(2px) scale(0.985);
     }
 
     .shortcut.is-empty .shortcut-key {
@@ -2080,6 +2095,7 @@
     @media (prefers-reduced-motion: reduce) {
       .shortcut-key {
         animation: none;
+        transition: none;
       }
     }
 
