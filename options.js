@@ -174,6 +174,7 @@ function activateMainTab(tabName) {
 
   const currentTab = document.querySelector('.tab-btn.active')?.dataset.tab;
   closeFabPopover();
+  closeMobileLibrarySearch();
   if (currentTab === tabName) {
     if (tabName === 'settings') scheduleSettingsScrollSpy();
     else resetSidebarForTab(tabName);
@@ -202,6 +203,7 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 
 window.addEventListener('resize', () => {
+  closeMobileLibrarySearch();
   if (isSettingsTabActive()) scheduleSettingsScrollSpy();
 });
 
@@ -234,6 +236,55 @@ function resetSidebarForTab(tabName) {
 let currentLibraryView = 'all';
 let currentTagPresetId = null;
 
+const LIBRARY_VIEW_META = {
+  all: {
+    title: 'All Highlights',
+    description: 'Every saved highlight, grouped by webpage.'
+  },
+  favorites: {
+    title: 'Favorites',
+    description: 'Highlights you have starred for quick access.'
+  },
+  tags: {
+    title: 'Tags',
+    description: 'Browse your saved highlights by tag.'
+  },
+  'recently-deleted': {
+    title: 'Recently Deleted',
+    description: 'Restore deleted highlights or remove them permanently.'
+  }
+};
+
+function syncLibraryViewHeader(viewName = currentLibraryView) {
+  const meta = LIBRARY_VIEW_META[viewName] || LIBRARY_VIEW_META.all;
+  const heading = document.getElementById('libraryViewHeading');
+  const description = document.getElementById('libraryViewDescription');
+  if (heading) heading.textContent = meta.title;
+  if (description) description.textContent = meta.description;
+}
+
+function isMobileLibraryLayout() {
+  return typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 768px)').matches;
+}
+
+function setMobileLibrarySearchOpen(isOpen, { focusInput = false } = {}) {
+  const sidebar = document.getElementById('sidebar-library');
+  if (!sidebar) return;
+  const shouldOpen = Boolean(isOpen && isMobileLibraryLayout());
+  const toggle = sidebar.querySelector('.search-bar-collapsed-btn');
+  const input = document.getElementById('librarySearch');
+  sidebar.classList.toggle('is-mobile-search-open', shouldOpen);
+  if (toggle) toggle.setAttribute('aria-expanded', String(shouldOpen));
+  if (shouldOpen && focusInput) {
+    requestAnimationFrame(() => input?.focus({ preventScroll: true }));
+  }
+}
+
+function closeMobileLibrarySearch() {
+  setMobileLibrarySearchOpen(false);
+}
+
 function isLibraryTabActive() {
   const panel = document.getElementById('tab-library');
   return !!(panel && panel.classList.contains('active'));
@@ -251,10 +302,12 @@ function switchSidebarView(tabName, viewName) {
   if (!panel) return;
   
   if (tabName === 'library') {
+    closeMobileLibrarySearch();
     currentLibraryView = viewName;
     if (viewName !== 'tags') {
       currentTagPresetId = null;
     }
+    syncLibraryViewHeader(viewName);
     const sidebar = panel.querySelector('.sidebar');
     sidebar.querySelectorAll('.sidebar-item').forEach(item => {
       const isActive = item.dataset.view === viewName;
@@ -2263,6 +2316,7 @@ function normalizeStoredHighlights(raw) {
 }
 
 function refreshLibrary() {
+  syncLibraryViewHeader();
   if (currentLibraryView === 'recently-deleted') {
     loadRecentlyDeleted();
   } else if (currentLibraryView === 'tags') {
@@ -2505,14 +2559,26 @@ function loadTagHighlights(presetId) {
   });
 }
 
+function libraryIconMarkup(iconName) {
+  const paths = {
+    back: '<path d="m15 18-6-6 6-6"/>',
+    star: '<path d="M12 2.8l2.82 5.72 6.31.92-4.57 4.45 1.08 6.29L12 17.22l-5.64 2.96 1.08-6.29-4.57-4.45 6.31-.92L12 2.8z"/>',
+    trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6"/>',
+    restore: '<path d="M3 7v5h5"/><path d="M5.1 16a8 8 0 1 0 .5-9.4L3 9"/>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[iconName] || ''}</svg>`;
+}
+
 function createTagsToolbar(preset) {
   const toolbar = document.createElement('div');
   toolbar.className = 'tags-toolbar';
 
   const backBtn = document.createElement('button');
   backBtn.type = 'button';
-  backBtn.className = 'page-clear-btn';
-  backBtn.textContent = 'Back';
+  backBtn.className = 'tags-back-btn';
+  backBtn.innerHTML = `${libraryIconMarkup('back')}<span>All tags</span>`;
+  backBtn.title = 'Back to all tags';
+  backBtn.setAttribute('aria-label', 'Back to all tags');
   backBtn.addEventListener('click', () => {
     currentTagPresetId = null;
     loadTagsView();
@@ -2520,7 +2586,7 @@ function createTagsToolbar(preset) {
 
   const title = document.createElement('div');
   title.className = 'tags-toolbar-title';
-  title.textContent = `Tags / ${preset && preset.name ? preset.name : 'Tag'}`;
+  title.textContent = preset && preset.name ? preset.name : 'Tag';
 
   toolbar.appendChild(backBtn);
   toolbar.appendChild(title);
@@ -2760,7 +2826,6 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
 
   const toolbar = document.createElement('div');
   toolbar.className = 'page-header trash-toolbar';
-  toolbar.style.marginBottom = '16px';
   const emptyTrashBtn = document.createElement('button');
   emptyTrashBtn.type = 'button';
   emptyTrashBtn.className = 'page-clear-btn';
@@ -2825,16 +2890,18 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
 
       const restoreBtn = document.createElement('button');
       restoreBtn.type = 'button';
-      restoreBtn.className = 'page-clear-btn';
-      restoreBtn.textContent = 'Restore';
+      restoreBtn.className = 'library-action-btn snippet-restore';
+      restoreBtn.innerHTML = libraryIconMarkup('restore');
       restoreBtn.title = 'Restore highlight';
+      restoreBtn.setAttribute('aria-label', 'Restore highlight');
       restoreBtn.addEventListener('click', () => restoreFromTrash(entry.trashId));
 
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
-      delBtn.className = 'snippet-delete';
-      delBtn.innerHTML = '&#215;';
+      delBtn.className = 'library-action-btn snippet-delete is-danger';
+      delBtn.innerHTML = libraryIconMarkup('trash');
       delBtn.title = 'Delete forever';
+      delBtn.setAttribute('aria-label', 'Delete highlight forever');
       delBtn.addEventListener('click', () => deleteForeverFromTrash(entry.trashId));
 
       trashBtns.appendChild(restoreBtn);
@@ -2912,11 +2979,11 @@ function renderEmpty() {
 function createStarButton(pageUrl, hl) {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'snippet-star' + (hl.favorited === true ? ' is-favorited' : '');
+  btn.className = 'library-action-btn snippet-star' + (hl.favorited === true ? ' is-favorited' : '');
   const favorited = hl.favorited === true;
   btn.title = favorited ? 'Remove from favorites' : 'Add to favorites';
   btn.setAttribute('aria-label', btn.title);
-  btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+  btn.innerHTML = libraryIconMarkup('star');
   btn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -3013,9 +3080,10 @@ function renderHighlights(pages, totalCount, options = {}) {
 
       const del = document.createElement('button');
       del.type = 'button';
-      del.className = 'snippet-delete';
-      del.innerHTML = '&#215;';
+      del.className = 'library-action-btn snippet-delete is-danger';
+      del.innerHTML = libraryIconMarkup('trash');
       del.title = 'Delete highlight';
+      del.setAttribute('aria-label', 'Delete highlight');
       del.addEventListener('click', () => deleteHighlight(page.url, hl.id));
 
       const rowActions = document.createElement('div');
@@ -3167,9 +3235,15 @@ function initSidebarCollapseToggle() {
 function initSearchCollapsedBtn() {
   document.querySelectorAll('.search-bar-collapsed-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      const sidebar = btn.closest('.sidebar');
+      if (sidebar?.id === 'sidebar-library' && isMobileLibraryLayout()) {
+        const willOpen = !sidebar.classList.contains('is-mobile-search-open');
+        setMobileLibrarySearchOpen(willOpen, { focusInput: willOpen });
+        if (!willOpen) btn.focus({ preventScroll: true });
+        return;
+      }
       setSidebarCollapsed(false);
       saveSidebarCollapsedState(false);
-      const sidebar = btn.closest('.sidebar');
       const input = sidebar ? sidebar.querySelector('.search-bar-wrap input') : null;
       if (input) {
         input.focus();
@@ -3177,6 +3251,20 @@ function initSearchCollapsedBtn() {
     });
   });
 }
+
+document.addEventListener('pointerdown', (event) => {
+  const sidebar = document.getElementById('sidebar-library');
+  if (!sidebar?.classList.contains('is-mobile-search-open')) return;
+  if (!sidebar.contains(event.target)) closeMobileLibrarySearch();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  const sidebar = document.getElementById('sidebar-library');
+  if (!sidebar?.classList.contains('is-mobile-search-open')) return;
+  closeMobileLibrarySearch();
+  sidebar.querySelector('.search-bar-collapsed-btn')?.focus({ preventScroll: true });
+});
 
 // ---- Init ----
 loadSettings();

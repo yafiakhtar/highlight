@@ -1806,13 +1806,12 @@
       color: var(--opt-text);
       cursor: pointer;
       text-align: left;
-      transition: color 0.15s ease, padding 0.15s ease;
+      transition: color 0.15s ease, background 0.15s ease;
     }
 
     .tag-folder:hover {
       color: var(--opt-text-strong);
-      padding-left: 10px;
-      padding-right: 10px;
+      background: var(--opt-surface);
     }
 
     .tag-folder:focus-visible {
@@ -2760,6 +2759,372 @@
       padding-top: 0;
     }
 
+    /* ---- Modern Library shell ---- */
+
+    body.dark #tab-library {
+      --opt-text-muted: #9a9a9a;
+    }
+
+    #tab-library {
+      align-items: flex-start;
+    }
+
+    #sidebar-library {
+      position: sticky;
+      top: 16px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+    }
+
+    #tab-library .sidebar-icon svg,
+    #tab-library .search-icon,
+    #tab-library .search-bar-collapsed-btn svg {
+      stroke-width: 1.8;
+    }
+
+    #tab-library .search-bar input,
+    #tab-library .sidebar-item,
+    #tab-library .sidebar-toggle,
+    #tab-library .search-bar-collapsed-btn {
+      min-height: 36px;
+    }
+
+    #tab-library .content-area.library-content {
+      --library-content-gutter-left: 24px;
+      --library-content-gutter-right: 32px;
+      padding-bottom: 72px;
+      background: var(--opt-content);
+      overflow-x: hidden;
+    }
+
+    .library-page-intro {
+      margin-bottom: 32px;
+    }
+
+    .library-page-title {
+      margin: 0 0 7px;
+      color: var(--opt-text-strong);
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.3px;
+    }
+
+    .library-page-description {
+      max-width: 680px;
+      margin: 0;
+      color: var(--opt-text-muted);
+      font-size: 12.5px;
+      line-height: 1.65;
+    }
+
+    .library-view-header {
+      margin-bottom: 14px;
+    }
+
+    .library-view-title {
+      margin: 0 0 6px;
+      color: var(--opt-text-strong);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+
+    .library-view-description {
+      margin: 0;
+      color: var(--opt-text-muted);
+      font-size: 10.5px;
+      font-weight: 500;
+      line-height: 1.65;
+      letter-spacing: 0.65px;
+      text-transform: uppercase;
+    }
+
+    .library-section-surface {
+      --library-surface-divider: color-mix(in srgb, var(--opt-text) 11%, transparent);
+      min-height: 96px;
+      margin-right: calc(-1 * var(--library-content-gutter-right));
+      margin-left: calc(-1 * var(--library-content-gutter-left));
+      padding: 24px var(--library-content-gutter-right) 24px var(--library-content-gutter-left);
+      border: none;
+      border-radius: 0;
+      background: var(--opt-surface-alt);
+    }
+
+    .library-section-surface .page-group {
+      margin-bottom: 0;
+    }
+
+    .library-section-surface .page-group + .page-group {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--library-surface-divider);
+    }
+
+    .library-section-surface .tag-folders {
+      border-top: none;
+    }
+
+    .library-section-surface .tag-folder {
+      min-height: 44px;
+      padding: 12px 4px;
+      border-bottom-color: var(--library-surface-divider);
+    }
+
+    .library-section-surface .tag-folder:last-child {
+      border-bottom: none;
+    }
+
+    .library-section-surface .tag-folder:hover {
+      background: var(--opt-surface);
+    }
+
+    .library-section-surface .page-header {
+      margin-bottom: 10px;
+    }
+
+    .library-section-surface .page-clear-btn {
+      min-height: 36px;
+      padding: 7px 10px;
+      font-size: 12px;
+    }
+
+    .library-section-surface .page-url {
+      font-size: 12px;
+    }
+
+    .library-section-surface .trash-toolbar {
+      min-height: 36px;
+      margin-bottom: 18px !important;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--library-surface-divider);
+    }
+
+    .library-section-surface .snippet-item {
+      min-height: 44px;
+      padding: 8px 0;
+    }
+
+    .library-action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 36px;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--opt-text-muted);
+      cursor: pointer;
+      opacity: 1;
+      transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+    }
+
+    .library-action-btn svg,
+    .tags-back-btn svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .library-action-btn:hover {
+      background: var(--opt-surface);
+      color: var(--opt-text-strong);
+    }
+
+    .library-action-btn.is-danger:hover {
+      background: color-mix(in srgb, var(--opt-danger) 12%, transparent);
+      color: var(--opt-danger);
+    }
+
+    .snippet-star.library-action-btn svg path {
+      stroke-width: 1.8;
+    }
+
+    .snippet-trash-actions {
+      gap: 4px;
+    }
+
+    .tags-toolbar {
+      min-height: 36px;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--library-surface-divider);
+    }
+
+    .tags-back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 36px;
+      padding: 6px 8px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--opt-text-muted);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+
+    .tags-back-btn:hover {
+      background: var(--opt-surface);
+      color: var(--opt-text-strong);
+    }
+
+    .tags-toolbar-title {
+      color: var(--opt-text);
+      font-size: 12.5px;
+      font-weight: 500;
+    }
+
+    #tab-library button:focus-visible,
+    #tab-library a:focus-visible,
+    #tab-library input:focus-visible {
+      outline: 2px solid var(--opt-accent);
+      outline-offset: 2px;
+    }
+
+    #tab-library .tag-folder:focus-visible {
+      outline-offset: -2px;
+    }
+
+    @media (max-width: 768px) {
+      #tab-library.active {
+        align-items: flex-start;
+        flex-direction: row;
+        min-width: 0;
+      }
+
+      #tab-library #sidebar-library,
+      #tab-library #sidebar-library.collapsed,
+      #tab-library #sidebar-library:not(.collapsed) {
+        display: flex;
+        width: 64px;
+        height: calc(100vh - 57px);
+        max-height: none;
+        flex: 0 0 64px;
+        position: sticky;
+        top: 0;
+        overflow: visible;
+        z-index: 20;
+      }
+
+      #sidebar-library .sidebar-inner,
+      #sidebar-library.collapsed .sidebar-inner {
+        gap: 8px;
+        padding: 12px 8px;
+        overflow: visible;
+      }
+
+      #sidebar-library .sidebar-toggle {
+        display: none;
+      }
+
+      #sidebar-library .sidebar-nav {
+        flex-direction: column;
+        gap: 4px;
+        overflow: visible;
+      }
+
+      #sidebar-library .sidebar-item,
+      #sidebar-library.collapsed .sidebar-item {
+        width: 48px;
+        min-height: 44px;
+        justify-content: center;
+        padding: 10px;
+        flex-shrink: 0;
+      }
+
+      #sidebar-library .sidebar-label {
+        display: none;
+      }
+
+      #sidebar-library .search-bar {
+        position: relative;
+        margin-bottom: 0;
+      }
+
+      #sidebar-library .search-bar-collapsed-btn,
+      #sidebar-library.collapsed .search-bar .search-bar-collapsed-btn {
+        display: flex;
+        width: 48px;
+        min-height: 44px;
+        padding: 10px;
+        border-radius: 6px;
+      }
+
+      #sidebar-library .search-bar-wrap,
+      #sidebar-library.collapsed .search-bar .search-bar-wrap {
+        display: none;
+      }
+
+      #sidebar-library.is-mobile-search-open .search-bar-wrap,
+      #sidebar-library.collapsed.is-mobile-search-open .search-bar .search-bar-wrap {
+        display: block;
+        position: absolute;
+        top: -4px;
+        left: 56px;
+        width: min(280px, calc(100vw - 80px));
+        padding: 8px;
+        border: 1px solid var(--opt-border);
+        border-radius: 10px;
+        background: var(--opt-surface);
+        box-shadow: 0 12px 32px rgba(0,0,0,0.16);
+        z-index: 30;
+      }
+
+      #sidebar-library.is-mobile-search-open .search-bar-wrap input {
+        min-height: 44px;
+        background: var(--opt-surface-alt);
+      }
+
+      #tab-library .library-content {
+        --library-content-gutter-left: 16px;
+        --library-content-gutter-right: 16px;
+        width: calc(100% - 64px);
+        min-width: 0;
+        padding: 20px 16px 48px;
+        overflow-x: hidden;
+      }
+
+      .library-section-surface {
+        padding: 16px var(--library-content-gutter-right) 16px var(--library-content-gutter-left);
+      }
+
+      .library-action-btn {
+        width: 44px;
+        height: 44px;
+        flex-basis: 44px;
+      }
+
+      .tags-back-btn,
+      #tab-library .page-clear-btn {
+        min-height: 44px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #tab-library .sidebar,
+      #tab-library .sidebar-item,
+      #tab-library .sidebar-toggle,
+      #tab-library .search-bar input,
+      #tab-library .search-bar-collapsed-btn,
+      #tab-library .tag-folder,
+      #tab-library .page-title,
+      #tab-library .page-clear-btn,
+      #tab-library .library-action-btn,
+      #tab-library .tags-back-btn {
+        transition: none;
+      }
+    }
+
     /* ---- Settings accessibility and reset confirmation ---- */
 
     #tab-settings button:focus-visible,
@@ -3031,11 +3396,11 @@
         <div class="sidebar-inner">
           <div class="search-bar">
             <div class="search-bar-wrap">
-              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input type="text" placeholder="Search highlights..." id="librarySearch">
             </div>
-            <button type="button" class="search-bar-collapsed-btn" title="Search" aria-label="Search">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <button type="button" class="search-bar-collapsed-btn" title="Search" aria-label="Search highlights" aria-expanded="false" aria-controls="librarySearch">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             </button>
           </div>
           <nav class="sidebar-nav">
@@ -3045,32 +3410,44 @@
                 <svg class="sidebar-chevron-expand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
               </span>
             </button>
-            <button type="button" class="sidebar-item active" data-view="all" title="All">
-              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+            <button type="button" class="sidebar-item active" data-view="all" title="All" aria-current="page">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
               <span class="sidebar-label">All</span>
             </button>
             <button type="button" class="sidebar-item" data-view="favorites" title="Favorites">
-              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.82 5.72 6.31.92-4.57 4.45 1.08 6.29L12 17.22l-5.64 2.96 1.08-6.29-4.57-4.45 6.31-.92L12 2.8z"/></svg></span>
               <span class="sidebar-label">Favorites</span>
             </button>
             <button type="button" class="sidebar-item" data-view="tags" title="Tags">
-              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
               <span class="sidebar-label">Tags</span>
             </button>
             <button type="button" class="sidebar-item" data-view="recently-deleted" title="Recently Deleted">
-              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
               <span class="sidebar-label">Recently Deleted</span>
             </button>
           </nav>
         </div>
       </aside>
-      <main class="content-area">
-        <div id="highlightsContainer">
-          <div class="empty-state">
-            <div class="empty-state-title">No highlights yet</div>
-            Highlight text on any webpage and it will appear here.
+      <main class="content-area library-content">
+        <header class="library-page-intro">
+          <h1 class="library-page-title">Library</h1>
+          <p class="library-page-description">Browse, organize, and revisit highlights saved from the web.</p>
+        </header>
+
+        <section class="library-view-shell" aria-labelledby="libraryViewHeading">
+          <header class="library-view-header">
+            <h2 class="library-view-title" id="libraryViewHeading" tabindex="-1">All Highlights</h2>
+            <p class="library-view-description" id="libraryViewDescription">Every saved highlight, grouped by webpage.</p>
+          </header>
+
+          <div id="highlightsContainer" class="library-section-surface">
+            <div class="empty-state">
+              <div class="empty-state-title">No highlights yet</div>
+              Highlight text on any webpage and it will appear here.
+            </div>
           </div>
-        </div>
+        </section>
       </main>
     </div>
 
