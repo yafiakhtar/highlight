@@ -83,6 +83,8 @@ let settingsScrollPosition = 0;
 let settingsHasStoredScrollPosition = false;
 let currentSettingsSection = 'appearance';
 let settingsScrollFrame = null;
+let settingsStickyHeaderOffset = 112;
+let settingsHeaderResizeObserver = null;
 
 function isSettingsTabActive() {
   const panel = document.getElementById('tab-settings');
@@ -91,6 +93,36 @@ function isSettingsTabActive() {
 
 function getSettingsSection(viewName) {
   return document.querySelector(`#tab-settings .settings-view[data-view="${viewName}"]`);
+}
+
+function updateSettingsStickyHeaderMetrics() {
+  const header = document.querySelector('#tab-settings .settings-page-intro');
+  const content = document.querySelector('#tab-settings .content-area');
+  if (!header || !content) return settingsStickyHeaderOffset;
+  const measuredHeight = Math.ceil(header.getBoundingClientRect().height);
+  if (measuredHeight > 0) {
+    settingsStickyHeaderOffset = measuredHeight + 16;
+    content.style.setProperty('--settings-sticky-header-offset', `${settingsStickyHeaderOffset}px`);
+  }
+  return settingsStickyHeaderOffset;
+}
+
+function getSettingsScrollReadingLine() {
+  const header = document.querySelector('#tab-settings .settings-page-intro');
+  if (!header) return settingsStickyHeaderOffset;
+  const headerBottom = header.getBoundingClientRect().bottom;
+  return Math.max(24, Math.min(window.innerHeight - 24, headerBottom + 16));
+}
+
+function initSettingsStickyHeaderMetrics() {
+  updateSettingsStickyHeaderMetrics();
+  const header = document.querySelector('#tab-settings .settings-page-intro');
+  if (!header || typeof ResizeObserver !== 'function') return;
+  settingsHeaderResizeObserver = new ResizeObserver(() => {
+    updateSettingsStickyHeaderMetrics();
+    if (isSettingsTabActive()) scheduleSettingsScrollSpy();
+  });
+  settingsHeaderResizeObserver.observe(header);
 }
 
 function setActiveSettingsSidebarItem(viewName) {
@@ -114,7 +146,8 @@ function updateSettingsScrollSpy() {
     .filter(item => item.element);
   if (sections.length === 0) return;
 
-  const readingLine = Math.min(180, window.innerHeight * 0.25);
+  updateSettingsStickyHeaderMetrics();
+  const readingLine = getSettingsScrollReadingLine();
   let activeViewName = sections[0].viewName;
   sections.forEach(item => {
     if (item.element.getBoundingClientRect().top <= readingLine) {
@@ -141,10 +174,12 @@ function scrollToSettingsSection(viewName, { focusHeading = false } = {}) {
   if (!section) return;
   closeFabPopover();
   setActiveSettingsSidebarItem(viewName);
+  updateSettingsStickyHeaderMetrics();
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  section.scrollIntoView({
+  const sectionTop = window.scrollY + section.getBoundingClientRect().top;
+  window.scrollTo({
+    top: Math.max(0, sectionTop - settingsStickyHeaderOffset),
     behavior: reduceMotion ? 'auto' : 'smooth',
-    block: 'start'
   });
   if (focusHeading) {
     const heading = section.querySelector('h2');
@@ -161,6 +196,7 @@ function captureSettingsScrollPosition() {
 function restoreSettingsScrollPosition() {
   const targetPosition = settingsHasStoredScrollPosition ? settingsScrollPosition : 0;
   requestAnimationFrame(() => {
+    updateSettingsStickyHeaderMetrics();
     const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo({ top: Math.min(targetPosition, maxScroll), behavior: 'auto' });
     scheduleSettingsScrollSpy();
@@ -204,6 +240,7 @@ window.addEventListener('scroll', () => {
 
 window.addEventListener('resize', () => {
   closeMobileLibrarySearch();
+  updateSettingsStickyHeaderMetrics();
   if (isSettingsTabActive()) scheduleSettingsScrollSpy();
 });
 
@@ -3272,6 +3309,7 @@ initSidebarNavigation();
 loadSidebarCollapsedState();
 initSidebarCollapseToggle();
 initSearchCollapsedBtn();
+initSettingsStickyHeaderMetrics();
 
 const urlParams = new URLSearchParams(window.location.search);
 const tabParam = urlParams.get('tab');
