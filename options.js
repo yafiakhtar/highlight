@@ -85,6 +85,29 @@ let currentSettingsSection = 'appearance';
 let settingsScrollFrame = null;
 let settingsStickyHeaderOffset = 112;
 let settingsHeaderResizeObserver = null;
+let navbarResizeObserver = null;
+
+function updateGlobalNavbarMetrics() {
+  const navbar = document.querySelector('header.navbar');
+  if (!navbar) return 0;
+  const navbarHeight = Math.ceil(navbar.getBoundingClientRect().height);
+  if (navbarHeight > 0) {
+    document.documentElement.style.setProperty('--global-navbar-height', `${navbarHeight}px`);
+  }
+  return navbarHeight;
+}
+
+function initGlobalNavbarMetrics() {
+  updateGlobalNavbarMetrics();
+  const navbar = document.querySelector('header.navbar');
+  if (!navbar || typeof ResizeObserver !== 'function') return;
+  navbarResizeObserver = new ResizeObserver(() => {
+    updateGlobalNavbarMetrics();
+    updateSettingsStickyHeaderMetrics();
+    if (isSettingsTabActive()) scheduleSettingsScrollSpy();
+  });
+  navbarResizeObserver.observe(navbar);
+}
 
 function isSettingsTabActive() {
   const panel = document.getElementById('tab-settings');
@@ -100,8 +123,9 @@ function updateSettingsStickyHeaderMetrics() {
   const content = document.querySelector('#tab-settings .content-area');
   if (!header || !content) return settingsStickyHeaderOffset;
   const measuredHeight = Math.ceil(header.getBoundingClientRect().height);
+  const navbarHeight = updateGlobalNavbarMetrics();
   if (measuredHeight > 0) {
-    settingsStickyHeaderOffset = measuredHeight + 16;
+    settingsStickyHeaderOffset = navbarHeight + measuredHeight + 16;
     content.style.setProperty('--settings-sticky-header-offset', `${settingsStickyHeaderOffset}px`);
   }
   return settingsStickyHeaderOffset;
@@ -4623,6 +4647,7 @@ initSidebarNavigation();
 loadSidebarCollapsedState();
 initSidebarCollapseToggle();
 initSearchCollapsedBtn();
+initGlobalNavbarMetrics();
 initSettingsStickyHeaderMetrics();
 initLibraryTagPopoverInteractions();
 initLibraryFolderPopoverInteractions();
