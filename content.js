@@ -37,7 +37,10 @@ let userSettings = { ...DEFAULT_SETTINGS };
 let fabLayoutV1 = null;
 
 const FAB_LAYOUT_KEY = 'fabLayoutV1';
-const FAB_ACTION_IDS = new Set(['favorite', 'comment', 'copyLink', 'share']);
+const FOLDERS_KEY = 'highlightFoldersV1';
+const FAB_ACTION_IDS = new Set(['favorite', 'folder', 'comment', 'copyLink', 'share']);
+const MAX_FOLDER_NAME_LENGTH = 60;
+const RECENT_FOLDER_LIMIT = 5;
 
 function defaultFabLayoutV1() {
   return { rows: 2, cols: 4, slots: ['preset1', 'preset2', 'preset3', 'preset4', null, null, null, null] };
@@ -130,6 +133,39 @@ function isExtensionContextValid() {
   }
 }
 
+function normalizeFolderName(name) {
+  return (name || '').toString().replace(/\s+/g, ' ').trim().slice(0, MAX_FOLDER_NAME_LENGTH);
+}
+
+function generateFolderId() {
+  return 'folder_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+}
+
+function normalizeFolders(rawFolders) {
+  if (!Array.isArray(rawFolders)) return [];
+  const seenIds = new Set();
+  const seenNames = new Set();
+  const folders = [];
+  rawFolders.forEach(raw => {
+    if (!raw || typeof raw !== 'object') return;
+    const name = normalizeFolderName(raw.name);
+    const normalizedName = name.toLocaleLowerCase();
+    if (!name || seenNames.has(normalizedName)) return;
+    let id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : generateFolderId();
+    if (seenIds.has(id)) id = generateFolderId();
+    seenIds.add(id);
+    seenNames.add(normalizedName);
+    const createdAt = Number.isFinite(raw.createdAt) ? raw.createdAt : Date.now();
+    folders.push({
+      id,
+      name,
+      createdAt,
+      lastUsedAt: Number.isFinite(raw.lastUsedAt) ? raw.lastUsedAt : createdAt
+    });
+  });
+  return folders;
+}
+
 function normalizePresets(presets) {
   const defaults = DEFAULT_SETTINGS.presets.map(p => ({ ...p }));
   const source = Array.isArray(presets) && presets.length > 0 ? presets : defaults;
@@ -220,6 +256,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
     rebuildHighlightFab();
   }
 
+  if (changes[FOLDERS_KEY]) {
+    const folders = normalizeFolders(changes[FOLDERS_KEY].newValue);
+    if (fabPostFolderId && !folders.some(folder => folder.id === fabPostFolderId)) {
+      fabPostFolderId = null;
+      syncHighlightFabState();
+    }
+    closeHighlightFabFolderPopover();
+  }
+
   // Highlight data for this page changed (e.g. deleted from options page)
   const key = getStorageKey();
   if (changes[key]) {
@@ -263,7 +308,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
         }
       });
       if (fabPostHighlightId && highlightsById.has(fabPostHighlightId)) {
-        fabPostPresetId = getPresetById(highlightsById.get(fabPostHighlightId)?.presetId).id;
+        const postHighlight = highlightsById.get(fabPostHighlightId);
+        fabPostPresetId = getPresetById(postHighlight?.presetId).id;
+        fabPostFolderId = typeof postHighlight?.folderId === 'string' ? postHighlight.folderId : null;
         syncHighlightFabState();
       }
       if (presetAssignmentChanged) applyCustomColors();
@@ -284,6 +331,7 @@ function applyCustomColors() {
   const theme = getPageTheme();
   const isDark = theme === 'dark';
   const presets = getPresets();
+  if (highlightFab) highlightFab.classList.toggle('is-dark-page', isDark);
 
   // Preset IDs are authoritative: recolor every existing mark immediately.
   document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
@@ -418,6 +466,7 @@ function normalizeStoredHighlights(raw) {
     const combinedText = parts.length > 1 ? tightenPunctuation(collapsed) : collapsed;
     const createdAt = Math.min(...items.map(it => (typeof it.createdAt === 'number' ? it.createdAt : Date.now())));
     const favorited = items.some(it => it && it.favorited === true);
+    const folderId = items.find(it => typeof it?.folderId === 'string' && it.folderId.trim())?.folderId || null;
     const rawPresetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
       || base.presetId
       || DEFAULT_SETTINGS.presets[0].id;
@@ -439,6 +488,8 @@ function normalizeStoredHighlights(raw) {
 
     if (favorited) out.favorited = true;
     else delete out.favorited;
+    if (folderId) out.folderId = folderId;
+    else delete out.folderId;
 
     merged.push(out);
   }
@@ -510,6 +561,9 @@ function saveHighlights({ favoriteOverrides = new Map() } = {}) {
         highlights.forEach(highlight => {
           const oldHighlight = oldById.get(highlight.id);
           highlight.createdAt = oldHighlight?.createdAt || Date.now();
+          if (typeof oldHighlight?.folderId === 'string' && oldHighlight.folderId) {
+            highlight.folderId = oldHighlight.folderId;
+          }
           if (favoriteOverrides.has(highlight.id)) {
             if (favoriteOverrides.get(highlight.id) === true) highlight.favorited = true;
           } else if (oldHighlight?.favorited === true) {
@@ -573,6 +627,12 @@ function patchStoredHighlight(highlightId, patch) {
           && patch.favorited !== true
         ) {
           delete nextHighlight.favorited;
+        }
+        if (
+          Object.prototype.hasOwnProperty.call(patch, 'folderId')
+          && (typeof patch.folderId !== 'string' || !patch.folderId)
+        ) {
+          delete nextHighlight.folderId;
         }
         const nextHighlights = highlights.slice();
         nextHighlights[index] = nextHighlight;
@@ -1116,8 +1176,12 @@ let highlightFab = null;
 let highlightFabButtons = [];
 let highlightFabStatus = null;
 let highlightFabStatusTimer = null;
+let highlightFabFolderPopover = null;
+let highlightFabFolderRequestVersion = 0;
+let highlightFabFolderRequestPending = false;
 let fabPostHighlightId = null;
 let fabPostPresetId = null;
+let fabPostFolderId = null;
 let fabPostTimeout = null;
 let fabHideTimeout = null;
 let fabPointerPaused = false;
@@ -1130,9 +1194,10 @@ let fabInteractionVersion = 0;
 const FAB_POST_ACTION_TIMEOUT_MS = 4000;
 const FAB_FADE_OUT_MS = 170;
 
-function hasFavoriteFabAction() {
+function hasPostHighlightFabAction() {
   const layout = fabLayoutV1 || defaultFabLayoutV1();
-  return Array.isArray(layout.slots) && layout.slots.includes('favorite');
+  return Array.isArray(layout.slots)
+    && (layout.slots.includes('favorite') || layout.slots.includes('folder'));
 }
 
 function clearFabPostTimeout() {
@@ -1155,6 +1220,7 @@ function clearFabPostState() {
   clearFabPostTimeout();
   fabPostHighlightId = null;
   fabPostPresetId = null;
+  fabPostFolderId = null;
   fabPointerPaused = false;
   fabKeyboardPaused = false;
   syncHighlightFabState();
@@ -1187,6 +1253,14 @@ function syncHighlightFabState() {
         : 'Highlight with the default tag and add to favorites';
       button.setAttribute('aria-label', button.title);
     }
+    if (button.dataset.actionId === 'folder') {
+      const hasFolder = Boolean(fabPostHighlightId && fabPostFolderId);
+      button.classList.toggle('has-folder', hasFolder);
+      button.title = fabPostHighlightId
+        ? (hasFolder ? 'Change folder' : 'Add this highlight to a folder')
+        : 'Highlight first';
+      button.setAttribute('aria-label', button.title);
+    }
   });
 }
 
@@ -1208,19 +1282,272 @@ function hideHighlightFabStatus() {
   if (highlightFabStatus) highlightFabStatus.classList.remove('is-visible');
 }
 
-function showHighlightFabStatus(message) {
+function showHighlightFabStatus(message, kind = 'default') {
   const status = ensureHighlightFabStatus();
   if (highlightFab) {
     status.style.left = highlightFab.style.left;
     status.style.top = highlightFab.style.top;
   }
   status.textContent = message;
+  status.dataset.kind = kind;
   status.classList.add('is-visible');
   if (highlightFabStatusTimer !== null) clearTimeout(highlightFabStatusTimer);
   highlightFabStatusTimer = setTimeout(() => {
     status.classList.remove('is-visible');
     highlightFabStatusTimer = null;
   }, 1600);
+}
+
+function createFolderIconElement() {
+  const namespace = 'http://www.w3.org/2000/svg';
+  const icon = document.createElementNS(namespace, 'svg');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(namespace, 'path');
+  path.setAttribute('d', 'M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z');
+  icon.appendChild(path);
+  return icon;
+}
+
+function closeHighlightFabFolderPopover({ restartTimeout = true } = {}) {
+  highlightFabFolderRequestVersion++;
+  const hadPendingRequest = highlightFabFolderRequestPending;
+  highlightFabFolderRequestPending = false;
+  if (!highlightFabFolderPopover && !hadPendingRequest) return;
+  highlightFabFolderPopover?.remove();
+  highlightFabFolderPopover = null;
+  fabPointerPaused = false;
+  fabKeyboardPaused = false;
+  if (restartTimeout) scheduleFabPostTimeout();
+}
+
+function positionHighlightFabFolderPopover(popover, anchor) {
+  const rect = anchor.getBoundingClientRect();
+  const width = popover.offsetWidth || 244;
+  const height = popover.offsetHeight || 240;
+  const viewportPadding = 10;
+  const gap = 7;
+  const left = Math.min(
+    Math.max(rect.right + window.scrollX - width, window.scrollX + viewportPadding),
+    window.scrollX + window.innerWidth - width - viewportPadding
+  );
+  const below = rect.bottom + window.scrollY + gap;
+  const above = rect.top + window.scrollY - height - gap;
+  const useAbove = rect.bottom + gap + height > window.innerHeight - viewportPadding
+    && above >= window.scrollY + viewportPadding;
+  popover.style.left = `${Math.round(left)}px`;
+  popover.style.top = `${Math.round(useAbove ? above : below)}px`;
+  popover.classList.toggle('opens-up', useAbove);
+}
+
+function patchStoredHighlightFolder(highlightId, requestedFolderId, createName = '') {
+  const key = getStorageKey();
+  return new Promise(resolve => {
+    if (!highlightId || !isExtensionContextValid()) {
+      resolve(null);
+      return;
+    }
+    chrome.storage.local.get([key, FOLDERS_KEY], result => {
+      if (chrome.runtime.lastError) {
+        resolve(null);
+        return;
+      }
+      const highlights = Array.isArray(result[key]) ? result[key] : [];
+      const highlightIndex = highlights.findIndex(highlight => highlight?.id === highlightId);
+      if (highlightIndex < 0) {
+        resolve(null);
+        return;
+      }
+      let folders = normalizeFolders(result[FOLDERS_KEY]);
+      const normalizedCreateName = normalizeFolderName(createName);
+      let folder = requestedFolderId ? folders.find(item => item.id === requestedFolderId) : null;
+      if (normalizedCreateName) {
+        folder = folders.find(item => item.name.toLocaleLowerCase() === normalizedCreateName.toLocaleLowerCase()) || null;
+        if (!folder) {
+          const now = Date.now();
+          folder = { id: generateFolderId(), name: normalizedCreateName, createdAt: now, lastUsedAt: now };
+          folders = [...folders, folder];
+        }
+      }
+      if (!folder) {
+        resolve(null);
+        return;
+      }
+      const usedAt = Date.now();
+      folders = folders.map(item => item.id === folder.id ? { ...item, lastUsedAt: usedAt } : item);
+      folder = folders.find(item => item.id === folder.id);
+      const nextHighlight = { ...highlights[highlightIndex], folderId: folder.id };
+      const nextHighlights = highlights.slice();
+      nextHighlights[highlightIndex] = nextHighlight;
+      chrome.storage.local.set({ [key]: nextHighlights, [FOLDERS_KEY]: folders }, () => {
+        resolve(chrome.runtime.lastError ? null : { highlight: nextHighlight, folder });
+      });
+    });
+  });
+}
+
+function createContentFolderPickerOption(folder, currentFolderId) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'text-highlighter-folder-option';
+  button.classList.toggle('is-current', folder.id === currentFolderId);
+  button.setAttribute('role', 'option');
+  button.setAttribute('aria-selected', String(folder.id === currentFolderId));
+  button.appendChild(createFolderIconElement());
+  const label = document.createElement('span');
+  label.textContent = folder.name;
+  button.appendChild(label);
+  if (folder.id === currentFolderId) {
+    const check = document.createElement('span');
+    check.className = 'text-highlighter-folder-check';
+    check.textContent = '✓';
+    check.setAttribute('aria-hidden', 'true');
+    button.appendChild(check);
+  }
+  button.addEventListener('mousedown', event => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  button.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    assignFabHighlightToFolder(folder.id);
+  });
+  return button;
+}
+
+function renderContentFolderPickerResults(list, query, folders, currentFolderId) {
+  list.innerHTML = '';
+  const normalizedQuery = normalizeFolderName(query);
+  const visible = normalizedQuery
+    ? folders.filter(folder => folder.name.toLocaleLowerCase().includes(normalizedQuery.toLocaleLowerCase()))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    : folders.slice().sort((a, b) => b.lastUsedAt - a.lastUsedAt).slice(0, RECENT_FOLDER_LIMIT);
+  const heading = document.createElement('div');
+  heading.className = 'text-highlighter-folder-heading';
+  heading.textContent = normalizedQuery ? 'Results' : 'Recent folders';
+  list.appendChild(heading);
+  visible.forEach(folder => list.appendChild(createContentFolderPickerOption(folder, currentFolderId)));
+  const exact = folders.some(folder => folder.name.toLocaleLowerCase() === normalizedQuery.toLocaleLowerCase());
+  if (normalizedQuery && !exact) {
+    const create = document.createElement('button');
+    create.type = 'button';
+    create.className = 'text-highlighter-folder-option is-create';
+    create.textContent = `Create “${normalizedQuery}”`;
+    create.addEventListener('mousedown', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    create.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      assignFabHighlightToFolder(null, normalizedQuery);
+    });
+    list.appendChild(create);
+  } else if (visible.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'text-highlighter-folder-empty';
+    empty.textContent = 'No folders yet. Search to create one.';
+    list.appendChild(empty);
+  }
+}
+
+function openHighlightFabFolderPopover(anchor) {
+  if (!fabPostHighlightId || !anchor) {
+    showHighlightFabStatus('Highlight first', 'folder');
+    return;
+  }
+  if (highlightFabFolderPopover || highlightFabFolderRequestPending) {
+    closeHighlightFabFolderPopover();
+    return;
+  }
+  clearFabPostTimeout();
+  fabPointerPaused = true;
+  fabKeyboardPaused = true;
+  const requestVersion = ++highlightFabFolderRequestVersion;
+  highlightFabFolderRequestPending = true;
+  chrome.storage.local.get(FOLDERS_KEY, result => {
+    if (requestVersion !== highlightFabFolderRequestVersion) return;
+    highlightFabFolderRequestPending = false;
+    if (chrome.runtime.lastError || !fabPostHighlightId || !anchor.isConnected) {
+      fabPointerPaused = false;
+      fabKeyboardPaused = false;
+      scheduleFabPostTimeout();
+      return;
+    }
+    const folders = normalizeFolders(result[FOLDERS_KEY]);
+    const popover = document.createElement('div');
+    popover.className = 'text-highlighter-folder-picker';
+    popover.classList.toggle('is-dark-page', getPageTheme() === 'dark');
+    popover.setAttribute('role', 'dialog');
+    popover.setAttribute('aria-label', 'Choose folder');
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.placeholder = 'Search folders…';
+    search.maxLength = MAX_FOLDER_NAME_LENGTH;
+    search.setAttribute('aria-label', 'Search or create folders');
+    search.addEventListener('mousedown', event => event.stopPropagation());
+    const list = document.createElement('div');
+    list.className = 'text-highlighter-folder-list';
+    list.setAttribute('role', 'listbox');
+    renderContentFolderPickerResults(list, '', folders, fabPostFolderId);
+    search.addEventListener('input', () => renderContentFolderPickerResults(list, search.value, folders, fabPostFolderId));
+    popover.append(search, list);
+    popover.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeHighlightFabFolderPopover();
+        anchor.focus({ preventScroll: true });
+        return;
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      const buttons = Array.from(popover.querySelectorAll('button:not(:disabled)'));
+      if (buttons.length === 0) return;
+      event.preventDefault();
+      const currentIndex = buttons.indexOf(document.activeElement);
+      let nextIndex = 0;
+      if (event.key === 'End') nextIndex = buttons.length - 1;
+      else if (event.key === 'ArrowDown') nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % buttons.length;
+      else if (event.key === 'ArrowUp') nextIndex = currentIndex < 0 ? buttons.length - 1 : (currentIndex - 1 + buttons.length) % buttons.length;
+      buttons[nextIndex].focus({ preventScroll: true });
+    });
+    popover.addEventListener('pointerenter', () => clearFabPostTimeout());
+    popover.addEventListener('focusin', () => clearFabPostTimeout());
+    document.body.appendChild(popover);
+    highlightFabFolderPopover = popover;
+    positionHighlightFabFolderPopover(popover, anchor);
+    requestAnimationFrame(() => {
+      if (highlightFabFolderPopover !== popover) return;
+      popover.classList.add('is-open');
+      search.focus({ preventScroll: true });
+    });
+  });
+}
+
+function assignFabHighlightToFolder(folderId, createName = '') {
+  const highlightId = fabPostHighlightId;
+  closeHighlightFabFolderPopover({ restartTimeout: false });
+  runFabOperation(async interactionVersion => {
+    const updated = await patchStoredHighlightFolder(highlightId, folderId, createName);
+    if (interactionVersion !== fabInteractionVersion) return;
+    if (!updated) {
+      hideHighlightFab();
+      return;
+    }
+    fabPostFolderId = updated.folder.id;
+    syncHighlightFabState();
+    showHighlightFabStatus(`Added to ${updated.folder.name}`, 'folder');
+    scheduleFabPostTimeout();
+  });
+}
+
+function handleFabFolderAction(anchor) {
+  if (!fabPostHighlightId) {
+    showHighlightFabStatus('Highlight first', 'folder');
+    return;
+  }
+  openHighlightFabFolderPopover(anchor);
 }
 
 function persistLastUsedPresetId(presetId) {
@@ -1248,7 +1575,7 @@ function runFabOperation(operation) {
 function confirmFavoriteAndClose() {
   if (highlightFab) highlightFab.classList.add('is-confirming-favorite');
   syncHighlightFabState();
-  showHighlightFabStatus('Added to Favorites');
+  showHighlightFabStatus('Added to Favorites', 'favorite');
   hideHighlightFab({ fade: true });
 }
 
@@ -1275,7 +1602,7 @@ function handleFabPresetAction(presetId) {
       return;
     }
     persistLastUsedPresetId(created.presetId);
-    if (!hasFavoriteFabAction()) {
+    if (!hasPostHighlightFabAction()) {
       hideHighlightFab();
       return;
     }
@@ -1314,6 +1641,7 @@ function handleFabFavoriteAction() {
 
 function rebuildHighlightFab() {
   if (!highlightFab) return;
+  closeHighlightFabFolderPopover({ restartTimeout: false });
   hideHighlightFab();
   highlightFab.innerHTML = '';
   highlightFabButtons = [];
@@ -1405,6 +1733,31 @@ function buildFabButtonsInto(container) {
     return btn;
   };
 
+  const makeFolderBtn = () => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'text-highlighter-fab-action text-highlighter-fab-folder';
+    btn.dataset.fabKind = 'action';
+    btn.dataset.actionId = 'folder';
+    btn.style.padding = '0';
+    btn.style.margin = '0';
+    btn.style.width = '18px';
+    btn.style.height = '18px';
+    btn.style.borderRadius = '999px';
+    btn.style.cursor = 'pointer';
+    btn.appendChild(createFolderIconElement());
+    btn.addEventListener('mousedown', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    btn.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      handleFabFolderAction(btn);
+    });
+    return btn;
+  };
+
   layout.slots.forEach((slotId) => {
     if (!slotId) {
       appendSpacer();
@@ -1450,6 +1803,13 @@ function buildFabButtonsInto(container) {
       return;
     }
 
+    if (slotId === 'folder') {
+      const folderBtn = makeFolderBtn();
+      container.appendChild(folderBtn);
+      highlightFabButtons.push(folderBtn);
+      return;
+    }
+
     if (FAB_ACTION_IDS.has(slotId)) {
       const actionBtn = makePlaceholderBtn(slotId);
       container.appendChild(actionBtn);
@@ -1475,6 +1835,9 @@ function createHighlightFab() {
   // Prevent mousedown on the container from clearing selection
   highlightFab.addEventListener('mousedown', (e) => {
     fabLastInputWasKeyboard = false;
+    if (highlightFabFolderPopover && !e.target.closest('.text-highlighter-fab-folder')) {
+      closeHighlightFabFolderPopover({ restartTimeout: false });
+    }
     e.preventDefault();
     e.stopPropagation();
   });
@@ -1547,6 +1910,7 @@ async function showHighlightFab(x, y) {
 
 function hideHighlightFab({ fade = false } = {}) {
   fabInteractionVersion++;
+  closeHighlightFabFolderPopover({ restartTimeout: false });
   clearFabPostState();
   if (!highlightFab) return;
 
@@ -1583,7 +1947,7 @@ function hideHighlightFab({ fade = false } = {}) {
 // Show FAB when text is selected
 document.addEventListener('mouseup', (e) => {
   // Ignore if clicking on the FAB itself
-  if (highlightFab && highlightFab.contains(e.target)) {
+  if ((highlightFab && highlightFab.contains(e.target)) || highlightFabFolderPopover?.contains(e.target)) {
     return;
   }
   
@@ -1619,7 +1983,7 @@ document.addEventListener('mouseup', (e) => {
 
 // Hide FAB when clicking elsewhere
 document.addEventListener('mousedown', (e) => {
-  if (highlightFab && !highlightFab.contains(e.target)) {
+  if (highlightFab && !highlightFab.contains(e.target) && !highlightFabFolderPopover?.contains(e.target)) {
     hideHighlightFab();
   }
 });
@@ -1632,7 +1996,8 @@ document.addEventListener('keydown', (event) => {
 });
 
 // Hide FAB on scroll to avoid orphan button
-document.addEventListener('scroll', () => {
+document.addEventListener('scroll', event => {
+  if (highlightFabFolderPopover?.contains(event.target)) return;
   hideHighlightFab();
 }, true);
 

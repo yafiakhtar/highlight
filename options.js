@@ -211,6 +211,7 @@ function activateMainTab(tabName) {
   const currentTab = document.querySelector('.tab-btn.active')?.dataset.tab;
   closeFabPopover();
   closeLibraryTagPopover();
+  closeLibraryFolderPopover();
   closeMobileLibrarySearch();
   if (currentTab === tabName) {
     if (tabName === 'settings') scheduleSettingsScrollSpy();
@@ -241,6 +242,7 @@ window.addEventListener('scroll', () => {
 
 window.addEventListener('resize', () => {
   closeMobileLibrarySearch();
+  setFoldersExpanded(foldersExpandedPreference);
   updateSettingsStickyHeaderMetrics();
   if (isSettingsTabActive()) scheduleSettingsScrollSpy();
 });
@@ -273,6 +275,7 @@ function resetSidebarForTab(tabName) {
 
 let currentLibraryView = 'all';
 let currentTagPresetId = null;
+let foldersExpandedPreference = false;
 
 const LIBRARY_VIEW_META = {
   all: {
@@ -286,6 +289,10 @@ const LIBRARY_VIEW_META = {
   tags: {
     title: 'Tags',
     description: 'Browse your saved highlights by tag.'
+  },
+  folders: {
+    title: 'Folders',
+    description: 'Create folders and organize highlights into one place.'
   },
   'recently-deleted': {
     title: 'Recently Deleted',
@@ -323,6 +330,81 @@ function closeMobileLibrarySearch() {
   setMobileLibrarySearchOpen(false);
 }
 
+function setFoldersExpanded(expanded, { persist = false } = {}) {
+  const nav = document.getElementById('libraryFoldersNav');
+  const toggle = document.getElementById('libraryFoldersToggle');
+  const children = document.getElementById('libraryFolderChildren');
+  if (!nav || !toggle || !children) return;
+  foldersExpandedPreference = Boolean(expanded);
+  const canExpand = !isMobileLibraryLayout()
+    && !document.getElementById('sidebar-library')?.classList.contains('collapsed');
+  const isExpanded = Boolean(expanded && canExpand);
+  nav.classList.toggle('is-expanded', isExpanded);
+  toggle.setAttribute('aria-expanded', String(isExpanded));
+  toggle.setAttribute('aria-label', isExpanded ? 'Collapse folders' : 'Expand folders');
+  toggle.title = isExpanded ? 'Collapse folders' : 'Expand folders';
+  children.hidden = !isExpanded;
+  if (persist) chrome.storage.local.set({ [FOLDERS_EXPANDED_KEY]: foldersExpandedPreference });
+}
+
+function renderLibraryFolderChildren(folders = activeLibraryFolders) {
+  const children = document.getElementById('libraryFolderChildren');
+  if (!children) return;
+  const parentItem = document.querySelector('#sidebar-library .sidebar-item[data-view="folders"]');
+  if (parentItem) {
+    const isFoldersView = currentLibraryView === 'folders';
+    parentItem.classList.toggle('active', isFoldersView);
+    if (isFoldersView && !currentFolderId) parentItem.setAttribute('aria-current', 'page');
+    else parentItem.removeAttribute('aria-current');
+  }
+  children.innerHTML = '';
+  sortFoldersByName(folders).forEach(folder => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'library-folder-child';
+    button.classList.toggle('active', currentLibraryView === 'folders' && currentFolderId === folder.id);
+    if (currentLibraryView === 'folders' && currentFolderId === folder.id) {
+      button.setAttribute('aria-current', 'page');
+    }
+    button.title = folder.name;
+
+    const label = document.createElement('span');
+    label.className = 'library-folder-child-label';
+    label.textContent = folder.name;
+    button.appendChild(label);
+    button.addEventListener('click', () => {
+      currentLibraryView = 'folders';
+      currentFolderId = folder.id;
+      syncLibraryViewHeader('folders');
+      document.querySelectorAll('#sidebar-library .sidebar-item').forEach(item => {
+        const isActive = item.dataset.view === 'folders';
+        item.classList.toggle('active', isActive);
+        item.removeAttribute('aria-current');
+      });
+      renderLibraryFolderChildren();
+      refreshLibrary();
+    });
+    children.appendChild(button);
+  });
+}
+
+function initLibraryFoldersNavigation() {
+  const toggle = document.getElementById('libraryFoldersToggle');
+  if (toggle) {
+    toggle.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const expanded = toggle.getAttribute('aria-expanded') !== 'true';
+      setFoldersExpanded(expanded, { persist: true });
+    });
+  }
+  chrome.storage.local.get([FOLDERS_KEY, FOLDERS_EXPANDED_KEY], result => {
+    activeLibraryFolders = normalizeFolders(result[FOLDERS_KEY]);
+    renderLibraryFolderChildren();
+    setFoldersExpanded(result[FOLDERS_EXPANDED_KEY] === true);
+  });
+}
+
 function isLibraryTabActive() {
   const panel = document.getElementById('tab-library');
   return !!(panel && panel.classList.contains('active'));
@@ -345,6 +427,7 @@ function switchSidebarView(tabName, viewName) {
     if (viewName !== 'tags') {
       currentTagPresetId = null;
     }
+    currentFolderId = null;
     syncLibraryViewHeader(viewName);
     const sidebar = panel.querySelector('.sidebar');
     sidebar.querySelectorAll('.sidebar-item').forEach(item => {
@@ -353,6 +436,7 @@ function switchSidebarView(tabName, viewName) {
       if (isActive) item.setAttribute('aria-current', 'page');
       else item.removeAttribute('aria-current');
     });
+    renderLibraryFolderChildren();
     refreshLibrary();
   } else if (tabName === 'settings') {
     scrollToSettingsSection(viewName);
@@ -461,6 +545,7 @@ const fabPopoverLayerEl = document.getElementById('fabPopoverLayer');
 
 const FAB_ACTION_DEFS = [
   { id: 'favorite', label: 'Favorite', type: 'action', glyph: '☆', paletteGlyph: '☆' },
+  { id: 'folder', label: 'Folder', type: 'action', glyph: '', paletteGlyph: '', icon: 'folder' },
   { id: 'comment', label: 'Comment', type: 'placeholder', glyph: '⋯', paletteGlyph: '✎' },
   { id: 'copyLink', label: 'Copy link', type: 'placeholder', glyph: '⋯', paletteGlyph: '⧉' },
   { id: 'share', label: 'Share', type: 'placeholder', glyph: '⋯', paletteGlyph: '↗' }
@@ -631,7 +716,7 @@ function positionFabPopover(popover, anchor) {
   popover.classList.toggle('opens-up', shouldOpenUp);
 }
 
-function createFabPopoverOption({ label, icon, color, danger = false, onSelect }) {
+function createFabPopoverOption({ label, icon, iconName, color, danger = false, onSelect }) {
   const option = document.createElement('button');
   option.type = 'button';
   option.className = 'fab-popover-option';
@@ -640,6 +725,7 @@ function createFabPopoverOption({ label, icon, color, danger = false, onSelect }
   const visual = document.createElement('span');
   visual.className = 'fab-popover-option-icon';
   if (color) visual.style.backgroundColor = color;
+  else if (iconName) visual.innerHTML = libraryIconMarkup(iconName);
   else visual.textContent = icon || '';
 
   const text = document.createElement('span');
@@ -677,6 +763,7 @@ function createFabPickerGroup(title, defs, badgeText = '') {
     group.appendChild(createFabPopoverOption({
       label: def.label,
       icon: def.paletteGlyph || def.glyph,
+      iconName: def.icon,
       color: def.type === 'preset' ? getPresetColorsForId(def.id).current : '',
       onSelect: () => placeFabItemInSlot(activeFabSlotIndex, def.id)
     }));
@@ -851,6 +938,8 @@ function createFabToolboxGroup(title, defs, badgeText = '') {
     swatch.className = 'fab-toolbox-swatch';
     if (def.type === 'preset') {
       swatch.style.backgroundColor = getPresetColorsForId(def.id).current;
+    } else if (def.icon) {
+      swatch.innerHTML = libraryIconMarkup(def.icon);
     } else {
       swatch.textContent = def.paletteGlyph || def.glyph || '⋯';
     }
@@ -981,6 +1070,8 @@ function renderFabGrid() {
       visual.className = 'fab-slot-visual';
       if (def.type === 'preset') {
         visual.style.backgroundColor = getPresetColorsForId(def.id).current;
+      } else if (def.icon) {
+        visual.innerHTML = libraryIconMarkup(def.icon);
       } else {
         visual.textContent = def.glyph || '⋯';
       }
@@ -1077,6 +1168,8 @@ function renderFabPreview() {
 
     if (def.type === 'preset') {
       btn.style.backgroundColor = getPresetColorsForId(def.id).current;
+    } else if (def.icon) {
+      btn.innerHTML = libraryIconMarkup(def.icon);
     } else {
       btn.textContent = def.glyph || '⋯';
     }
@@ -2200,6 +2293,7 @@ const highlightsContainer = document.getElementById('highlightsContainer');
 const highlightCount = document.getElementById('highlightCount');
 const librarySearchInput = document.getElementById('librarySearch');
 const libraryTagPopoverLayerEl = document.getElementById('libraryTagPopoverLayer');
+const libraryFolderPopoverLayerEl = document.getElementById('libraryFolderPopoverLayer');
 
 let libraryQuery = '';
 let librarySearchDebounce = null;
@@ -2209,8 +2303,72 @@ let libraryTagPopoverCleanupTimer = null;
 let libraryTagWriteQueue = Promise.resolve();
 let libraryTagPopoverListenersInitialized = false;
 let pendingLibraryTagFocus = null;
+let currentLibraryFolderPopover = null;
+let currentLibraryFolderPopoverAnchor = null;
+let libraryFolderPopoverCleanupTimer = null;
+let libraryFolderPopoverRequestVersion = 0;
+let libraryFolderPopoverListenersInitialized = false;
+let pendingLibraryFolderFocus = null;
 
 const RECENTLY_DELETED_KEY = 'recentlyDeletedHighlights';
+const FOLDERS_KEY = 'highlightFoldersV1';
+const FOLDERS_EXPANDED_KEY = 'libraryFoldersExpanded';
+const MAX_FOLDER_NAME_LENGTH = 60;
+const RECENT_FOLDER_LIMIT = 5;
+
+let activeLibraryFolders = [];
+let currentFolderId = null;
+let editingFolderId = null;
+let folderDeleteTargetId = null;
+let folderDeleteTrigger = null;
+let folderMutationQueue = Promise.resolve();
+const folderDeleteDialog = document.getElementById('folderDeleteDialog');
+const folderDeleteDialogTitle = document.getElementById('folderDeleteDialogTitle');
+const folderDeleteDialogDescription = document.getElementById('folderDeleteDialogDescription');
+const cancelFolderDeleteBtn = document.getElementById('cancelFolderDeleteBtn');
+const keepFolderHighlightsBtn = document.getElementById('keepFolderHighlightsBtn');
+const deleteFolderHighlightsBtn = document.getElementById('deleteFolderHighlightsBtn');
+
+function normalizeFolderName(name) {
+  return (name || '').toString().replace(/\s+/g, ' ').trim().slice(0, MAX_FOLDER_NAME_LENGTH);
+}
+
+function generateFolderId() {
+  return 'folder_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+}
+
+function normalizeFolders(rawFolders) {
+  if (!Array.isArray(rawFolders)) return [];
+  const seenIds = new Set();
+  const seenNames = new Set();
+  const folders = [];
+  rawFolders.forEach(raw => {
+    if (!raw || typeof raw !== 'object') return;
+    const name = normalizeFolderName(raw.name);
+    const normalizedName = name.toLocaleLowerCase();
+    if (!name || seenNames.has(normalizedName)) return;
+    let id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : generateFolderId();
+    if (seenIds.has(id)) id = generateFolderId();
+    seenIds.add(id);
+    seenNames.add(normalizedName);
+    const createdAt = Number.isFinite(raw.createdAt) ? raw.createdAt : Date.now();
+    folders.push({
+      id,
+      name,
+      createdAt,
+      lastUsedAt: Number.isFinite(raw.lastUsedAt) ? raw.lastUsedAt : createdAt
+    });
+  });
+  return folders;
+}
+
+function sortFoldersByName(folders) {
+  return folders.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+function getFolderById(folderId, folders = activeLibraryFolders) {
+  return folders.find(folder => folder.id === folderId) || null;
+}
 
 function generateTrashId() {
   return 'tr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
@@ -2340,6 +2498,7 @@ function normalizeStoredHighlights(raw) {
     const combinedText = parts.length > 1 ? tightenPunctuation(collapsed) : collapsed;
     const createdAt = Math.min(...items.map(it => (typeof it.createdAt === 'number' ? it.createdAt : Date.now())));
     const favorited = items.some(it => it && it.favorited === true);
+    const folderId = items.find(it => typeof it?.folderId === 'string' && it.folderId.trim())?.folderId || null;
     const rawPresetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
       || base.presetId
       || DEFAULTS.presets[0].id;
@@ -2359,6 +2518,8 @@ function normalizeStoredHighlights(raw) {
     delete out.color;
     if (favorited) out.favorited = true;
     else delete out.favorited;
+    if (folderId) out.folderId = folderId;
+    else delete out.folderId;
 
     merged.push(out);
   }
@@ -2368,9 +2529,12 @@ function normalizeStoredHighlights(raw) {
 
 function refreshLibrary() {
   closeLibraryTagPopover({ immediate: true });
+  closeLibraryFolderPopover({ immediate: true });
   syncLibraryViewHeader();
   if (currentLibraryView === 'recently-deleted') {
     loadRecentlyDeleted();
+  } else if (currentLibraryView === 'folders') {
+    loadFoldersView();
   } else if (currentLibraryView === 'tags') {
     loadTagsView();
   } else if (currentLibraryView === 'favorites') {
@@ -2754,6 +2918,316 @@ function initLibraryTagPopoverInteractions() {
   }, true);
 }
 
+function closeLibraryFolderPopover({ immediate = false, restoreFocus = false } = {}) {
+  libraryFolderPopoverRequestVersion++;
+  if (libraryFolderPopoverCleanupTimer) {
+    clearTimeout(libraryFolderPopoverCleanupTimer);
+    libraryFolderPopoverCleanupTimer = null;
+  }
+  const popover = currentLibraryFolderPopover;
+  const anchor = currentLibraryFolderPopoverAnchor;
+  currentLibraryFolderPopover = null;
+  currentLibraryFolderPopoverAnchor = null;
+  if (anchor) anchor.setAttribute('aria-expanded', 'false');
+  if (restoreFocus && anchor?.isConnected) anchor.focus({ preventScroll: true });
+  if (!popover) {
+    if (immediate && libraryFolderPopoverLayerEl) libraryFolderPopoverLayerEl.innerHTML = '';
+    return;
+  }
+  const remove = () => popover.remove();
+  if (immediate || prefersReducedLibraryMotion()) {
+    remove();
+    return;
+  }
+  popover.classList.remove('is-open');
+  popover.classList.add('is-closing');
+  popover.setAttribute('aria-hidden', 'true');
+  popover.addEventListener('transitionend', remove, { once: true });
+  libraryFolderPopoverCleanupTimer = setTimeout(remove, 220);
+}
+
+function patchLibraryHighlightFolder(pageUrl, highlightId, requestedFolderId, createName = '') {
+  const key = 'highlights_' + pageUrl;
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get([key, FOLDERS_KEY], result => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      let folders = normalizeFolders(result[FOLDERS_KEY]);
+      const highlights = Array.isArray(result[key]) ? result[key] : [];
+      const index = highlights.findIndex(highlight => highlight?.id === highlightId);
+      if (index < 0) {
+        resolve({ status: 'missing' });
+        return;
+      }
+
+      let folder = requestedFolderId ? folders.find(item => item.id === requestedFolderId) : null;
+      const normalizedCreateName = normalizeFolderName(createName);
+      if (normalizedCreateName) {
+        folder = folders.find(item => item.name.toLocaleLowerCase() === normalizedCreateName.toLocaleLowerCase()) || null;
+        if (!folder) {
+          const now = Date.now();
+          folder = { id: generateFolderId(), name: normalizedCreateName, createdAt: now, lastUsedAt: now };
+          folders = [...folders, folder];
+        }
+      }
+
+      const currentFolderId = typeof highlights[index].folderId === 'string' ? highlights[index].folderId : null;
+      const nextFolderId = folder?.id || null;
+      if (currentFolderId === nextFolderId && !normalizedCreateName) {
+        resolve({ status: 'unchanged', folder });
+        return;
+      }
+
+      const nextHighlight = { ...highlights[index] };
+      if (nextFolderId) nextHighlight.folderId = nextFolderId;
+      else delete nextHighlight.folderId;
+      const nextHighlights = highlights.slice();
+      nextHighlights[index] = nextHighlight;
+      if (folder) {
+        const usedAt = Date.now();
+        folders = folders.map(item => item.id === folder.id ? { ...item, lastUsedAt: usedAt } : item);
+        folder = folders.find(item => item.id === folder.id);
+      }
+
+      chrome.storage.local.set({ [key]: nextHighlights, [FOLDERS_KEY]: folders }, () => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve({ status: 'changed', folder });
+      });
+    });
+  });
+}
+
+function restorePendingLibraryFolderSelectorFocus() {
+  if (!pendingLibraryFolderFocus) return;
+  const target = pendingLibraryFolderFocus;
+  pendingLibraryFolderFocus = null;
+  requestAnimationFrame(() => {
+    const selector = Array.from(highlightsContainer.querySelectorAll('.snippet-folder-selector')).find(button => (
+      button.dataset.pageUrl === target.pageUrl && button.dataset.highlightId === target.highlightId
+    ));
+    selector?.focus({ preventScroll: true });
+  });
+}
+
+function assignLibraryHighlightFolder(pageUrl, highlightId, folderId, createName = '') {
+  pendingLibraryFolderFocus = { pageUrl, highlightId };
+  closeLibraryFolderPopover({ immediate: true });
+  queueFolderMutation(() => patchLibraryHighlightFolder(pageUrl, highlightId, folderId, createName))
+    .then(result => {
+      if (result.status === 'changed') {
+        showToast(result.folder ? `Added to ${result.folder.name}` : 'Removed from folder');
+      } else if (result.status === 'unchanged') {
+        restorePendingLibraryFolderSelectorFocus();
+      } else {
+        pendingLibraryFolderFocus = null;
+        showToast('Highlight is no longer available');
+        refreshLibrary();
+      }
+    })
+    .catch(() => {
+      pendingLibraryFolderFocus = null;
+      showToast('Could not update folder');
+      refreshLibrary();
+    });
+}
+
+function createLibraryFolderPickerOption(folder, currentFolderId, onSelect) {
+  const option = document.createElement('button');
+  option.type = 'button';
+  option.className = 'fab-popover-option folder-picker-option';
+  option.classList.toggle('is-current', folder.id === currentFolderId);
+  option.setAttribute('role', 'option');
+  option.setAttribute('aria-selected', String(folder.id === currentFolderId));
+  const icon = document.createElement('span');
+  icon.className = 'fab-popover-option-icon';
+  icon.innerHTML = libraryIconMarkup('folder');
+  const label = document.createElement('span');
+  label.className = 'fab-popover-option-label';
+  label.textContent = folder.name;
+  option.append(icon, label);
+  if (folder.id === currentFolderId) {
+    const check = document.createElement('span');
+    check.textContent = '✓';
+    check.setAttribute('aria-hidden', 'true');
+    option.appendChild(check);
+  }
+  option.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    onSelect();
+  });
+  return option;
+}
+
+function renderLibraryFolderPickerResults(list, query, folders, currentFolderId, pageUrl, highlightId) {
+  list.innerHTML = '';
+  const normalizedQuery = normalizeFolderName(query);
+  const shownFolders = normalizedQuery
+    ? sortFoldersByName(folders.filter(folder => folder.name.toLocaleLowerCase().includes(normalizedQuery.toLocaleLowerCase())))
+    : folders.slice().sort((a, b) => b.lastUsedAt - a.lastUsedAt).slice(0, RECENT_FOLDER_LIMIT);
+
+  const heading = document.createElement('div');
+  heading.className = 'folder-picker-heading';
+  heading.textContent = normalizedQuery ? 'Results' : 'Recent folders';
+  list.appendChild(heading);
+
+  if (currentFolderId && !normalizedQuery) {
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'fab-popover-option folder-picker-option is-danger';
+    remove.setAttribute('role', 'option');
+    remove.innerHTML = `<span class="fab-popover-option-icon">×</span><span class="fab-popover-option-label">Remove from folder</span>`;
+    remove.addEventListener('click', () => assignLibraryHighlightFolder(pageUrl, highlightId, null));
+    list.appendChild(remove);
+  }
+
+  shownFolders.forEach(folder => {
+    list.appendChild(createLibraryFolderPickerOption(folder, currentFolderId, () => {
+      assignLibraryHighlightFolder(pageUrl, highlightId, folder.id);
+    }));
+  });
+
+  const exactMatch = folders.some(folder => folder.name.toLocaleLowerCase() === normalizedQuery.toLocaleLowerCase());
+  if (normalizedQuery && !exactMatch) {
+    const create = document.createElement('button');
+    create.type = 'button';
+    create.className = 'fab-popover-option folder-picker-create';
+    create.innerHTML = `${libraryIconMarkup('plus')}<span class="fab-popover-option-label"></span>`;
+    create.querySelector('svg')?.classList.add('fab-popover-option-icon');
+    create.querySelector('.fab-popover-option-label').textContent = `Create “${normalizedQuery}”`;
+    create.addEventListener('click', () => assignLibraryHighlightFolder(pageUrl, highlightId, null, normalizedQuery));
+    list.appendChild(create);
+  } else if (shownFolders.length === 0 && !currentFolderId) {
+    const empty = document.createElement('div');
+    empty.className = 'folder-picker-empty';
+    empty.textContent = normalizedQuery ? 'No matching folders' : 'No folders yet. Search to create one.';
+    list.appendChild(empty);
+  }
+}
+
+function openLibraryFolderPopover(anchor, pageUrl, highlight) {
+  if (!libraryFolderPopoverLayerEl || !anchor || !highlight) return;
+  if (currentLibraryFolderPopoverAnchor === anchor) {
+    closeLibraryFolderPopover({ restoreFocus: true });
+    return;
+  }
+  closeLibraryTagPopover({ immediate: true });
+  closeLibraryFolderPopover({ immediate: true });
+  const requestVersion = ++libraryFolderPopoverRequestVersion;
+  chrome.storage.local.get(FOLDERS_KEY, result => {
+    if (requestVersion !== libraryFolderPopoverRequestVersion || !anchor.isConnected) return;
+    activeLibraryFolders = normalizeFolders(result[FOLDERS_KEY]);
+    const currentFolder = getFolderById(highlight.folderId);
+    const popover = document.createElement('div');
+    popover.className = 'fab-popover library-folder-popover';
+    popover.setAttribute('role', 'dialog');
+    popover.setAttribute('aria-label', 'Choose folder');
+
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'folder-picker-search-wrap';
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.className = 'folder-picker-search';
+    search.placeholder = 'Search folders…';
+    search.maxLength = MAX_FOLDER_NAME_LENGTH;
+    search.setAttribute('aria-label', 'Search or create folders');
+    searchWrap.appendChild(search);
+    const list = document.createElement('div');
+    list.className = 'library-tag-popover-list';
+    list.setAttribute('role', 'listbox');
+    renderLibraryFolderPickerResults(list, '', activeLibraryFolders, currentFolder?.id || null, pageUrl, highlight.id);
+    search.addEventListener('input', () => {
+      renderLibraryFolderPickerResults(list, search.value, activeLibraryFolders, currentFolder?.id || null, pageUrl, highlight.id);
+    });
+
+    const footer = document.createElement('div');
+    footer.className = 'library-tag-popover-footer';
+    const manage = document.createElement('button');
+    manage.type = 'button';
+    manage.className = 'fab-popover-option library-tag-manage';
+    manage.innerHTML = '<span>Manage Folders</span><span aria-hidden="true">→</span>';
+    manage.addEventListener('click', () => {
+      closeLibraryFolderPopover({ immediate: true });
+      switchSidebarView('library', 'folders');
+      requestAnimationFrame(() => document.getElementById('libraryViewHeading')?.focus({ preventScroll: true }));
+    });
+    footer.appendChild(manage);
+    popover.append(searchWrap, list, footer);
+    popover.addEventListener('keydown', event => {
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      const buttons = Array.from(popover.querySelectorAll('button:not(:disabled)'));
+      if (buttons.length === 0) return;
+      event.preventDefault();
+      const currentIndex = buttons.indexOf(document.activeElement);
+      let nextIndex = 0;
+      if (event.key === 'End') nextIndex = buttons.length - 1;
+      else if (event.key === 'ArrowDown') nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % buttons.length;
+      else if (event.key === 'ArrowUp') nextIndex = currentIndex < 0 ? buttons.length - 1 : (currentIndex - 1 + buttons.length) % buttons.length;
+      buttons[nextIndex].focus({ preventScroll: true });
+    });
+
+    libraryFolderPopoverLayerEl.replaceChildren(popover);
+    currentLibraryFolderPopover = popover;
+    currentLibraryFolderPopoverAnchor = anchor;
+    anchor.setAttribute('aria-expanded', 'true');
+    positionLibraryTagPopover(popover, anchor);
+    requestAnimationFrame(() => {
+      if (currentLibraryFolderPopover !== popover) return;
+      popover.classList.add('is-open');
+      search.focus({ preventScroll: true });
+    });
+  });
+}
+
+function createLibraryFolderSelector(pageUrl, highlight) {
+  const folder = getFolderById(highlight.folderId);
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'snippet-folder-selector';
+  button.classList.toggle('has-folder', Boolean(folder));
+  button.innerHTML = libraryIconMarkup('folder');
+  button.title = folder ? `Folder: ${folder.name}` : 'Add to folder';
+  button.setAttribute('aria-label', folder ? `Change folder. Current folder: ${folder.name}` : 'Add highlight to folder');
+  button.setAttribute('aria-haspopup', 'dialog');
+  button.setAttribute('aria-expanded', 'false');
+  button.dataset.pageUrl = pageUrl;
+  button.dataset.highlightId = highlight.id;
+  button.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openLibraryFolderPopover(button, pageUrl, highlight);
+  });
+  return button;
+}
+
+function initLibraryFolderPopoverInteractions() {
+  if (libraryFolderPopoverListenersInitialized) return;
+  libraryFolderPopoverListenersInitialized = true;
+  document.addEventListener('pointerdown', event => {
+    if (!currentLibraryFolderPopover) return;
+    if (currentLibraryFolderPopover.contains(event.target)) return;
+    if (currentLibraryFolderPopoverAnchor?.contains(event.target)) return;
+    closeLibraryFolderPopover();
+  });
+  document.addEventListener('focusin', event => {
+    if (!currentLibraryFolderPopover) return;
+    if (currentLibraryFolderPopover.contains(event.target)) return;
+    if (currentLibraryFolderPopoverAnchor?.contains(event.target)) return;
+    closeLibraryFolderPopover();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !currentLibraryFolderPopover) return;
+    event.preventDefault();
+    closeLibraryFolderPopover({ restoreFocus: true });
+  });
+  window.addEventListener('resize', () => closeLibraryFolderPopover());
+  window.addEventListener('scroll', event => {
+    if (currentLibraryFolderPopover && !currentLibraryFolderPopover.contains(event.target)) closeLibraryFolderPopover();
+  }, true);
+}
+
 function loadTagsView() {
   if (currentTagPresetId) {
     loadTagHighlights(currentTagPresetId);
@@ -2948,6 +3422,9 @@ function libraryIconMarkup(iconName) {
     back: '<path d="m15 18-6-6 6-6"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
     chevron: '<path d="m8 10 4 4 4-4"/>',
+    folder: '<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/>',
+    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4z"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
     star: '<path d="M12 2.8l2.82 5.72 6.31.92-4.57 4.45 1.08 6.29L12 17.22l-5.64 2.96 1.08-6.29-4.57-4.45 6.31-.92L12 2.8z"/>',
     trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6"/>',
     restore: '<path d="M3 7v5h5"/><path d="M5.1 16a8 8 0 1 0 .5-9.4L3 9"/>'
@@ -2979,10 +3456,428 @@ function createTagsToolbar(preset) {
   return toolbar;
 }
 
+function queueFolderMutation(task) {
+  folderMutationQueue = folderMutationQueue.catch(() => undefined).then(task);
+  return folderMutationQueue;
+}
+
+function findUniqueFolderName(folders, baseName = 'New Folder') {
+  const used = new Set(folders.map(folder => folder.name.toLocaleLowerCase()));
+  if (!used.has(baseName.toLocaleLowerCase())) return baseName;
+  let suffix = 2;
+  while (used.has(`${baseName} ${suffix}`.toLocaleLowerCase())) suffix++;
+  return `${baseName} ${suffix}`;
+}
+
+function createFolderFromManager() {
+  libraryQuery = '';
+  if (librarySearchInput) librarySearchInput.value = '';
+  queueFolderMutation(() => new Promise((resolve, reject) => {
+    chrome.storage.local.get(FOLDERS_KEY, result => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      const folders = normalizeFolders(result[FOLDERS_KEY]);
+      const now = Date.now();
+      const folder = {
+        id: generateFolderId(),
+        name: findUniqueFolderName(folders),
+        createdAt: now,
+        lastUsedAt: now
+      };
+      editingFolderId = folder.id;
+      chrome.storage.local.set({ [FOLDERS_KEY]: [...folders, folder] }, () => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(folder);
+      });
+    });
+  })).catch(() => showToast('Could not create folder'));
+}
+
+function renameFolder(folderId, requestedName) {
+  const name = normalizeFolderName(requestedName);
+  if (!name) {
+    showToast('Folder name cannot be empty');
+    editingFolderId = null;
+    refreshLibrary();
+    return;
+  }
+  queueFolderMutation(() => new Promise((resolve, reject) => {
+    chrome.storage.local.get(FOLDERS_KEY, result => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      const folders = normalizeFolders(result[FOLDERS_KEY]);
+      if (folders.some(folder => folder.id !== folderId && folder.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        resolve({ duplicate: true });
+        return;
+      }
+      let changed = false;
+      const next = folders.map(folder => {
+        if (folder.id !== folderId || folder.name === name) return folder;
+        changed = true;
+        return { ...folder, name };
+      });
+      if (!changed) {
+        resolve({ changed: false });
+        return;
+      }
+      chrome.storage.local.set({ [FOLDERS_KEY]: next }, () => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve({ changed: true });
+      });
+    });
+  })).then(result => {
+    editingFolderId = null;
+    if (result?.duplicate) showToast('A folder with that name already exists');
+    refreshLibrary();
+  }).catch(() => {
+    editingFolderId = null;
+    showToast('Could not rename folder');
+    refreshLibrary();
+  });
+}
+
+function countHighlightsByFolder(all, folders) {
+  const counts = Object.fromEntries(folders.map(folder => [folder.id, 0]));
+  Object.keys(all).forEach(storageKey => {
+    if (!storageKey.startsWith('highlights_') || !Array.isArray(all[storageKey])) return;
+    all[storageKey].forEach(highlight => {
+      if (highlight && typeof highlight.folderId === 'string' && counts[highlight.folderId] !== undefined) {
+        counts[highlight.folderId]++;
+      }
+    });
+  });
+  return counts;
+}
+
+function loadFoldersView() {
+  chrome.storage.local.get(null, all => {
+    activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
+    renderLibraryFolderChildren(activeLibraryFolders);
+    const selectedFolder = getFolderById(currentFolderId);
+    if (currentFolderId && selectedFolder) {
+      const heading = document.getElementById('libraryViewHeading');
+      const description = document.getElementById('libraryViewDescription');
+      if (heading) heading.textContent = selectedFolder.name;
+      if (description) description.textContent = 'Highlights saved in this folder.';
+      renderFolderHighlights(all, selectedFolder);
+      return;
+    }
+    currentFolderId = null;
+    syncLibraryViewHeader('folders');
+    const folderTokens = normalizeQuery(libraryQuery);
+    const visibleFolders = folderTokens.length > 0
+      ? activeLibraryFolders.filter(folder => matchesTokens(folder.name, folderTokens))
+      : activeLibraryFolders;
+    renderFolderManager(visibleFolders, countHighlightsByFolder(all, activeLibraryFolders), {
+      filtered: folderTokens.length > 0,
+      totalFolders: activeLibraryFolders.length
+    });
+  });
+}
+
+function renderFolderManager(folders, counts, { filtered = false, totalFolders = folders.length } = {}) {
+  highlightCount.textContent = `${filtered ? folders.length : totalFolders} ${folders.length === 1 ? 'folder' : 'folders'}`;
+  highlightsContainer.innerHTML = '';
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'folder-manager-toolbar';
+  const summary = document.createElement('span');
+  summary.className = 'page-url';
+  summary.textContent = 'One folder per highlight';
+  const addButton = document.createElement('button');
+  addButton.type = 'button';
+  addButton.className = 'btn btn-primary';
+  addButton.textContent = 'Add Folder';
+  addButton.addEventListener('click', createFolderFromManager);
+  toolbar.append(summary, addButton);
+  highlightsContainer.appendChild(toolbar);
+
+  if (folders.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.innerHTML = filtered
+      ? '<div class="empty-state-title">No results</div>Try a different folder name.'
+      : '<div class="empty-state-title">No folders yet</div>Create a folder to start organizing highlights.';
+    highlightsContainer.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'folder-manager-list';
+  sortFoldersByName(folders).forEach(folder => {
+    const row = document.createElement('div');
+    row.className = 'folder-manager-row';
+
+    if (editingFolderId === folder.id) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'folder-name-input';
+      input.value = folder.name;
+      input.maxLength = MAX_FOLDER_NAME_LENGTH;
+      input.setAttribute('aria-label', `Rename ${folder.name}`);
+      let cancelled = false;
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') input.blur();
+        if (event.key === 'Escape') {
+          cancelled = true;
+          editingFolderId = null;
+          refreshLibrary();
+        }
+      });
+      input.addEventListener('blur', () => {
+        if (!cancelled) renameFolder(folder.id, input.value);
+      }, { once: true });
+      row.appendChild(input);
+      requestAnimationFrame(() => {
+        if (!input.isConnected) return;
+        input.focus({ preventScroll: true });
+        input.select();
+      });
+    } else {
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'folder-manager-open';
+      open.innerHTML = `${libraryIconMarkup('folder')}<span class="folder-manager-name"></span><span class="folder-manager-count"></span>`;
+      open.querySelector('svg')?.classList.add('folder-manager-icon');
+      open.querySelector('.folder-manager-name').textContent = folder.name;
+      const count = counts[folder.id] || 0;
+      open.querySelector('.folder-manager-count').textContent = `${count} ${count === 1 ? 'highlight' : 'highlights'}`;
+      open.addEventListener('click', () => {
+        currentFolderId = folder.id;
+        renderLibraryFolderChildren();
+        refreshLibrary();
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'folder-manager-actions';
+      const rename = document.createElement('button');
+      rename.type = 'button';
+      rename.className = 'library-action-btn';
+      rename.innerHTML = libraryIconMarkup('edit');
+      rename.title = `Rename ${folder.name}`;
+      rename.setAttribute('aria-label', rename.title);
+      rename.addEventListener('click', () => {
+        editingFolderId = folder.id;
+        refreshLibrary();
+      });
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'library-action-btn is-danger';
+      remove.innerHTML = libraryIconMarkup('trash');
+      remove.title = `Delete ${folder.name}`;
+      remove.setAttribute('aria-label', remove.title);
+      remove.addEventListener('click', () => openFolderDeleteDialog(folder.id, count, remove));
+      actions.append(rename, remove);
+      row.append(open, actions);
+    }
+    list.appendChild(row);
+  });
+  highlightsContainer.appendChild(list);
+}
+
+function renderFolderHighlights(all, folder) {
+  const pages = [];
+  const index = all.highlightIndex || {};
+  let totalCount = 0;
+  Object.keys(all).forEach(storageKey => {
+    if (!storageKey.startsWith('highlights_') || !Array.isArray(all[storageKey])) return;
+    const inFolder = all[storageKey].filter(highlight => highlight?.folderId === folder.id);
+    if (inFolder.length === 0) return;
+    const url = storageKey.substring('highlights_'.length);
+    const meta = index[url] || {};
+    const tokens = normalizeQuery(libraryQuery);
+    const pageMatch = tokens.length > 0 ? pageMatchesQuery(meta.title || url, url, tokens) : false;
+    const filtered = tokens.length === 0 || pageMatch
+      ? inFolder
+      : inFolder.filter(highlight => highlightMatchesQuery(highlight.text, tokens));
+    if (filtered.length === 0) return;
+    totalCount += filtered.length;
+    pages.push({
+      url,
+      title: meta.title || url,
+      lastUpdated: meta.lastUpdated || 0,
+      highlights: filtered.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+    });
+  });
+  pages.sort((a, b) => b.lastUpdated - a.lastUpdated);
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'folder-view-toolbar';
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'folder-view-back';
+  back.innerHTML = `${libraryIconMarkup('back')}<span>All folders</span>`;
+  back.addEventListener('click', () => {
+    currentFolderId = null;
+    renderLibraryFolderChildren();
+    refreshLibrary();
+  });
+  const name = document.createElement('span');
+  name.className = 'tags-toolbar-title';
+  name.textContent = folder.name;
+  toolbar.append(back, name);
+
+  if (pages.length === 0) {
+    highlightCount.textContent = '';
+    highlightsContainer.innerHTML = '';
+    highlightsContainer.appendChild(toolbar);
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.innerHTML = `<div class="empty-state-title">${libraryQuery ? 'No results' : 'No highlights in this folder'}</div>${libraryQuery ? 'Try a different keyword.' : 'Assign highlights from All, Favorites, or the FAB.'}`;
+    highlightsContainer.appendChild(empty);
+    return;
+  }
+  renderHighlights(pages, totalCount, { countLabel: 'saved' });
+  highlightsContainer.prepend(toolbar);
+}
+
+function openFolderDeleteDialog(folderId, highlightCountForFolder, trigger = null) {
+  const folder = getFolderById(folderId);
+  if (!folder) return;
+  folderDeleteTargetId = folderId;
+  folderDeleteTrigger = trigger;
+  const hasHighlights = highlightCountForFolder > 0;
+  folderDeleteDialogTitle.textContent = `Delete “${folder.name}”?`;
+  folderDeleteDialogDescription.textContent = hasHighlights
+    ? `This folder contains ${highlightCountForFolder} ${highlightCountForFolder === 1 ? 'highlight' : 'highlights'}. Keep them as unfiled, or move them to Recently Deleted.`
+    : 'This folder is empty and can be deleted safely.';
+  keepFolderHighlightsBtn.textContent = hasHighlights ? 'Delete folder, keep highlights' : 'Delete folder';
+  deleteFolderHighlightsBtn.hidden = !hasHighlights;
+  if (!folderDeleteDialog || typeof folderDeleteDialog.showModal !== 'function') {
+    if (window.confirm(`Delete “${folder.name}”? Highlights will be kept as unfiled.`)) {
+      deleteFolder(folderId, 'keep');
+    } else {
+      folderDeleteTargetId = null;
+      folderDeleteTrigger = null;
+    }
+    return;
+  }
+  folderDeleteDialog.returnValue = '';
+  folderDeleteDialog.showModal();
+  requestAnimationFrame(() => cancelFolderDeleteBtn?.focus({ preventScroll: true }));
+}
+
+function deleteFolder(folderId, mode) {
+  queueFolderMutation(() => new Promise((resolve, reject) => {
+    chrome.storage.local.get(null, all => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      const folders = normalizeFolders(all[FOLDERS_KEY]);
+      const folder = folders.find(item => item.id === folderId);
+      if (!folder) {
+        resolve(null);
+        return;
+      }
+      const nextFolders = folders.filter(item => item.id !== folderId);
+      const index = { ...(all.highlightIndex || {}) };
+      let trash = Array.isArray(all[RECENTLY_DELETED_KEY])
+        ? all[RECENTLY_DELETED_KEY].map(entry => {
+            if (entry?.highlight?.folderId !== folderId) return entry;
+            const highlight = { ...entry.highlight };
+            delete highlight.folderId;
+            return { ...entry, highlight };
+          })
+        : [];
+      const payload = {
+        [FOLDERS_KEY]: nextFolders,
+        [RECENTLY_DELETED_KEY]: trash,
+        highlightIndex: index
+      };
+      const emptyKeys = [];
+      const now = Date.now();
+
+      Object.keys(all).forEach(storageKey => {
+        if (!storageKey.startsWith('highlights_') || !Array.isArray(all[storageKey])) return;
+        const pageUrl = storageKey.substring('highlights_'.length);
+        const pageTitle = index[pageUrl]?.title || pageUrl;
+        const nextHighlights = [];
+        let affected = false;
+        all[storageKey].forEach(highlight => {
+          if (!highlight || highlight.folderId !== folderId) {
+            nextHighlights.push(highlight);
+            return;
+          }
+          affected = true;
+          const nextHighlight = { ...highlight };
+          delete nextHighlight.folderId;
+          if (mode === 'delete-highlights') {
+            trash.unshift({
+              trashId: generateTrashId(),
+              pageUrl,
+              pageTitle,
+              deletedAt: now,
+              highlight: nextHighlight
+            });
+          } else {
+            nextHighlights.push(nextHighlight);
+          }
+        });
+        if (!affected) return;
+        if (nextHighlights.length === 0 && all[storageKey].length > 0) {
+          payload[storageKey] = [];
+          emptyKeys.push(storageKey);
+          delete index[pageUrl];
+        } else {
+          payload[storageKey] = nextHighlights;
+        }
+      });
+      payload[RECENTLY_DELETED_KEY] = trash;
+
+      chrome.storage.local.set(payload, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        const finish = () => resolve(folder);
+        if (emptyKeys.length > 0) chrome.storage.local.remove(emptyKeys, finish);
+        else finish();
+      });
+    });
+  })).then(folder => {
+    if (!folder) return;
+    if (currentFolderId === folder.id) currentFolderId = null;
+    folderDeleteTargetId = null;
+    showToast(mode === 'delete-highlights' ? 'Folder and highlights moved to Recently Deleted' : 'Folder deleted; highlights kept');
+    refreshLibrary();
+  }).catch(() => {
+    folderDeleteTargetId = null;
+    showToast('Could not delete folder');
+  });
+}
+
+cancelFolderDeleteBtn?.addEventListener('click', () => folderDeleteDialog?.close('cancel'));
+keepFolderHighlightsBtn?.addEventListener('click', () => {
+  const folderId = folderDeleteTargetId;
+  folderDeleteDialog?.close('keep');
+  if (folderId) deleteFolder(folderId, 'keep');
+});
+deleteFolderHighlightsBtn?.addEventListener('click', () => {
+  const folderId = folderDeleteTargetId;
+  folderDeleteDialog?.close('delete-highlights');
+  if (folderId) deleteFolder(folderId, 'delete-highlights');
+});
+folderDeleteDialog?.addEventListener('close', () => {
+  const trigger = folderDeleteTrigger;
+  folderDeleteTrigger = null;
+  if (folderDeleteDialog.returnValue === 'cancel') folderDeleteTargetId = null;
+  requestAnimationFrame(() => trigger?.isConnected && trigger.focus({ preventScroll: true }));
+});
+folderDeleteDialog?.addEventListener('cancel', () => {
+  folderDeleteTargetId = null;
+});
+
 // Load all highlights from storage and render them
 function loadAllHighlights() {
   chrome.storage.local.get(null, (all) => {
     setActiveLibraryPresets(all.highlightSettings);
+    activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
+    renderLibraryFolderChildren(activeLibraryFolders);
     const index = all.highlightIndex || {};
     const indexNeedsUpdate = {};
     const storageFixups = {};
@@ -3057,7 +3952,8 @@ function loadAllHighlights() {
 
     renderHighlights(filtered.pages, filtered.totalCount, {
       countLabel: 'saved',
-      allowTagChange: true
+      allowTagChange: true,
+      allowFolderChange: true
     });
   });
 }
@@ -3065,6 +3961,8 @@ function loadAllHighlights() {
 function loadFavoriteHighlights() {
   chrome.storage.local.get(null, (all) => {
     setActiveLibraryPresets(all.highlightSettings);
+    activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
+    renderLibraryFolderChildren(activeLibraryFolders);
     const index = all.highlightIndex || {};
     const pages = [];
     let totalCount = 0;
@@ -3122,7 +4020,8 @@ function loadFavoriteHighlights() {
     filtered.pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
     renderHighlights(filtered.pages, filtered.totalCount, {
       countLabel: 'favorited',
-      allowTagChange: true
+      allowTagChange: true,
+      allowFolderChange: true
     });
   });
 }
@@ -3321,20 +4220,29 @@ function emptyRecentlyDeleted() {
 }
 
 function restoreFromTrash(trashId) {
-  chrome.storage.local.get([RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
+  chrome.storage.local.get([RECENTLY_DELETED_KEY, 'highlightIndex', FOLDERS_KEY], (result) => {
     const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
     const entry = trash.find(t => t.trashId === trashId);
     if (!entry || !entry.highlight) return;
+
+    const restoredHighlight = { ...entry.highlight };
+    const folders = normalizeFolders(result[FOLDERS_KEY]);
+    if (
+      restoredHighlight.folderId
+      && !folders.some(folder => folder.id === restoredHighlight.folderId)
+    ) {
+      delete restoredHighlight.folderId;
+    }
 
     const key = 'highlights_' + entry.pageUrl;
     chrome.storage.local.get(key, (r2) => {
       let highlights = r2[key] || [];
       const newTrash = trash.filter(t => t.trashId !== trashId);
-      if (highlights.some(h => h.id === entry.highlight.id)) {
+      if (highlights.some(h => h.id === restoredHighlight.id)) {
         chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: newTrash }, refreshLibrary);
         return;
       }
-      highlights = highlights.concat([entry.highlight]);
+      highlights = highlights.concat([restoredHighlight]);
       const index = result.highlightIndex || {};
       index[entry.pageUrl] = {
         title: entry.pageTitle || entry.pageUrl,
@@ -3474,6 +4382,7 @@ function renderHighlights(pages, totalCount, options = {}) {
       }
 
       const star = createStarButton(page.url, hl);
+      const folder = options.allowFolderChange ? createLibraryFolderSelector(page.url, hl) : null;
 
       const del = document.createElement('button');
       del.type = 'button';
@@ -3486,6 +4395,7 @@ function renderHighlights(pages, totalCount, options = {}) {
       const rowActions = document.createElement('div');
       rowActions.className = 'snippet-item-actions';
       rowActions.appendChild(colorSlot);
+      if (folder) rowActions.appendChild(folder);
       rowActions.appendChild(star);
       rowActions.appendChild(del);
 
@@ -3499,6 +4409,7 @@ function renderHighlights(pages, totalCount, options = {}) {
   });
 
   restorePendingLibraryTagSelectorFocus();
+  restorePendingLibraryFolderSelectorFocus();
 }
 
 // Delete a single highlight by ID (soft-delete into Recently Deleted)
@@ -3582,8 +4493,19 @@ chrome.storage.onChanged.addListener((changes, area) => {
     k => k === 'highlightIndex' || k.startsWith('highlights_')
   );
   const hasTrashChange = Object.prototype.hasOwnProperty.call(changes, RECENTLY_DELETED_KEY);
+  const hasFolderChange = Object.prototype.hasOwnProperty.call(changes, FOLDERS_KEY);
+  const hasFolderExpansionChange = Object.prototype.hasOwnProperty.call(changes, FOLDERS_EXPANDED_KEY);
 
-  if ((hasHighlightChange || hasTrashChange) && isLibraryTabActive()) {
+  if (hasFolderChange) {
+    activeLibraryFolders = normalizeFolders(changes[FOLDERS_KEY].newValue);
+    if (currentFolderId && !getFolderById(currentFolderId)) currentFolderId = null;
+    renderLibraryFolderChildren(activeLibraryFolders);
+  }
+  if (hasFolderExpansionChange) {
+    setFoldersExpanded(changes[FOLDERS_EXPANDED_KEY].newValue === true);
+  }
+
+  if ((hasHighlightChange || hasTrashChange || hasFolderChange) && isLibraryTabActive()) {
     refreshLibrary();
   }
 });
@@ -3603,6 +4525,7 @@ function setSidebarCollapsed(collapsed) {
   document.querySelectorAll('.sidebar-toggle').forEach(btn => {
     btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
   });
+  setFoldersExpanded(foldersExpandedPreference);
 }
 
 function getSidebarCollapsed() {
@@ -3673,6 +4596,8 @@ initSidebarCollapseToggle();
 initSearchCollapsedBtn();
 initSettingsStickyHeaderMetrics();
 initLibraryTagPopoverInteractions();
+initLibraryFolderPopoverInteractions();
+initLibraryFoldersNavigation();
 
 const urlParams = new URLSearchParams(window.location.search);
 const tabParam = urlParams.get('tab');
