@@ -507,9 +507,7 @@
     }
 
     .settings-page-intro {
-      position: sticky;
-      top: var(--global-navbar-height, 60px);
-      z-index: 10;
+      position: static;
       margin-right: calc(-1 * var(--local-page-header-gutter-right));
       margin-bottom: 32px;
       margin-left: calc(-1 * var(--local-page-header-gutter-left));
@@ -523,15 +521,19 @@
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 7px;
+      margin: 0;
     }
 
-    .settings-page-title {
-      margin: 0;
-      color: var(--opt-text-strong);
-      font-size: 22px;
-      font-weight: 500;
-      letter-spacing: -0.3px;
+    .page-intro-accessible-title {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     .settings-page-heading .appearance-save-status {
@@ -539,11 +541,14 @@
     }
 
     .settings-page-description {
-      max-width: 680px;
+      max-width: none;
       margin: 0;
       color: var(--opt-text-muted);
-      font-size: 12.5px;
+      font-size: 10.5px;
+      font-weight: 500;
       line-height: 1.65;
+      letter-spacing: 0.65px;
+      text-transform: uppercase;
     }
 
     #tab-settings .settings-view + .settings-view {
@@ -3316,9 +3321,7 @@
     }
 
     .library-page-intro {
-      position: sticky;
-      top: var(--global-navbar-height, 60px);
-      z-index: 10;
+      position: static;
       margin-right: calc(-1 * var(--local-page-header-gutter-right));
       margin-bottom: 32px;
       margin-left: calc(-1 * var(--local-page-header-gutter-left));
@@ -3327,20 +3330,15 @@
       background: var(--opt-content);
     }
 
-    .library-page-title {
-      margin: 0 0 7px;
-      color: var(--opt-text-strong);
-      font-size: 22px;
-      font-weight: 500;
-      letter-spacing: -0.3px;
-    }
-
     .library-page-description {
-      max-width: 680px;
+      max-width: none;
       margin: 0;
       color: var(--opt-text-muted);
-      font-size: 12.5px;
+      font-size: 10.5px;
+      font-weight: 500;
       line-height: 1.65;
+      letter-spacing: 0.65px;
+      text-transform: uppercase;
     }
 
     .library-view-header {
@@ -4044,7 +4042,7 @@
       </aside>
       <main class="content-area library-content">
         <header class="library-page-intro">
-          <h1 class="library-page-title">Library</h1>
+          <h1 class="page-intro-accessible-title">Library</h1>
           <p class="library-page-description">Browse, organize, and revisit highlights saved from the web.</p>
         </header>
 
@@ -4104,11 +4102,11 @@
       </aside>
       <main class="content-area">
         <header class="settings-page-intro">
+          <h1 class="page-intro-accessible-title">Settings</h1>
           <div class="settings-page-heading">
-            <h1 class="settings-page-title">Settings</h1>
+            <p class="settings-page-description">Customize how highlights look, organize your tag palette, and control how the extension behaves.</p>
             <span class="appearance-save-status" id="appearanceSaveStatus" role="status" aria-live="polite">All changes save automatically</span>
           </div>
-          <p class="settings-page-description">Customize how highlights look, organize your tag palette, and control how the extension behaves.</p>
         </header>
 
         <!-- Appearance View -->

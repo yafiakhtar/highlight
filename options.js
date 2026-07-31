@@ -122,20 +122,19 @@ function updateSettingsStickyHeaderMetrics() {
   const header = document.querySelector('#tab-settings .settings-page-intro');
   const content = document.querySelector('#tab-settings .content-area');
   if (!header || !content) return settingsStickyHeaderOffset;
-  const measuredHeight = Math.ceil(header.getBoundingClientRect().height);
   const navbarHeight = updateGlobalNavbarMetrics();
-  if (measuredHeight > 0) {
-    settingsStickyHeaderOffset = navbarHeight + measuredHeight + 16;
+  if (navbarHeight > 0) {
+    settingsStickyHeaderOffset = navbarHeight + 16;
     content.style.setProperty('--settings-sticky-header-offset', `${settingsStickyHeaderOffset}px`);
   }
   return settingsStickyHeaderOffset;
 }
 
 function getSettingsScrollReadingLine() {
-  const header = document.querySelector('#tab-settings .settings-page-intro');
-  if (!header) return settingsStickyHeaderOffset;
-  const headerBottom = header.getBoundingClientRect().bottom;
-  return Math.max(24, Math.min(window.innerHeight - 24, headerBottom + 16));
+  const navbar = document.querySelector('header.navbar');
+  if (!navbar) return settingsStickyHeaderOffset;
+  const navbarBottom = navbar.getBoundingClientRect().bottom;
+  return Math.max(24, Math.min(window.innerHeight - 24, navbarBottom + 16));
 }
 
 function initSettingsStickyHeaderMetrics() {
