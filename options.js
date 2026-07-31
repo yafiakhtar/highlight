@@ -3706,10 +3706,10 @@ function renderFolderHighlights(all, folder) {
   pages.sort((a, b) => b.lastUpdated - a.lastUpdated);
 
   const toolbar = document.createElement('div');
-  toolbar.className = 'folder-view-toolbar';
+  toolbar.className = 'tags-toolbar folder-view-toolbar';
   const back = document.createElement('button');
   back.type = 'button';
-  back.className = 'folder-view-back';
+  back.className = 'tags-back-btn folder-view-back';
   back.innerHTML = `${libraryIconMarkup('back')}<span>All folders</span>`;
   back.addEventListener('click', () => {
     currentFolderId = null;
