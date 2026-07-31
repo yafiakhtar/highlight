@@ -16,7 +16,8 @@
 ### Floating Action Button (FAB)
 - Appears beside your text selection for quick one-tap highlighting
 - Displays up to 8 slots arranged in a **2×4 grid**, configurable in Settings
-- Each slot can hold a color preset or an action button (favorite, comment, copy link, share)
+- Each slot can hold a color preset or action button; Favorite is functional, while comment, copy link, and share remain marked as coming soon
+- Favorite can create a default-color favorite directly, or be applied after choosing a tag color
 - The FAB can be toggled on/off from the popup or Settings
 
 ### Color Presets & Tags

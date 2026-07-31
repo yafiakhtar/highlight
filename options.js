@@ -459,7 +459,7 @@ const fabRemoveZoneEl = document.getElementById('fabRemoveZone');
 const fabPopoverLayerEl = document.getElementById('fabPopoverLayer');
 
 const FAB_ACTION_DEFS = [
-  { id: 'favorite', label: 'Favorite', type: 'placeholder', glyph: '⋯', paletteGlyph: '☆' },
+  { id: 'favorite', label: 'Favorite', type: 'action', glyph: '☆', paletteGlyph: '☆' },
   { id: 'comment', label: 'Comment', type: 'placeholder', glyph: '⋯', paletteGlyph: '✎' },
   { id: 'copyLink', label: 'Copy link', type: 'placeholder', glyph: '⋯', paletteGlyph: '⧉' },
   { id: 'share', label: 'Share', type: 'placeholder', glyph: '⋯', paletteGlyph: '↗' }
@@ -726,8 +726,11 @@ function openFabPicker(slotIndex, anchor) {
   ));
   popover.appendChild(createFabPickerGroup(
     'Actions',
-    defs.filter(def => def.type !== 'preset'),
-    'Coming soon'
+    defs.filter(def => def.type === 'action')
+  ));
+  popover.appendChild(createFabPickerGroup(
+    'Coming soon',
+    defs.filter(def => def.type === 'placeholder')
   ));
 
   mountFabPopover(popover, anchor, slotIndex);
@@ -891,8 +894,11 @@ function renderFabToolbox() {
   ));
   fabToolboxEl.appendChild(createFabToolboxGroup(
     'Actions',
-    defs.filter(def => def.type !== 'preset'),
-    'Coming soon'
+    defs.filter(def => def.type === 'action')
+  ));
+  fabToolboxEl.appendChild(createFabToolboxGroup(
+    'Coming soon',
+    defs.filter(def => def.type === 'placeholder')
   ));
 }
 

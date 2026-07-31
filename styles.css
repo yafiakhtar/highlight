@@ -27,4 +27,102 @@
   display: none;
   cursor: pointer;
   z-index: 2147483647;
+  opacity: 1;
+  transform: scale(1);
+  transform-origin: center;
+  transition: opacity 170ms ease, transform 170ms ease;
+}
+
+.text-highlighter-fab.is-expiring {
+  opacity: 0;
+  transform: scale(0.94);
+}
+
+.text-highlighter-fab button:disabled {
+  cursor: wait !important;
+  opacity: 0.62 !important;
+}
+
+.text-highlighter-fab-color.is-active-preset {
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,0.96),
+    0 0 0 4px rgba(30,30,30,0.58) !important;
+}
+
+.text-highlighter-fab-favorite {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid rgba(0,0,0,0.16) !important;
+  background: rgba(255,255,255,0.94) !important;
+  color: #424242 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12) !important;
+}
+
+.text-highlighter-fab-favorite svg {
+  width: 12px !important;
+  height: 12px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.8 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  pointer-events: none !important;
+}
+
+.text-highlighter-fab-favorite.is-favorited,
+.text-highlighter-fab.is-confirming-favorite .text-highlighter-fab-favorite {
+  border-color: #b98e19 !important;
+  background: #fff8d7 !important;
+  color: #c49a20 !important;
+}
+
+.text-highlighter-fab-favorite.is-favorited svg,
+.text-highlighter-fab.is-confirming-favorite .text-highlighter-fab-favorite svg {
+  fill: currentColor !important;
+}
+
+.text-highlighter-fab button:focus-visible {
+  outline: 2px solid #1976d2 !important;
+  outline-offset: 2px !important;
+}
+
+.text-highlighter-fab-status {
+  position: absolute;
+  z-index: 2147483647;
+  max-width: 220px;
+  padding: 6px 9px;
+  border: 1px solid rgba(0,0,0,0.14);
+  border-radius: 7px;
+  background: rgba(28,28,28,0.94);
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(calc(-100% - 8px)) scale(0.96);
+  transform-origin: bottom left;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.text-highlighter-fab-status::before {
+  content: "★";
+  margin-right: 5px;
+  color: #e2b735;
+}
+
+.text-highlighter-fab-status.is-visible {
+  opacity: 1;
+  transform: translateY(calc(-100% - 8px)) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-highlighter-fab,
+  .text-highlighter-fab-status {
+    transition: none;
+  }
 }

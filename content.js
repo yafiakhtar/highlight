@@ -224,6 +224,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const key = getStorageKey();
   if (changes[key]) {
     const newHighlights = changes[key].newValue;
+    if (
+      fabPostHighlightId
+      && (
+        !Array.isArray(newHighlights)
+        || !newHighlights.some(highlight => highlight?.id === fabPostHighlightId)
+      )
+    ) {
+      hideHighlightFab();
+    }
     if (!newHighlights) {
       // Key was deleted — remove all marks
       document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
@@ -290,7 +299,7 @@ function applyCustomColors() {
 // (When turned back on, it will appear naturally on the next text selection)
 function updateFabVisibility() {
   if (highlightFab && !userSettings.showFab) {
-    highlightFab.style.display = 'none';
+    hideHighlightFab();
   }
 }
 
@@ -422,8 +431,10 @@ function normalizeStoredHighlights(raw) {
   return { highlights: merged, changed };
 }
 
-// Save highlights to storage and update the global index
-function saveHighlights() {
+// Save highlights to storage and update the global index.
+// Optional favorite overrides let a newly-created highlight be favorited
+// atomically without introducing a second source of truth in the DOM.
+function saveHighlights({ favoriteOverrides = new Map() } = {}) {
   const key = getStorageKey();
   const url = window.location.href;
 
@@ -464,43 +475,131 @@ function saveHighlights() {
     });
   }
 
-  // Read existing data to preserve createdAt timestamps, then write
-  if (!isExtensionContextValid()) return;
-  try {
-    chrome.storage.local.get([key, 'highlightIndex'], (result) => {
-      if (chrome.runtime.lastError) return;
-    // Preserve existing createdAt timestamps and favorited flag
-    const oldHighlights = result[key] || [];
-    const oldTimestamps = {};
-    const oldFavorited = {};
-    oldHighlights.forEach(h => {
-      oldTimestamps[h.id] = h.createdAt;
-      if (h.favorited === true) oldFavorited[h.id] = true;
-    });
-
-    highlights.forEach(h => {
-      h.createdAt = oldTimestamps[h.id] || Date.now();
-      if (oldFavorited[h.id]) h.favorited = true;
-    });
-
-    const index = result.highlightIndex || {};
-
-    if (highlights.length > 0) {
-      index[url] = {
-        title: document.title || url,
-        lastUpdated: Date.now()
-      };
-      chrome.storage.local.set({ [key]: highlights, highlightIndex: index });
-    } else {
-      // No highlights left — clean up
-      delete index[url];
-      chrome.storage.local.remove(key);
-      chrome.storage.local.set({ highlightIndex: index });
+  // Read existing data immediately before merging so createdAt and favorite
+  // metadata cannot be lost to a stale in-memory snapshot.
+  return new Promise((resolve) => {
+    if (!isExtensionContextValid()) {
+      resolve(false);
+      return;
     }
-    });
-  } catch {
-    // ignore
-  }
+    try {
+      chrome.storage.local.get([key, 'highlightIndex'], (result) => {
+        if (chrome.runtime.lastError) {
+          resolve(false);
+          return;
+        }
+
+        const oldHighlights = Array.isArray(result[key]) ? result[key] : [];
+        const oldById = new Map(oldHighlights.map(highlight => [highlight.id, highlight]));
+
+        highlights.forEach(highlight => {
+          const oldHighlight = oldById.get(highlight.id);
+          highlight.createdAt = oldHighlight?.createdAt || Date.now();
+          if (favoriteOverrides.has(highlight.id)) {
+            if (favoriteOverrides.get(highlight.id) === true) highlight.favorited = true;
+          } else if (oldHighlight?.favorited === true) {
+            highlight.favorited = true;
+          }
+        });
+
+        const index = result.highlightIndex || {};
+        if (highlights.length > 0) {
+          index[url] = {
+            title: document.title || url,
+            lastUpdated: Date.now()
+          };
+          chrome.storage.local.set({ [key]: highlights, highlightIndex: index }, () => {
+            resolve(!chrome.runtime.lastError);
+          });
+          return;
+        }
+
+        delete index[url];
+        chrome.storage.local.remove(key, () => {
+          if (chrome.runtime.lastError) {
+            resolve(false);
+            return;
+          }
+          chrome.storage.local.set({ highlightIndex: index }, () => {
+            resolve(!chrome.runtime.lastError);
+          });
+        });
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+function patchStoredHighlight(highlightId, patch) {
+  const key = getStorageKey();
+  const url = window.location.href;
+  return new Promise((resolve) => {
+    if (!highlightId || !isExtensionContextValid()) {
+      resolve(null);
+      return;
+    }
+    try {
+      chrome.storage.local.get([key, 'highlightIndex'], (result) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+          return;
+        }
+        const highlights = Array.isArray(result[key]) ? result[key] : [];
+        const index = highlights.findIndex(highlight => highlight?.id === highlightId);
+        if (index < 0) {
+          resolve(null);
+          return;
+        }
+
+        const nextHighlight = { ...highlights[index], ...patch };
+        if (
+          Object.prototype.hasOwnProperty.call(patch, 'favorited')
+          && patch.favorited !== true
+        ) {
+          delete nextHighlight.favorited;
+        }
+        const nextHighlights = highlights.slice();
+        nextHighlights[index] = nextHighlight;
+
+        const highlightIndex = result.highlightIndex || {};
+        highlightIndex[url] = {
+          title: document.title || url,
+          lastUpdated: Date.now()
+        };
+        chrome.storage.local.set({
+          [key]: nextHighlights,
+          highlightIndex
+        }, () => {
+          resolve(chrome.runtime.lastError ? null : nextHighlight);
+        });
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function updateHighlightPreset(highlightId, presetId) {
+  const preset = getPresetById(presetId);
+  const marks = Array.from(
+    document.querySelectorAll(`.text-highlighter-mark[data-highlight-id="${highlightId}"]`)
+  );
+  if (!preset || marks.length === 0) return null;
+
+  const updated = await patchStoredHighlight(highlightId, { presetId: preset.id });
+  if (!updated) return null;
+
+  const theme = getPageTheme();
+  const isDark = theme === 'dark';
+  const color = getPresetColor(preset.id, theme);
+  marks.forEach(mark => {
+    mark.dataset.presetId = preset.id;
+    mark.classList.toggle('hl-dark', isDark);
+    mark.classList.toggle('hl-light', !isDark);
+    mark.style.backgroundColor = color;
+  });
+  return updated;
 }
 
 // Get XPath for an element
@@ -562,13 +661,13 @@ function getPageTheme() {
   return luminance < 0.25 ? 'dark' : 'light';
 }
 
-// Highlight the current selection
-async function highlightSelection(presetIdOrIndex = 0) {
+// Highlight the current selection and resolve with its persisted identity.
+async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {}) {
   await loadUserSettings();
   const selection = window.getSelection();
   
   if (!selection || selection.isCollapsed || !selection.toString().trim()) {
-    return;
+    return null;
   }
   
   const range = selection.getRangeAt(0);
@@ -576,10 +675,10 @@ async function highlightSelection(presetIdOrIndex = 0) {
   // Check if selection is already highlighted
   const ancestor = range.commonAncestorContainer;
   if (ancestor.nodeType === Node.ELEMENT_NODE && ancestor.classList?.contains('text-highlighter-mark')) {
-    return;
+    return null;
   }
   if (ancestor.parentNode?.classList?.contains('text-highlighter-mark')) {
-    return;
+    return null;
   }
   
   const highlightId = generateId();
@@ -610,7 +709,10 @@ async function highlightSelection(presetIdOrIndex = 0) {
     mark.addEventListener('click', handleHighlightClick);
     
     selection.removeAllRanges();
-    saveHighlights();
+    const saved = await saveHighlights({
+      favoriteOverrides: favorited ? new Map([[highlightId, true]]) : new Map()
+    });
+    return saved ? { highlightId, presetId, favorited } : null;
   } catch (e) {
     // surroundContents fails if selection crosses element boundaries
     // Wrap each text node individually to preserve DOM structure
@@ -618,9 +720,10 @@ async function highlightSelection(presetIdOrIndex = 0) {
       const textNodes = getTextNodesInRange(range);
       
       if (textNodes.length === 0) {
-        return;
+        return null;
       }
-      
+
+      let createdPartCount = 0;
       textNodes.forEach((nodeInfo) => {
         const { node, start, end } = nodeInfo;
         
@@ -640,15 +743,21 @@ async function highlightSelection(presetIdOrIndex = 0) {
         try {
           nodeRange.surroundContents(mark);
           mark.addEventListener('click', handleHighlightClick);
+          createdPartCount++;
         } catch (err) {
           // Skip nodes that can't be wrapped
         }
       });
-      
+
+      if (createdPartCount === 0) return null;
       selection.removeAllRanges();
-      saveHighlights();
+      const saved = await saveHighlights({
+        favoriteOverrides: favorited ? new Map([[highlightId, true]]) : new Map()
+      });
+      return saved ? { highlightId, presetId, favorited } : null;
     } catch (e2) {
       console.error('Could not highlight selection:', e2);
+      return null;
     }
   }
 }
@@ -990,13 +1099,213 @@ function restoreHighlights() {
 // Create the FAB palette element once
 let highlightFab = null;
 let highlightFabButtons = [];
+let highlightFabStatus = null;
+let highlightFabStatusTimer = null;
+let fabPostHighlightId = null;
+let fabPostPresetId = null;
+let fabPostTimeout = null;
+let fabHideTimeout = null;
+let fabPointerPaused = false;
+let fabKeyboardPaused = false;
+let fabLastInputWasKeyboard = false;
+let fabOperationInFlight = false;
+let fabOperationChain = Promise.resolve();
+let fabInteractionVersion = 0;
+
+const FAB_POST_ACTION_TIMEOUT_MS = 4000;
+const FAB_FADE_OUT_MS = 170;
+
+function hasFavoriteFabAction() {
+  const layout = fabLayoutV1 || defaultFabLayoutV1();
+  return Array.isArray(layout.slots) && layout.slots.includes('favorite');
+}
+
+function clearFabPostTimeout() {
+  if (fabPostTimeout !== null) {
+    clearTimeout(fabPostTimeout);
+    fabPostTimeout = null;
+  }
+}
+
+function scheduleFabPostTimeout() {
+  clearFabPostTimeout();
+  if (!fabPostHighlightId || fabPointerPaused || fabKeyboardPaused) return;
+  fabPostTimeout = setTimeout(() => {
+    fabPostTimeout = null;
+    hideHighlightFab({ fade: true });
+  }, FAB_POST_ACTION_TIMEOUT_MS);
+}
+
+function clearFabPostState() {
+  clearFabPostTimeout();
+  fabPostHighlightId = null;
+  fabPostPresetId = null;
+  fabPointerPaused = false;
+  fabKeyboardPaused = false;
+  syncHighlightFabState();
+}
+
+function setFabBusy(isBusy) {
+  fabOperationInFlight = isBusy;
+  if (highlightFab) highlightFab.setAttribute('aria-busy', String(isBusy));
+  highlightFabButtons.forEach(button => {
+    if (button) button.disabled = isBusy;
+  });
+}
+
+function syncHighlightFabState() {
+  highlightFabButtons.forEach(button => {
+    if (!button) return;
+    const isActivePreset = Boolean(
+      fabPostHighlightId
+      && button.dataset.fabKind === 'preset'
+      && button.dataset.presetId === fabPostPresetId
+    );
+    button.classList.toggle('is-active-preset', isActivePreset);
+    if (button.dataset.actionId === 'favorite') {
+      button.classList.toggle(
+        'is-favorited',
+        Boolean(highlightFab?.classList.contains('is-confirming-favorite'))
+      );
+      button.title = fabPostHighlightId
+        ? 'Add this highlight to favorites'
+        : 'Highlight with the default tag and add to favorites';
+      button.setAttribute('aria-label', button.title);
+    }
+  });
+}
+
+function ensureHighlightFabStatus() {
+  if (highlightFabStatus) return highlightFabStatus;
+  highlightFabStatus = document.createElement('div');
+  highlightFabStatus.className = 'text-highlighter-fab-status';
+  highlightFabStatus.setAttribute('role', 'status');
+  highlightFabStatus.setAttribute('aria-live', 'polite');
+  document.body.appendChild(highlightFabStatus);
+  return highlightFabStatus;
+}
+
+function hideHighlightFabStatus() {
+  if (highlightFabStatusTimer !== null) {
+    clearTimeout(highlightFabStatusTimer);
+    highlightFabStatusTimer = null;
+  }
+  if (highlightFabStatus) highlightFabStatus.classList.remove('is-visible');
+}
+
+function showHighlightFabStatus(message) {
+  const status = ensureHighlightFabStatus();
+  if (highlightFab) {
+    status.style.left = highlightFab.style.left;
+    status.style.top = highlightFab.style.top;
+  }
+  status.textContent = message;
+  status.classList.add('is-visible');
+  if (highlightFabStatusTimer !== null) clearTimeout(highlightFabStatusTimer);
+  highlightFabStatusTimer = setTimeout(() => {
+    status.classList.remove('is-visible');
+    highlightFabStatusTimer = null;
+  }, 1600);
+}
+
+function persistLastUsedPresetId(presetId) {
+  if (!presetId || !isExtensionContextValid()) return;
+  try {
+    chrome.storage.local.set({ lastUsedPresetId: presetId });
+  } catch {
+    // ignore
+  }
+}
+
+function runFabOperation(operation) {
+  if (fabOperationInFlight) return;
+  const interactionVersion = fabInteractionVersion;
+  clearFabPostTimeout();
+  setFabBusy(true);
+  const execution = fabOperationChain.then(() => operation(interactionVersion));
+  fabOperationChain = execution.catch(() => {
+    if (interactionVersion === fabInteractionVersion) hideHighlightFab();
+    return null;
+  });
+  fabOperationChain.then(() => setFabBusy(false));
+}
+
+function confirmFavoriteAndClose() {
+  if (highlightFab) highlightFab.classList.add('is-confirming-favorite');
+  syncHighlightFabState();
+  showHighlightFabStatus('Added to Favorites');
+  hideHighlightFab({ fade: true });
+}
+
+function handleFabPresetAction(presetId) {
+  runFabOperation(async (interactionVersion) => {
+    if (fabPostHighlightId) {
+      const updated = await updateHighlightPreset(fabPostHighlightId, presetId);
+      if (interactionVersion !== fabInteractionVersion) return;
+      if (!updated) {
+        hideHighlightFab();
+        return;
+      }
+      fabPostPresetId = updated.presetId;
+      persistLastUsedPresetId(updated.presetId);
+      syncHighlightFabState();
+      scheduleFabPostTimeout();
+      return;
+    }
+
+    const created = await highlightSelection(presetId);
+    if (interactionVersion !== fabInteractionVersion) return;
+    if (!created) {
+      hideHighlightFab();
+      return;
+    }
+    persistLastUsedPresetId(created.presetId);
+    if (!hasFavoriteFabAction()) {
+      hideHighlightFab();
+      return;
+    }
+
+    fabPostHighlightId = created.highlightId;
+    fabPostPresetId = created.presetId;
+    syncHighlightFabState();
+    scheduleFabPostTimeout();
+  });
+}
+
+function handleFabFavoriteAction() {
+  runFabOperation(async (interactionVersion) => {
+    if (fabPostHighlightId) {
+      const updated = await patchStoredHighlight(fabPostHighlightId, { favorited: true });
+      if (interactionVersion !== fabInteractionVersion) return;
+      if (!updated) {
+        hideHighlightFab();
+        return;
+      }
+      confirmFavoriteAndClose();
+      return;
+    }
+
+    const defaultPreset = getPresetById('preset1');
+    const created = await highlightSelection(defaultPreset.id, { favorited: true });
+    if (interactionVersion !== fabInteractionVersion) return;
+    if (!created) {
+      hideHighlightFab();
+      return;
+    }
+    persistLastUsedPresetId(created.presetId);
+    confirmFavoriteAndClose();
+  });
+}
 
 function rebuildHighlightFab() {
   if (!highlightFab) return;
+  hideHighlightFab();
   highlightFab.innerHTML = '';
   highlightFabButtons = [];
   buildFabButtonsInto(highlightFab);
   applyCustomColors();
+  syncHighlightFabState();
+  setFabBusy(fabOperationInFlight);
 }
 
 function buildFabButtonsInto(container) {
@@ -1006,7 +1315,7 @@ function buildFabButtonsInto(container) {
   container.style.display = 'grid';
   container.style.gridTemplateColumns = `repeat(${layout.cols}, 18px)`;
   container.style.gridAutoRows = '18px';
-  container.style.gap = '8px';
+  container.style.gap = '0';
   container.style.alignItems = 'center';
   container.style.justifyContent = 'center';
 
@@ -1049,6 +1358,38 @@ function buildFabButtonsInto(container) {
     return btn;
   };
 
+  const makeFavoriteBtn = () => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'text-highlighter-fab-action text-highlighter-fab-favorite';
+    btn.dataset.fabKind = 'action';
+    btn.dataset.actionId = 'favorite';
+    btn.style.padding = '0';
+    btn.style.margin = '0';
+    btn.style.width = '18px';
+    btn.style.height = '18px';
+    btn.style.borderRadius = '999px';
+    btn.style.cursor = 'pointer';
+    const svgNamespace = 'http://www.w3.org/2000/svg';
+    const icon = document.createElementNS(svgNamespace, 'svg');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS(svgNamespace, 'path');
+    path.setAttribute('d', 'm12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z');
+    icon.appendChild(path);
+    btn.appendChild(icon);
+    btn.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      handleFabFavoriteAction();
+    });
+    return btn;
+  };
+
   layout.slots.forEach((slotId) => {
     if (!slotId) {
       appendSpacer();
@@ -1079,20 +1420,18 @@ function buildFabButtonsInto(container) {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        // Track last-used preset for popup icon consistency
-        try {
-          if (isExtensionContextValid() && preset && typeof preset.id === 'string' && preset.id.trim() !== '') {
-            chrome.storage.local.set({ lastUsedPresetId: preset.id });
-          }
-        } catch {
-          // ignore
-        }
-        highlightSelection(preset.id);
-        hideHighlightFab();
+        handleFabPresetAction(preset.id);
       });
 
       container.appendChild(btn);
       highlightFabButtons.push(btn);
+      return;
+    }
+
+    if (slotId === 'favorite') {
+      const favoriteBtn = makeFavoriteBtn();
+      container.appendChild(favoriteBtn);
+      highlightFabButtons.push(favoriteBtn);
       return;
     }
 
@@ -1120,12 +1459,49 @@ function createHighlightFab() {
 
   // Prevent mousedown on the container from clearing selection
   highlightFab.addEventListener('mousedown', (e) => {
+    fabLastInputWasKeyboard = false;
     e.preventDefault();
     e.stopPropagation();
   });
 
+  highlightFab.addEventListener('pointerenter', (event) => {
+    if (event.pointerType && event.pointerType !== 'mouse') return;
+    fabPointerPaused = true;
+    clearFabPostTimeout();
+  });
+
+  highlightFab.addEventListener('pointerleave', (event) => {
+    if (event.pointerType && event.pointerType !== 'mouse') return;
+    fabPointerPaused = false;
+    scheduleFabPostTimeout();
+  });
+
+  highlightFab.addEventListener('keydown', () => {
+    fabLastInputWasKeyboard = true;
+    if (highlightFab?.contains(document.activeElement)) {
+      fabKeyboardPaused = true;
+      clearFabPostTimeout();
+    }
+  });
+
+  highlightFab.addEventListener('focusin', () => {
+    if (!fabLastInputWasKeyboard) return;
+    fabKeyboardPaused = true;
+    clearFabPostTimeout();
+  });
+
+  highlightFab.addEventListener('focusout', () => {
+    setTimeout(() => {
+      if (highlightFab?.contains(document.activeElement)) return;
+      fabKeyboardPaused = false;
+      fabLastInputWasKeyboard = false;
+      scheduleFabPostTimeout();
+    }, 0);
+  });
+
   // Apply initial colors
   applyCustomColors();
+  syncHighlightFabState();
 
   return highlightFab;
 }
@@ -1135,18 +1511,58 @@ async function showHighlightFab(x, y) {
   if (!userSettings.showFab) return;
   if (!highlightFab) createHighlightFab();
 
+  fabInteractionVersion++;
+  clearFabPostState();
+  hideHighlightFabStatus();
+  if (fabHideTimeout !== null) {
+    clearTimeout(fabHideTimeout);
+    fabHideTimeout = null;
+  }
+  highlightFab.classList.remove('is-expiring', 'is-confirming-favorite');
+  highlightFab.style.pointerEvents = '';
+
   // Update palette colors for current theme
   applyCustomColors();
+  syncHighlightFabState();
 
   highlightFab.style.left = x + 'px';
   highlightFab.style.top = y + 'px';
-  highlightFab.style.display = 'block';
+  highlightFab.style.display = 'grid';
 }
 
-function hideHighlightFab() {
-  if (highlightFab) {
-    highlightFab.style.display = 'none';
+function hideHighlightFab({ fade = false } = {}) {
+  fabInteractionVersion++;
+  clearFabPostState();
+  if (!highlightFab) return;
+
+  if (fabHideTimeout !== null) {
+    clearTimeout(fabHideTimeout);
+    fabHideTimeout = null;
   }
+
+  const finishHide = () => {
+    if (!highlightFab) return;
+    highlightFab.style.display = 'none';
+    highlightFab.style.pointerEvents = '';
+    highlightFab.classList.remove('is-expiring', 'is-confirming-favorite');
+    syncHighlightFabState();
+  };
+
+  if (
+    fade
+    && highlightFab.style.display !== 'none'
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ) {
+    highlightFab.style.pointerEvents = 'none';
+    highlightFab.classList.add('is-expiring');
+    fabHideTimeout = setTimeout(() => {
+      fabHideTimeout = null;
+      finishHide();
+    }, FAB_FADE_OUT_MS);
+    return;
+  }
+
+  finishHide();
 }
 
 // Show FAB when text is selected
@@ -1193,6 +1609,13 @@ document.addEventListener('mousedown', (e) => {
   }
 });
 
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && highlightFab && highlightFab.style.display !== 'none') {
+    event.preventDefault();
+    hideHighlightFab();
+  }
+});
+
 // Hide FAB on scroll to avoid orphan button
 document.addEventListener('scroll', () => {
   hideHighlightFab();
@@ -1225,6 +1648,8 @@ document.addEventListener('visibilitychange', () => {
       updateFabVisibility();
       applyCustomColors();
     });
+  } else {
+    hideHighlightFab();
   }
 });
 
