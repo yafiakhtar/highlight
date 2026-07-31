@@ -244,14 +244,29 @@ chrome.storage.onChanged.addListener((changes, area) => {
     } else {
       // Compare: remove marks whose IDs no longer exist
       const activeIds = new Set(newHighlights.map(h => h.id));
+      const highlightsById = new Map(newHighlights.map(highlight => [highlight.id, highlight]));
+      let presetAssignmentChanged = false;
       document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
         if (!activeIds.has(mark.dataset.highlightId)) {
           const parent = mark.parentNode;
           while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
           parent.removeChild(mark);
           parent.normalize();
+          return;
+        }
+
+        const storedHighlight = highlightsById.get(mark.dataset.highlightId);
+        const storedPresetId = getPresetById(storedHighlight?.presetId).id;
+        if (mark.dataset.presetId !== storedPresetId) {
+          mark.dataset.presetId = storedPresetId;
+          presetAssignmentChanged = true;
         }
       });
+      if (fabPostHighlightId && highlightsById.has(fabPostHighlightId)) {
+        fabPostPresetId = getPresetById(highlightsById.get(fabPostHighlightId)?.presetId).id;
+        syncHighlightFabState();
+      }
+      if (presetAssignmentChanged) applyCustomColors();
       // Restore highlights added from options (e.g. Recently Deleted) without full reload
       const domIds = new Set(
         Array.from(document.querySelectorAll('.text-highlighter-mark')).map(m => m.dataset.highlightId)

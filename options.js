@@ -210,6 +210,7 @@ function activateMainTab(tabName) {
 
   const currentTab = document.querySelector('.tab-btn.active')?.dataset.tab;
   closeFabPopover();
+  closeLibraryTagPopover();
   closeMobileLibrarySearch();
   if (currentTab === tabName) {
     if (tabName === 'settings') scheduleSettingsScrollSpy();
@@ -2198,9 +2199,16 @@ window.addEventListener('blur', releaseAllShortcutKeys);
 const highlightsContainer = document.getElementById('highlightsContainer');
 const highlightCount = document.getElementById('highlightCount');
 const librarySearchInput = document.getElementById('librarySearch');
+const libraryTagPopoverLayerEl = document.getElementById('libraryTagPopoverLayer');
 
 let libraryQuery = '';
 let librarySearchDebounce = null;
+let currentLibraryTagPopover = null;
+let currentLibraryTagPopoverAnchor = null;
+let libraryTagPopoverCleanupTimer = null;
+let libraryTagWriteQueue = Promise.resolve();
+let libraryTagPopoverListenersInitialized = false;
+let pendingLibraryTagFocus = null;
 
 const RECENTLY_DELETED_KEY = 'recentlyDeletedHighlights';
 
@@ -2359,6 +2367,7 @@ function normalizeStoredHighlights(raw) {
 }
 
 function refreshLibrary() {
+  closeLibraryTagPopover({ immediate: true });
   syncLibraryViewHeader();
   if (currentLibraryView === 'recently-deleted') {
     loadRecentlyDeleted();
@@ -2411,6 +2420,338 @@ function getLibraryHighlightColor(hl) {
   return document.body.classList.contains('dark')
     ? (preset.colorDark || DEFAULTS.colorDark)
     : (preset.colorLight || DEFAULTS.colorLight);
+}
+
+function prefersReducedLibraryMotion() {
+  return typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function closeLibraryTagPopover({ immediate = false, restoreFocus = false } = {}) {
+  if (libraryTagPopoverCleanupTimer) {
+    clearTimeout(libraryTagPopoverCleanupTimer);
+    libraryTagPopoverCleanupTimer = null;
+  }
+
+  const popover = currentLibraryTagPopover;
+  const anchor = currentLibraryTagPopoverAnchor;
+  currentLibraryTagPopover = null;
+  currentLibraryTagPopoverAnchor = null;
+
+  if (anchor) anchor.setAttribute('aria-expanded', 'false');
+  if (restoreFocus && anchor?.isConnected) {
+    anchor.focus({ preventScroll: true });
+  }
+
+  if (!popover) {
+    if (immediate && libraryTagPopoverLayerEl) libraryTagPopoverLayerEl.innerHTML = '';
+    return;
+  }
+
+  const removePopover = () => {
+    if (popover.parentNode) popover.parentNode.removeChild(popover);
+  };
+
+  if (immediate || prefersReducedLibraryMotion()) {
+    removePopover();
+    return;
+  }
+
+  popover.classList.remove('is-open');
+  popover.classList.add('is-closing');
+  popover.setAttribute('aria-hidden', 'true');
+  popover.addEventListener('transitionend', removePopover, { once: true });
+  libraryTagPopoverCleanupTimer = setTimeout(removePopover, 220);
+}
+
+function positionLibraryTagPopover(popover, anchor) {
+  const viewportPadding = 12;
+  const anchorGap = 8;
+  const anchorRect = anchor.getBoundingClientRect();
+  const popoverWidth = popover.offsetWidth || 238;
+  const popoverHeight = popover.offsetHeight || 260;
+  const maxLeft = Math.max(viewportPadding, window.innerWidth - popoverWidth - viewportPadding);
+  const left = Math.min(Math.max(anchorRect.right - popoverWidth, viewportPadding), maxLeft);
+  const belowTop = anchorRect.bottom + anchorGap;
+  const aboveTop = anchorRect.top - popoverHeight - anchorGap;
+  const shouldOpenUp = belowTop + popoverHeight > window.innerHeight - viewportPadding
+    && aboveTop >= viewportPadding;
+  const maxTop = Math.max(viewportPadding, window.innerHeight - popoverHeight - viewportPadding);
+  const top = shouldOpenUp ? aboveTop : Math.min(Math.max(belowTop, viewportPadding), maxTop);
+
+  popover.style.left = `${Math.round(left)}px`;
+  popover.style.top = `${Math.round(top)}px`;
+  popover.classList.toggle('opens-up', shouldOpenUp);
+}
+
+function getLibraryPresetColor(preset) {
+  return document.body.classList.contains('dark')
+    ? (preset.colorDark || DEFAULTS.colorDark)
+    : (preset.colorLight || DEFAULTS.colorLight);
+}
+
+function patchStoredHighlightPreset(pageUrl, highlightId, requestedPresetId) {
+  const key = 'highlights_' + pageUrl;
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get([key, 'highlightSettings'], (result) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+
+      const storedSettings = result.highlightSettings || DEFAULTS;
+      const presets = normalizePresets(storedSettings.presets);
+      const fallbackPreset = presets.find(preset => preset.id === 'preset1') || presets[0];
+      const targetPreset = presets.find(preset => preset.id === requestedPresetId) || fallbackPreset;
+      const highlights = result[key];
+      if (!Array.isArray(highlights) || !targetPreset) {
+        resolve({ status: 'missing' });
+        return;
+      }
+
+      let found = false;
+      let changed = false;
+      const next = highlights.map(highlight => {
+        if (!highlight || highlight.id !== highlightId) return highlight;
+        found = true;
+        if (getHighlightPresetId(highlight) === targetPreset.id) return highlight;
+        changed = true;
+        return { ...highlight, presetId: targetPreset.id };
+      });
+
+      if (!found) {
+        resolve({ status: 'missing' });
+        return;
+      }
+      if (!changed) {
+        resolve({ status: 'unchanged', preset: targetPreset });
+        return;
+      }
+
+      chrome.storage.local.set({ [key]: next }, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve({ status: 'changed', preset: targetPreset });
+      });
+    });
+  });
+}
+
+function reassignLibraryHighlightTag(pageUrl, highlightId, presetId) {
+  pendingLibraryTagFocus = { pageUrl, highlightId };
+  closeLibraryTagPopover({ immediate: true });
+  libraryTagWriteQueue = libraryTagWriteQueue
+    .catch(() => undefined)
+    .then(() => patchStoredHighlightPreset(pageUrl, highlightId, presetId));
+
+  libraryTagWriteQueue.then(result => {
+    if (result.status === 'changed') {
+      showToast(`Changed tag to ${result.preset.name || 'Untitled'}`);
+    } else if (result.status === 'unchanged') {
+      restorePendingLibraryTagSelectorFocus();
+    } else if (result.status === 'missing') {
+      pendingLibraryTagFocus = null;
+      showToast('Highlight is no longer available');
+      refreshLibrary();
+    }
+  }).catch(() => {
+    pendingLibraryTagFocus = null;
+    showToast('Could not change tag');
+    refreshLibrary();
+  });
+}
+
+function restorePendingLibraryTagSelectorFocus() {
+  if (!pendingLibraryTagFocus) return;
+  const focusTarget = pendingLibraryTagFocus;
+  pendingLibraryTagFocus = null;
+  requestAnimationFrame(() => {
+    const selector = Array.from(highlightsContainer.querySelectorAll('.snippet-tag-selector')).find(button => (
+      button.dataset.pageUrl === focusTarget.pageUrl
+      && button.dataset.highlightId === focusTarget.highlightId
+    ));
+    selector?.focus({ preventScroll: true });
+  });
+}
+
+function openTagPresetSettingsFromLibrary() {
+  closeLibraryTagPopover({ immediate: true });
+  activateMainTab('settings');
+  requestAnimationFrame(() => {
+    scrollToSettingsSection('presets-tags', { focusHeading: true });
+  });
+}
+
+function createLibraryTagOption(preset, currentPresetId, pageUrl, highlightId) {
+  const option = document.createElement('button');
+  const isCurrent = preset.id === currentPresetId;
+  option.type = 'button';
+  option.className = 'fab-popover-option library-tag-option';
+  option.setAttribute('role', 'menuitemradio');
+  option.setAttribute('aria-checked', String(isCurrent));
+
+  const swatch = document.createElement('span');
+  swatch.className = 'fab-popover-option-icon library-tag-option-swatch';
+  swatch.style.backgroundColor = getLibraryPresetColor(preset);
+  swatch.setAttribute('aria-hidden', 'true');
+
+  const label = document.createElement('span');
+  label.className = 'fab-popover-option-label library-tag-option-label';
+  label.textContent = preset.name || 'Untitled';
+
+  const check = document.createElement('span');
+  check.innerHTML = libraryIconMarkup('check');
+  const checkSvg = check.firstElementChild;
+  checkSvg.classList.add('library-tag-option-check');
+
+  option.appendChild(swatch);
+  option.appendChild(label);
+  option.appendChild(checkSvg);
+  option.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isCurrent) {
+      closeLibraryTagPopover({ restoreFocus: true });
+      return;
+    }
+    reassignLibraryHighlightTag(pageUrl, highlightId, preset.id);
+  });
+  return option;
+}
+
+function openLibraryTagPopover(anchor, pageUrl, highlight) {
+  if (!libraryTagPopoverLayerEl || !anchor || !highlight) return;
+  if (currentLibraryTagPopoverAnchor === anchor) {
+    closeLibraryTagPopover({ restoreFocus: true });
+    return;
+  }
+
+  closeFabPopover({ immediate: true });
+  closeLibraryTagPopover({ immediate: true });
+
+  const currentPreset = getLibraryPresetForHighlight(highlight);
+  const popover = document.createElement('div');
+  popover.className = 'fab-popover library-tag-popover';
+  popover.setAttribute('role', 'menu');
+  popover.setAttribute('aria-label', `Change tag from ${currentPreset.name || 'Untitled'}`);
+
+  const title = document.createElement('div');
+  title.className = 'fab-popover-title';
+  title.textContent = 'Change tag';
+  title.setAttribute('role', 'presentation');
+
+  const list = document.createElement('div');
+  list.className = 'library-tag-popover-list';
+  list.setAttribute('role', 'presentation');
+  activeLibraryPresets.forEach(preset => {
+    list.appendChild(createLibraryTagOption(preset, currentPreset.id, pageUrl, highlight.id));
+  });
+
+  const footer = document.createElement('div');
+  footer.className = 'library-tag-popover-footer';
+  footer.setAttribute('role', 'presentation');
+  const manage = document.createElement('button');
+  manage.type = 'button';
+  manage.className = 'fab-popover-option library-tag-manage';
+  manage.setAttribute('role', 'menuitem');
+  manage.innerHTML = '<span>Manage Tag Presets</span><span aria-hidden="true">→</span>';
+  manage.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openTagPresetSettingsFromLibrary();
+  });
+  footer.appendChild(manage);
+
+  popover.appendChild(title);
+  popover.appendChild(list);
+  popover.appendChild(footer);
+  popover.addEventListener('keydown', event => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const items = Array.from(popover.querySelectorAll('button:not(:disabled)'));
+    if (items.length === 0) return;
+    event.preventDefault();
+    const currentIndex = items.indexOf(document.activeElement);
+    let nextIndex = 0;
+    if (event.key === 'End') nextIndex = items.length - 1;
+    else if (event.key === 'ArrowDown') nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
+    else if (event.key === 'ArrowUp') nextIndex = currentIndex < 0 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length;
+    items[nextIndex].focus({ preventScroll: true });
+  });
+
+  libraryTagPopoverLayerEl.replaceChildren(popover);
+  currentLibraryTagPopover = popover;
+  currentLibraryTagPopoverAnchor = anchor;
+  anchor.setAttribute('aria-expanded', 'true');
+  positionLibraryTagPopover(popover, anchor);
+
+  requestAnimationFrame(() => {
+    if (currentLibraryTagPopover !== popover) return;
+    popover.classList.add('is-open');
+    const currentOption = popover.querySelector('[aria-checked="true"]');
+    (currentOption || popover.querySelector('button'))?.focus({ preventScroll: true });
+  });
+}
+
+function createLibraryTagSelector(pageUrl, highlight) {
+  const preset = getLibraryPresetForHighlight(highlight);
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'snippet-tag-selector';
+  button.title = `Change tag: ${preset.name || 'Untitled'}`;
+  button.setAttribute('aria-label', `Change tag. Current tag: ${preset.name || 'Untitled'}`);
+  button.setAttribute('aria-haspopup', 'menu');
+  button.setAttribute('aria-expanded', 'false');
+  button.dataset.pageUrl = pageUrl;
+  button.dataset.highlightId = highlight.id;
+
+  const dot = document.createElement('span');
+  dot.className = 'snippet-color-dot';
+  dot.style.backgroundColor = getLibraryPresetColor(preset);
+  dot.setAttribute('aria-hidden', 'true');
+
+  const chevron = document.createElement('span');
+  chevron.innerHTML = libraryIconMarkup('chevron');
+  const chevronSvg = chevron.firstElementChild;
+
+  button.appendChild(dot);
+  button.appendChild(chevronSvg);
+  button.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openLibraryTagPopover(button, pageUrl, highlight);
+  });
+  return button;
+}
+
+function initLibraryTagPopoverInteractions() {
+  if (libraryTagPopoverListenersInitialized) return;
+  libraryTagPopoverListenersInitialized = true;
+
+  document.addEventListener('pointerdown', event => {
+    if (!currentLibraryTagPopover) return;
+    if (currentLibraryTagPopover.contains(event.target)) return;
+    if (currentLibraryTagPopoverAnchor?.contains(event.target)) return;
+    closeLibraryTagPopover();
+  });
+  document.addEventListener('focusin', event => {
+    if (!currentLibraryTagPopover) return;
+    if (currentLibraryTagPopover.contains(event.target)) return;
+    if (currentLibraryTagPopoverAnchor?.contains(event.target)) return;
+    closeLibraryTagPopover();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !currentLibraryTagPopover) return;
+    event.preventDefault();
+    closeLibraryTagPopover({ restoreFocus: true });
+  });
+  window.addEventListener('resize', () => closeLibraryTagPopover());
+  window.addEventListener('scroll', event => {
+    if (currentLibraryTagPopover && !currentLibraryTagPopover.contains(event.target)) {
+      closeLibraryTagPopover();
+    }
+  }, true);
 }
 
 function loadTagsView() {
@@ -2605,6 +2946,8 @@ function loadTagHighlights(presetId) {
 function libraryIconMarkup(iconName) {
   const paths = {
     back: '<path d="m15 18-6-6 6-6"/>',
+    check: '<path d="m5 12 4 4L19 6"/>',
+    chevron: '<path d="m8 10 4 4 4-4"/>',
     star: '<path d="M12 2.8l2.82 5.72 6.31.92-4.57 4.45 1.08 6.29L12 17.22l-5.64 2.96 1.08-6.29-4.57-4.45 6.31-.92L12 2.8z"/>',
     trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6"/>',
     restore: '<path d="M3 7v5h5"/><path d="M5.1 16a8 8 0 1 0 .5-9.4L3 9"/>'
@@ -2712,7 +3055,10 @@ function loadAllHighlights() {
       return;
     }
 
-    renderHighlights(filtered.pages, filtered.totalCount, { countLabel: 'saved' });
+    renderHighlights(filtered.pages, filtered.totalCount, {
+      countLabel: 'saved',
+      allowTagChange: true
+    });
   });
 }
 
@@ -2774,7 +3120,10 @@ function loadFavoriteHighlights() {
     }
 
     filtered.pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
-    renderHighlights(filtered.pages, filtered.totalCount, { countLabel: 'favorited' });
+    renderHighlights(filtered.pages, filtered.totalCount, {
+      countLabel: 'favorited',
+      allowTagChange: true
+    });
   });
 }
 
@@ -3110,14 +3459,19 @@ function renderHighlights(pages, totalCount, options = {}) {
       text.className = 'snippet-text';
       text.textContent = hl.text;
 
-      const colorSlot = document.createElement('span');
-      colorSlot.className = 'snippet-color-slot';
-      const dot = document.createElement('span');
-      dot.className = 'snippet-color-dot';
-      const resolvedColor = getLibraryHighlightColor(hl);
-      dot.style.backgroundColor = resolvedColor;
-      dot.title = getLibraryPresetForHighlight(hl).name || resolvedColor;
-      colorSlot.appendChild(dot);
+      let colorSlot;
+      if (options.allowTagChange) {
+        colorSlot = createLibraryTagSelector(page.url, hl);
+      } else {
+        colorSlot = document.createElement('span');
+        colorSlot.className = 'snippet-color-slot';
+        const dot = document.createElement('span');
+        dot.className = 'snippet-color-dot';
+        const resolvedColor = getLibraryHighlightColor(hl);
+        dot.style.backgroundColor = resolvedColor;
+        dot.title = getLibraryPresetForHighlight(hl).name || resolvedColor;
+        colorSlot.appendChild(dot);
+      }
 
       const star = createStarButton(page.url, hl);
 
@@ -3143,6 +3497,8 @@ function renderHighlights(pages, totalCount, options = {}) {
     group.appendChild(list);
     highlightsContainer.appendChild(group);
   });
+
+  restorePendingLibraryTagSelectorFocus();
 }
 
 // Delete a single highlight by ID (soft-delete into Recently Deleted)
@@ -3316,6 +3672,7 @@ loadSidebarCollapsedState();
 initSidebarCollapseToggle();
 initSearchCollapsedBtn();
 initSettingsStickyHeaderMetrics();
+initLibraryTagPopoverInteractions();
 
 const urlParams = new URLSearchParams(window.location.search);
 const tabParam = urlParams.get('tab');
