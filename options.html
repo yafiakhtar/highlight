@@ -2896,16 +2896,6 @@
       white-space: nowrap;
     }
 
-    .folder-manager-toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      min-height: 44px;
-      padding-bottom: 14px;
-      border-bottom: 1px solid var(--library-surface-divider);
-    }
-
     .folder-view-toolbar {
       justify-content: flex-start;
     }
@@ -2913,6 +2903,11 @@
     .folder-manager-list {
       display: flex;
       flex-direction: column;
+    }
+
+    .folder-manager-delete {
+      font-size: 20px;
+      line-height: 1;
     }
 
     .folder-manager-row {
@@ -3616,16 +3611,6 @@
     }
 
     @media (max-width: 560px) {
-      .folder-manager-toolbar {
-        align-items: stretch;
-        flex-direction: column;
-      }
-
-      .folder-manager-toolbar .btn {
-        align-self: flex-start;
-        min-height: 44px;
-      }
-
       .library-section-surface .snippet-item {
         flex-direction: column;
         gap: 6px;

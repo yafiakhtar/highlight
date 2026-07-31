@@ -2319,6 +2319,7 @@ const RECENT_FOLDER_LIMIT = 5;
 let activeLibraryFolders = [];
 let currentFolderId = null;
 let editingFolderId = null;
+let folderDeleteMode = false;
 let folderDeleteTargetId = null;
 let folderDeleteTrigger = null;
 let folderMutationQueue = Promise.resolve();
@@ -3556,6 +3557,7 @@ function countHighlightsByFolder(all, folders) {
 function loadFoldersView() {
   chrome.storage.local.get(null, all => {
     activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
+    if (activeLibraryFolders.length === 0) folderDeleteMode = false;
     renderLibraryFolderChildren(activeLibraryFolders);
     const selectedFolder = getFolderById(currentFolderId);
     if (currentFolderId && selectedFolder) {
@@ -3583,18 +3585,7 @@ function renderFolderManager(folders, counts, { filtered = false, totalFolders =
   highlightCount.textContent = `${filtered ? folders.length : totalFolders} ${folders.length === 1 ? 'folder' : 'folders'}`;
   highlightsContainer.innerHTML = '';
 
-  const toolbar = document.createElement('div');
-  toolbar.className = 'folder-manager-toolbar';
-  const summary = document.createElement('span');
-  summary.className = 'page-url';
-  summary.textContent = 'One folder per highlight';
-  const addButton = document.createElement('button');
-  addButton.type = 'button';
-  addButton.className = 'btn btn-primary';
-  addButton.textContent = 'Add Folder';
-  addButton.addEventListener('click', createFolderFromManager);
-  toolbar.append(summary, addButton);
-  highlightsContainer.appendChild(toolbar);
+  const footer = createFolderManagerActions(totalFolders > 0);
 
   if (folders.length === 0) {
     const empty = document.createElement('div');
@@ -3603,6 +3594,7 @@ function renderFolderManager(folders, counts, { filtered = false, totalFolders =
       ? '<div class="empty-state-title">No results</div>Try a different folder name.'
       : '<div class="empty-state-title">No folders yet</div>Create a folder to start organizing highlights.';
     highlightsContainer.appendChild(empty);
+    highlightsContainer.appendChild(footer);
     return;
   }
 
@@ -3666,17 +3658,54 @@ function renderFolderManager(folders, counts, { filtered = false, totalFolders =
       });
       const remove = document.createElement('button');
       remove.type = 'button';
-      remove.className = 'library-action-btn is-danger';
-      remove.innerHTML = libraryIconMarkup('trash');
+      remove.className = 'library-action-btn is-danger folder-manager-delete';
+      remove.textContent = '×';
       remove.title = `Delete ${folder.name}`;
       remove.setAttribute('aria-label', remove.title);
       remove.addEventListener('click', () => openFolderDeleteDialog(folder.id, count, remove));
-      actions.append(rename, remove);
+      actions.appendChild(rename);
+      if (folderDeleteMode) actions.appendChild(remove);
       row.append(open, actions);
     }
     list.appendChild(row);
   });
   highlightsContainer.appendChild(list);
+  highlightsContainer.appendChild(footer);
+}
+
+function createFolderManagerActions(hasFolders) {
+  if (!hasFolders) folderDeleteMode = false;
+
+  const actions = document.createElement('div');
+  actions.className = 'presets-footer-actions folder-manager-footer-actions';
+
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'btn btn-secondary presets-footer-icon';
+  add.title = 'Add folder';
+  add.setAttribute('aria-label', 'Add folder');
+  add.innerHTML = '<span class="preset-add-icon" aria-hidden="true">+</span>';
+  add.addEventListener('click', createFolderFromManager);
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'btn btn-secondary presets-footer-icon preset-delete-mode-toggle';
+  remove.disabled = !hasFolders;
+  remove.setAttribute('aria-pressed', String(folderDeleteMode));
+  const removeLabel = folderDeleteMode ? 'Finish deleting folders' : 'Delete folders';
+  remove.title = removeLabel;
+  remove.setAttribute('aria-label', removeLabel);
+  remove.innerHTML = `
+    <span class="preset-delete-trash-icon" aria-hidden="true">${libraryIconMarkup('trash')}</span>
+    <span class="preset-delete-done-icon" aria-hidden="true">${libraryIconMarkup('check')}</span>
+  `;
+  remove.addEventListener('click', () => {
+    folderDeleteMode = !folderDeleteMode;
+    refreshLibrary();
+  });
+
+  actions.append(add, remove);
+  return actions;
 }
 
 function renderFolderHighlights(all, folder) {
