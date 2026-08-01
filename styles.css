@@ -82,7 +82,8 @@
   fill: currentColor !important;
 }
 
-.text-highlighter-fab-folder {
+.text-highlighter-fab-folder,
+.text-highlighter-fab-close {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -92,14 +93,16 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.12) !important;
 }
 
-.text-highlighter-fab.is-dark-page .text-highlighter-fab-folder {
+.text-highlighter-fab.is-dark-page .text-highlighter-fab-folder,
+.text-highlighter-fab.is-dark-page .text-highlighter-fab-close {
   border-color: rgba(255,255,255,0.24) !important;
   background: rgba(28,28,30,0.92) !important;
   color: #f3f3f3 !important;
   box-shadow: 0 1px 4px rgba(0,0,0,0.42) !important;
 }
 
-.text-highlighter-fab-folder svg {
+.text-highlighter-fab-folder svg,
+.text-highlighter-fab-close svg {
   width: 12px !important;
   height: 12px !important;
   fill: none !important;

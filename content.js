@@ -38,7 +38,7 @@ let fabLayoutV1 = null;
 
 const FAB_LAYOUT_KEY = 'fabLayoutV1';
 const FOLDERS_KEY = 'highlightFoldersV1';
-const FAB_ACTION_IDS = new Set(['favorite', 'folder', 'comment', 'copyLink', 'share']);
+const FAB_ACTION_IDS = new Set(['favorite', 'folder', 'close', 'comment', 'copyLink', 'share']);
 const MAX_FOLDER_NAME_LENGTH = 60;
 const RECENT_FOLDER_LIMIT = 5;
 
@@ -1758,6 +1758,40 @@ function buildFabButtonsInto(container) {
     return btn;
   };
 
+  const makeCloseBtn = () => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'text-highlighter-fab-action text-highlighter-fab-close';
+    btn.dataset.fabKind = 'action';
+    btn.dataset.actionId = 'close';
+    btn.style.padding = '0';
+    btn.style.margin = '0';
+    btn.style.width = '18px';
+    btn.style.height = '18px';
+    btn.style.borderRadius = '999px';
+    btn.style.cursor = 'pointer';
+    btn.title = 'Close FAB, keep text selected';
+    btn.setAttribute('aria-label', btn.title);
+    const svgNamespace = 'http://www.w3.org/2000/svg';
+    const icon = document.createElementNS(svgNamespace, 'svg');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS(svgNamespace, 'path');
+    path.setAttribute('d', 'M6 6l12 12M18 6 6 18');
+    icon.appendChild(path);
+    btn.appendChild(icon);
+    btn.addEventListener('mousedown', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    btn.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      hideHighlightFab();
+    });
+    return btn;
+  };
+
   layout.slots.forEach((slotId) => {
     if (!slotId) {
       appendSpacer();
@@ -1807,6 +1841,13 @@ function buildFabButtonsInto(container) {
       const folderBtn = makeFolderBtn();
       container.appendChild(folderBtn);
       highlightFabButtons.push(folderBtn);
+      return;
+    }
+
+    if (slotId === 'close') {
+      const closeBtn = makeCloseBtn();
+      container.appendChild(closeBtn);
+      highlightFabButtons.push(closeBtn);
       return;
     }
 

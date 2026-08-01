@@ -569,6 +569,7 @@ const fabPopoverLayerEl = document.getElementById('fabPopoverLayer');
 const FAB_ACTION_DEFS = [
   { id: 'favorite', label: 'Favorite', type: 'action', glyph: '☆', paletteGlyph: '☆' },
   { id: 'folder', label: 'Folder', type: 'action', glyph: '', paletteGlyph: '', icon: 'folder' },
+  { id: 'close', label: 'Close', type: 'action', glyph: '', paletteGlyph: '', icon: 'close' },
   { id: 'comment', label: 'Comment', type: 'placeholder', glyph: '⋯', paletteGlyph: '✎' },
   { id: 'copyLink', label: 'Copy link', type: 'placeholder', glyph: '⋯', paletteGlyph: '⧉' },
   { id: 'share', label: 'Share', type: 'placeholder', glyph: '⋯', paletteGlyph: '↗' }
@@ -3445,6 +3446,7 @@ function libraryIconMarkup(iconName) {
   const paths = {
     back: '<path d="m15 18-6-6 6-6"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
+    close: '<path d="M6 6l12 12M18 6 6 18"/>',
     chevron: '<path d="m8 10 4 4 4-4"/>',
     folder: '<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4z"/>',
