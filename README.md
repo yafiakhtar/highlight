@@ -21,6 +21,7 @@
 - **Flexible controls** — place, swap, reorder, replace, or remove tag presets and actions
 - **Favorite action** — create a default-tag favorite directly, or choose a tag color first and favorite that same highlight during the retained FAB window
 - **Folder action** — file a newly highlighted selection through a searchable recent-folder picker, including create-from-search
+- **Close action** — dismiss the FAB while keeping the current text selection available
 - **In-place recoloring** — choosing another tag during the retained window updates the same highlight instead of creating a duplicate
 - **Visibility control** — toggle the FAB from the popup or Settings
 - **Coming soon** — Comment, Copy link, and Share remain clearly labeled as unfinished
