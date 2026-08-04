@@ -1609,7 +1609,8 @@
 
     .fab-popover-layer,
     .library-tag-popover-layer,
-    .library-folder-popover-layer {
+    .library-folder-popover-layer,
+    .library-comment-popover-layer {
       position: fixed;
       inset: 0;
       z-index: 1200;
@@ -3124,6 +3125,111 @@
       transition: color 0.15s ease, background 0.15s ease;
     }
 
+    .snippet-comment-selector {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 36px;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--opt-text-muted);
+      cursor: pointer;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+
+    .snippet-comment-selector:hover,
+    .snippet-comment-selector[aria-expanded="true"] {
+      background: var(--opt-surface);
+      color: var(--opt-text-strong);
+    }
+
+    .snippet-comment-selector svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .snippet-comment-selector.has-comment {
+      color: var(--opt-accent);
+    }
+
+    .snippet-comment-selector.has-comment svg {
+      fill: color-mix(in srgb, var(--opt-accent) 20%, transparent);
+    }
+
+    .library-comment-popover {
+      width: min(300px, calc(100vw - 24px));
+    }
+
+    .library-comment-textarea {
+      box-sizing: border-box;
+      display: block;
+      width: 100%;
+      min-height: 112px;
+      resize: vertical;
+      padding: 10px;
+      border: 1px solid var(--opt-border);
+      border-radius: 7px;
+      background: var(--opt-surface-alt);
+      color: var(--opt-text-strong);
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .library-comment-textarea:focus-visible {
+      border-color: var(--opt-accent);
+      outline: 2px solid color-mix(in srgb, var(--opt-accent) 25%, transparent);
+      outline-offset: 0;
+    }
+
+    .library-comment-meta {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 22px;
+      padding: 5px 2px 2px;
+      color: var(--opt-text-muted);
+      font-size: 10px;
+    }
+
+    .library-comment-error {
+      color: var(--opt-danger);
+    }
+
+    .library-comment-counter {
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+
+    .library-comment-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 7px;
+      margin-top: 3px;
+    }
+
+    .library-comment-actions .btn {
+      min-height: 36px;
+      padding: 7px 11px;
+      font-size: 11px;
+    }
+
+    .library-comment-delete {
+      margin-right: auto;
+      color: var(--opt-danger);
+    }
+
     .snippet-folder-selector:hover,
     .snippet-folder-selector[aria-expanded="true"] {
       background: var(--opt-surface);
@@ -3640,6 +3746,12 @@
         flex-basis: 44px;
       }
 
+      .snippet-comment-selector {
+        width: 44px;
+        height: 44px;
+        flex-basis: 44px;
+      }
+
       #sidebar-library .library-folders-toggle,
       #sidebar-library .library-folder-children {
         display: none;
@@ -3659,7 +3771,8 @@
       .library-tag-option,
       .library-tag-manage,
       .folder-picker-option,
-      .folder-picker-search {
+      .folder-picker-search,
+      .library-comment-actions .btn {
         min-height: 44px;
       }
 
@@ -3681,6 +3794,7 @@
       #tab-library .library-action-btn,
       #tab-library .snippet-tag-selector,
       #tab-library .snippet-folder-selector,
+      #tab-library .snippet-comment-selector,
       #tab-library .tags-back-btn {
         transition: none;
       }
@@ -4020,6 +4134,10 @@
             <button type="button" class="sidebar-item" data-view="tags" title="Tags">
               <span class="sidebar-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
               <span class="sidebar-label">Tags</span>
+            </button>
+            <button type="button" class="sidebar-item" data-view="comments" title="Comments">
+              <span class="sidebar-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg></span>
+              <span class="sidebar-label">Comments</span>
             </button>
             <div class="library-folders-nav" id="libraryFoldersNav">
               <div class="library-folders-nav-row">
@@ -4405,6 +4523,17 @@
   <div class="fab-popover-layer" id="fabPopoverLayer"></div>
   <div class="library-tag-popover-layer" id="libraryTagPopoverLayer"></div>
   <div class="library-folder-popover-layer" id="libraryFolderPopoverLayer"></div>
+  <div class="library-comment-popover-layer" id="libraryCommentPopoverLayer"></div>
+  <dialog class="reset-dialog" id="commentDeleteDialog" aria-labelledby="commentDeleteDialogTitle" aria-describedby="commentDeleteDialogDescription">
+    <div class="reset-dialog-panel">
+      <h2 class="reset-dialog-title" id="commentDeleteDialogTitle">Delete comment?</h2>
+      <p class="reset-dialog-description" id="commentDeleteDialogDescription">This removes only the comment. The highlight remains saved everywhere else.</p>
+      <div class="reset-dialog-actions">
+        <button type="button" class="btn btn-secondary" id="cancelCommentDeleteBtn">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmCommentDeleteBtn">Delete comment</button>
+      </div>
+    </div>
+  </dialog>
   <dialog class="reset-dialog folder-delete-dialog" id="folderDeleteDialog" aria-labelledby="folderDeleteDialogTitle" aria-describedby="folderDeleteDialogDescription">
     <div class="reset-dialog-panel">
       <h2 class="reset-dialog-title" id="folderDeleteDialogTitle">Delete folder?</h2>

@@ -235,6 +235,7 @@ function activateMainTab(tabName) {
   closeFabPopover();
   closeLibraryTagPopover();
   closeLibraryFolderPopover();
+  closeLibraryCommentPopover();
   closeMobileLibrarySearch();
   if (currentTab === tabName) {
     if (tabName === 'settings') scheduleSettingsScrollSpy();
@@ -312,6 +313,10 @@ const LIBRARY_VIEW_META = {
   tags: {
     title: 'Tags',
     description: 'Browse your saved highlights by tag.'
+  },
+  comments: {
+    title: 'Comments',
+    description: 'Review highlights with comments and notes.'
   },
   folders: {
     title: 'Folders',
@@ -570,7 +575,7 @@ const FAB_ACTION_DEFS = [
   { id: 'favorite', label: 'Favorite', type: 'action', glyph: '☆', paletteGlyph: '☆' },
   { id: 'folder', label: 'Folder', type: 'action', glyph: '', paletteGlyph: '', icon: 'folder' },
   { id: 'close', label: 'Close', type: 'action', glyph: '', paletteGlyph: '', icon: 'close' },
-  { id: 'comment', label: 'Comment', type: 'placeholder', glyph: '⋯', paletteGlyph: '✎' },
+  { id: 'comment', label: 'Comment', type: 'action', glyph: '', paletteGlyph: '', icon: 'comment' },
   { id: 'copyLink', label: 'Copy link', type: 'placeholder', glyph: '⋯', paletteGlyph: '⧉' },
   { id: 'share', label: 'Share', type: 'placeholder', glyph: '⋯', paletteGlyph: '↗' }
 ];
@@ -2318,13 +2323,13 @@ const highlightCount = document.getElementById('highlightCount');
 const librarySearchInput = document.getElementById('librarySearch');
 const libraryTagPopoverLayerEl = document.getElementById('libraryTagPopoverLayer');
 const libraryFolderPopoverLayerEl = document.getElementById('libraryFolderPopoverLayer');
+const libraryCommentPopoverLayerEl = document.getElementById('libraryCommentPopoverLayer');
 
 let libraryQuery = '';
 let librarySearchDebounce = null;
 let currentLibraryTagPopover = null;
 let currentLibraryTagPopoverAnchor = null;
 let libraryTagPopoverCleanupTimer = null;
-let libraryTagWriteQueue = Promise.resolve();
 let libraryTagPopoverListenersInitialized = false;
 let pendingLibraryTagFocus = null;
 let currentLibraryFolderPopover = null;
@@ -2333,12 +2338,27 @@ let libraryFolderPopoverCleanupTimer = null;
 let libraryFolderPopoverRequestVersion = 0;
 let libraryFolderPopoverListenersInitialized = false;
 let pendingLibraryFolderFocus = null;
+let currentLibraryCommentPopover = null;
+let currentLibraryCommentPopoverAnchor = null;
+let libraryCommentPopoverCleanupTimer = null;
+let libraryCommentPopoverListenersInitialized = false;
+let libraryHighlightWriteQueue = Promise.resolve();
+let pendingLibraryCommentFocus = null;
+let libraryCommentDeleteTarget = null;
+let libraryCommentDeleteTrigger = null;
 
 const RECENTLY_DELETED_KEY = 'recentlyDeletedHighlights';
 const FOLDERS_KEY = 'highlightFoldersV1';
 const FOLDERS_EXPANDED_KEY = 'libraryFoldersExpanded';
 const MAX_FOLDER_NAME_LENGTH = 60;
 const RECENT_FOLDER_LIMIT = 5;
+const MAX_COMMENT_LENGTH = 500;
+
+function normalizeComment(value) {
+  return typeof value === 'string'
+    ? value.replace(/\r\n?/g, '\n').trim().slice(0, MAX_COMMENT_LENGTH)
+    : '';
+}
 
 let activeLibraryFolders = [];
 let currentFolderId = null;
@@ -2353,6 +2373,9 @@ const folderDeleteDialogDescription = document.getElementById('folderDeleteDialo
 const cancelFolderDeleteBtn = document.getElementById('cancelFolderDeleteBtn');
 const keepFolderHighlightsBtn = document.getElementById('keepFolderHighlightsBtn');
 const deleteFolderHighlightsBtn = document.getElementById('deleteFolderHighlightsBtn');
+const commentDeleteDialog = document.getElementById('commentDeleteDialog');
+const cancelCommentDeleteBtn = document.getElementById('cancelCommentDeleteBtn');
+const confirmCommentDeleteBtn = document.getElementById('confirmCommentDeleteBtn');
 
 function normalizeFolderName(name) {
   return (name || '').toString().replace(/\s+/g, ' ').trim().slice(0, MAX_FOLDER_NAME_LENGTH);
@@ -2491,6 +2514,14 @@ function normalizeStoredHighlights(raw) {
         one.text = combined;
         changed = true;
       }
+      const comment = normalizeComment(one.comment);
+      if (comment) {
+        if (one.comment !== comment) changed = true;
+        one.comment = comment;
+      } else if (Object.prototype.hasOwnProperty.call(one, 'comment')) {
+        delete one.comment;
+        changed = true;
+      }
       merged.push(one);
       continue;
     }
@@ -2524,6 +2555,7 @@ function normalizeStoredHighlights(raw) {
     const createdAt = Math.min(...items.map(it => (typeof it.createdAt === 'number' ? it.createdAt : Date.now())));
     const favorited = items.some(it => it && it.favorited === true);
     const folderId = items.find(it => typeof it?.folderId === 'string' && it.folderId.trim())?.folderId || null;
+    const comment = items.map(it => normalizeComment(it?.comment)).find(Boolean) || '';
     const rawPresetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
       || base.presetId
       || DEFAULTS.presets[0].id;
@@ -2545,6 +2577,8 @@ function normalizeStoredHighlights(raw) {
     else delete out.favorited;
     if (folderId) out.folderId = folderId;
     else delete out.folderId;
+    if (comment) out.comment = comment;
+    else delete out.comment;
 
     merged.push(out);
   }
@@ -2555,6 +2589,7 @@ function normalizeStoredHighlights(raw) {
 function refreshLibrary() {
   closeLibraryTagPopover({ immediate: true });
   closeLibraryFolderPopover({ immediate: true });
+  closeLibraryCommentPopover({ immediate: true });
   syncLibraryViewHeader();
   if (currentLibraryView === 'recently-deleted') {
     loadRecentlyDeleted();
@@ -2562,6 +2597,8 @@ function refreshLibrary() {
     loadFoldersView();
   } else if (currentLibraryView === 'tags') {
     loadTagsView();
+  } else if (currentLibraryView === 'comments') {
+    loadCommentHighlights();
   } else if (currentLibraryView === 'favorites') {
     loadFavoriteHighlights();
   } else {
@@ -2731,11 +2768,7 @@ function patchStoredHighlightPreset(pageUrl, highlightId, requestedPresetId) {
 function reassignLibraryHighlightTag(pageUrl, highlightId, presetId) {
   pendingLibraryTagFocus = { pageUrl, highlightId };
   closeLibraryTagPopover({ immediate: true });
-  libraryTagWriteQueue = libraryTagWriteQueue
-    .catch(() => undefined)
-    .then(() => patchStoredHighlightPreset(pageUrl, highlightId, presetId));
-
-  libraryTagWriteQueue.then(result => {
+  queueLibraryHighlightMutation(() => patchStoredHighlightPreset(pageUrl, highlightId, presetId)).then(result => {
     if (result.status === 'changed') {
       showToast(`Changed tag to ${result.preset.name || 'Untitled'}`);
     } else if (result.status === 'unchanged') {
@@ -2819,6 +2852,7 @@ function openLibraryTagPopover(anchor, pageUrl, highlight) {
 
   closeFabPopover({ immediate: true });
   closeLibraryTagPopover({ immediate: true });
+  closeLibraryCommentPopover({ immediate: true });
 
   const currentPreset = getLibraryPresetForHighlight(highlight);
   const popover = document.createElement('div');
@@ -3039,7 +3073,9 @@ function restorePendingLibraryFolderSelectorFocus() {
 function assignLibraryHighlightFolder(pageUrl, highlightId, folderId, createName = '') {
   pendingLibraryFolderFocus = { pageUrl, highlightId };
   closeLibraryFolderPopover({ immediate: true });
-  queueFolderMutation(() => patchLibraryHighlightFolder(pageUrl, highlightId, folderId, createName))
+  queueLibraryHighlightMutation(() => (
+    queueFolderMutation(() => patchLibraryHighlightFolder(pageUrl, highlightId, folderId, createName))
+  ))
     .then(result => {
       if (result.status === 'changed') {
         showToast(result.folder ? `Added to ${result.folder.name}` : 'Removed from folder');
@@ -3140,6 +3176,7 @@ function openLibraryFolderPopover(anchor, pageUrl, highlight) {
   }
   closeLibraryTagPopover({ immediate: true });
   closeLibraryFolderPopover({ immediate: true });
+  closeLibraryCommentPopover({ immediate: true });
   const requestVersion = ++libraryFolderPopoverRequestVersion;
   chrome.storage.local.get(FOLDERS_KEY, result => {
     if (requestVersion !== libraryFolderPopoverRequestVersion || !anchor.isConnected) return;
@@ -3252,6 +3289,306 @@ function initLibraryFolderPopoverInteractions() {
     if (currentLibraryFolderPopover && !currentLibraryFolderPopover.contains(event.target)) closeLibraryFolderPopover();
   }, true);
 }
+
+function closeLibraryCommentPopover({ immediate = false, restoreFocus = false } = {}) {
+  if (libraryCommentPopoverCleanupTimer) {
+    clearTimeout(libraryCommentPopoverCleanupTimer);
+    libraryCommentPopoverCleanupTimer = null;
+  }
+  const popover = currentLibraryCommentPopover;
+  const anchor = currentLibraryCommentPopoverAnchor;
+  currentLibraryCommentPopover = null;
+  currentLibraryCommentPopoverAnchor = null;
+  if (anchor) anchor.setAttribute('aria-expanded', 'false');
+  if (restoreFocus && anchor?.isConnected) anchor.focus({ preventScroll: true });
+  if (!popover) {
+    if (immediate && libraryCommentPopoverLayerEl) libraryCommentPopoverLayerEl.innerHTML = '';
+    return;
+  }
+  const remove = () => popover.remove();
+  if (immediate || prefersReducedLibraryMotion()) {
+    remove();
+    return;
+  }
+  popover.classList.remove('is-open');
+  popover.classList.add('is-closing');
+  popover.setAttribute('aria-hidden', 'true');
+  popover.addEventListener('transitionend', remove, { once: true });
+  libraryCommentPopoverCleanupTimer = setTimeout(remove, 220);
+}
+
+function patchLibraryHighlightComment(pageUrl, highlightId, requestedComment) {
+  const key = 'highlights_' + pageUrl;
+  const comment = normalizeComment(requestedComment);
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(key, result => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      const highlights = Array.isArray(result[key]) ? result[key] : [];
+      const index = highlights.findIndex(highlight => highlight?.id === highlightId);
+      if (index < 0) {
+        resolve({ status: 'missing' });
+        return;
+      }
+      const current = normalizeComment(highlights[index].comment);
+      if (current === comment) {
+        resolve({ status: 'unchanged', comment });
+        return;
+      }
+      const nextHighlight = { ...highlights[index] };
+      if (comment) nextHighlight.comment = comment;
+      else delete nextHighlight.comment;
+      const nextHighlights = highlights.slice();
+      nextHighlights[index] = nextHighlight;
+      chrome.storage.local.set({ [key]: nextHighlights }, () => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve({ status: 'changed', comment });
+      });
+    });
+  });
+}
+
+function restorePendingLibraryCommentFocus() {
+  if (!pendingLibraryCommentFocus) return;
+  const target = pendingLibraryCommentFocus;
+  pendingLibraryCommentFocus = null;
+  requestAnimationFrame(() => {
+    const selector = Array.from(highlightsContainer.querySelectorAll('.snippet-comment-selector')).find(button => (
+      button.dataset.pageUrl === target.pageUrl && button.dataset.highlightId === target.highlightId
+    ));
+    if (selector) selector.focus({ preventScroll: true });
+    else document.getElementById('libraryViewHeading')?.focus({ preventScroll: true });
+  });
+}
+
+function queueLibraryHighlightMutation(task) {
+  libraryHighlightWriteQueue = libraryHighlightWriteQueue.catch(() => undefined).then(task);
+  return libraryHighlightWriteQueue;
+}
+
+function saveLibraryComment(pageUrl, highlightId, comment, popover) {
+  if (popover !== currentLibraryCommentPopover) return;
+  const textarea = popover.querySelector('.library-comment-textarea');
+  const error = popover.querySelector('.library-comment-error');
+  const normalized = normalizeComment(comment);
+  if (!normalized) {
+    if (error) error.textContent = 'Write a comment before saving.';
+    textarea?.focus({ preventScroll: true });
+    return;
+  }
+  popover.setAttribute('aria-busy', 'true');
+  popover.querySelectorAll('textarea, button').forEach(control => { control.disabled = true; });
+  pendingLibraryCommentFocus = { pageUrl, highlightId };
+  queueLibraryHighlightMutation(() => patchLibraryHighlightComment(pageUrl, highlightId, normalized))
+    .then(result => {
+      if (result.status === 'missing') {
+        pendingLibraryCommentFocus = null;
+        closeLibraryCommentPopover({ immediate: true });
+        showToast('Highlight is no longer available');
+        refreshLibrary();
+        return;
+      }
+      closeLibraryCommentPopover({ immediate: true });
+      showToast('Comment saved');
+      if (result.status === 'unchanged') restorePendingLibraryCommentFocus();
+    })
+    .catch(() => {
+      pendingLibraryCommentFocus = null;
+      if (popover !== currentLibraryCommentPopover) return;
+      popover.setAttribute('aria-busy', 'false');
+      popover.querySelectorAll('textarea, button').forEach(control => { control.disabled = false; });
+      if (error) error.textContent = 'Could not save the comment. Try again.';
+      textarea?.focus({ preventScroll: true });
+    });
+}
+
+function openCommentDeleteDialog(pageUrl, highlightId, trigger) {
+  libraryCommentDeleteTarget = { pageUrl, highlightId };
+  libraryCommentDeleteTrigger = trigger || null;
+  closeLibraryCommentPopover({ immediate: true });
+  if (!commentDeleteDialog || typeof commentDeleteDialog.showModal !== 'function') return;
+  commentDeleteDialog.returnValue = '';
+  commentDeleteDialog.showModal();
+  requestAnimationFrame(() => cancelCommentDeleteBtn?.focus({ preventScroll: true }));
+}
+
+function confirmLibraryCommentDelete() {
+  const target = libraryCommentDeleteTarget;
+  if (!target) return;
+  confirmCommentDeleteBtn.disabled = true;
+  cancelCommentDeleteBtn.disabled = true;
+  pendingLibraryCommentFocus = { ...target };
+  queueLibraryHighlightMutation(() => patchLibraryHighlightComment(target.pageUrl, target.highlightId, ''))
+    .then(result => {
+      if (result.status === 'missing') {
+        pendingLibraryCommentFocus = null;
+        showToast('Highlight is no longer available');
+      } else {
+        showToast('Comment deleted');
+      }
+      commentDeleteDialog?.close('deleted');
+      refreshLibrary();
+    })
+    .catch(() => {
+      pendingLibraryCommentFocus = null;
+      showToast('Could not delete comment');
+      commentDeleteDialog?.close('error');
+    });
+}
+
+function openLibraryCommentPopover(anchor, pageUrl, highlight) {
+  if (!libraryCommentPopoverLayerEl || !anchor || !highlight) return;
+  if (currentLibraryCommentPopoverAnchor === anchor) {
+    closeLibraryCommentPopover({ restoreFocus: true });
+    return;
+  }
+  closeLibraryTagPopover({ immediate: true });
+  closeLibraryFolderPopover({ immediate: true });
+  closeLibraryCommentPopover({ immediate: true });
+
+  const existing = normalizeComment(highlight.comment);
+  const popover = document.createElement('div');
+  popover.className = 'fab-popover library-comment-popover';
+  popover.setAttribute('role', 'dialog');
+  popover.setAttribute('aria-label', existing ? 'View or edit comment' : 'Add comment');
+  const title = document.createElement('div');
+  title.className = 'fab-popover-title';
+  title.textContent = existing ? 'Edit comment' : 'Add comment';
+  const textarea = document.createElement('textarea');
+  textarea.className = 'library-comment-textarea';
+  textarea.maxLength = MAX_COMMENT_LENGTH;
+  textarea.rows = 5;
+  textarea.placeholder = 'Write a note…';
+  textarea.setAttribute('aria-label', 'Comment');
+  textarea.value = existing;
+  const meta = document.createElement('div');
+  meta.className = 'library-comment-meta';
+  const error = document.createElement('span');
+  error.className = 'library-comment-error';
+  error.setAttribute('role', 'status');
+  error.setAttribute('aria-live', 'polite');
+  const counter = document.createElement('span');
+  counter.className = 'library-comment-counter';
+  meta.append(error, counter);
+  const actions = document.createElement('div');
+  actions.className = 'library-comment-actions';
+  if (existing) {
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn btn-secondary library-comment-delete';
+    remove.textContent = 'Delete comment';
+    remove.addEventListener('click', () => openCommentDeleteDialog(pageUrl, highlight.id, anchor));
+    actions.appendChild(remove);
+  }
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn btn-secondary';
+  cancel.textContent = 'Cancel';
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'btn btn-primary library-comment-save';
+  save.textContent = 'Save';
+  actions.append(cancel, save);
+  popover.append(title, textarea, meta, actions);
+
+  const update = () => {
+    counter.textContent = `${textarea.value.length} / ${MAX_COMMENT_LENGTH}`;
+    save.disabled = !normalizeComment(textarea.value);
+    error.textContent = '';
+  };
+  update();
+  textarea.addEventListener('input', update);
+  textarea.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      saveLibraryComment(pageUrl, highlight.id, textarea.value, popover);
+    }
+  });
+  cancel.addEventListener('click', () => closeLibraryCommentPopover({ restoreFocus: true }));
+  save.addEventListener('click', () => saveLibraryComment(pageUrl, highlight.id, textarea.value, popover));
+  popover.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeLibraryCommentPopover({ restoreFocus: true });
+  });
+
+  libraryCommentPopoverLayerEl.replaceChildren(popover);
+  currentLibraryCommentPopover = popover;
+  currentLibraryCommentPopoverAnchor = anchor;
+  anchor.setAttribute('aria-expanded', 'true');
+  positionLibraryTagPopover(popover, anchor);
+  requestAnimationFrame(() => {
+    if (currentLibraryCommentPopover !== popover) return;
+    popover.classList.add('is-open');
+    textarea.focus({ preventScroll: true });
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  });
+}
+
+function createLibraryCommentSelector(pageUrl, highlight) {
+  const hasComment = Boolean(normalizeComment(highlight.comment));
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'library-action-btn snippet-comment-selector' + (hasComment ? ' has-comment' : '');
+  button.innerHTML = libraryIconMarkup('comment');
+  button.title = hasComment ? 'View or edit comment' : 'Add comment';
+  button.setAttribute('aria-label', button.title);
+  button.setAttribute('aria-haspopup', 'dialog');
+  button.setAttribute('aria-expanded', 'false');
+  button.dataset.pageUrl = pageUrl;
+  button.dataset.highlightId = highlight.id;
+  button.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openLibraryCommentPopover(button, pageUrl, highlight);
+  });
+  return button;
+}
+
+function initLibraryCommentPopoverInteractions() {
+  if (libraryCommentPopoverListenersInitialized) return;
+  libraryCommentPopoverListenersInitialized = true;
+  document.addEventListener('pointerdown', event => {
+    if (!currentLibraryCommentPopover) return;
+    if (currentLibraryCommentPopover.contains(event.target)) return;
+    if (currentLibraryCommentPopoverAnchor?.contains(event.target)) return;
+    closeLibraryCommentPopover();
+  });
+  document.addEventListener('focusin', event => {
+    if (!currentLibraryCommentPopover) return;
+    if (currentLibraryCommentPopover.contains(event.target)) return;
+    if (currentLibraryCommentPopoverAnchor?.contains(event.target)) return;
+    closeLibraryCommentPopover();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !currentLibraryCommentPopover) return;
+    event.preventDefault();
+    closeLibraryCommentPopover({ restoreFocus: true });
+  });
+  window.addEventListener('resize', () => closeLibraryCommentPopover());
+  window.addEventListener('scroll', event => {
+    if (currentLibraryCommentPopover && !currentLibraryCommentPopover.contains(event.target)) closeLibraryCommentPopover();
+  }, true);
+}
+
+cancelCommentDeleteBtn?.addEventListener('click', () => commentDeleteDialog?.close('cancel'));
+confirmCommentDeleteBtn?.addEventListener('click', confirmLibraryCommentDelete);
+commentDeleteDialog?.addEventListener('cancel', event => {
+  event.preventDefault();
+  commentDeleteDialog.close('cancel');
+});
+commentDeleteDialog?.addEventListener('close', () => {
+  confirmCommentDeleteBtn.disabled = false;
+  cancelCommentDeleteBtn.disabled = false;
+  const shouldRestore = ['cancel', 'error'].includes(commentDeleteDialog.returnValue);
+  const trigger = libraryCommentDeleteTrigger;
+  libraryCommentDeleteTarget = null;
+  libraryCommentDeleteTrigger = null;
+  if (shouldRestore && trigger?.isConnected) trigger.focus({ preventScroll: true });
+});
 
 function loadTagsView() {
   if (currentTagPresetId) {
@@ -3449,6 +3786,7 @@ function libraryIconMarkup(iconName) {
     close: '<path d="M6 6l12 12M18 6 6 18"/>',
     chevron: '<path d="m8 10 4 4 4-4"/>',
     folder: '<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/>',
+    comment: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4z"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     star: '<path d="M12 2.8l2.82 5.72 6.31.92-4.57 4.45 1.08 6.29L12 17.22l-5.64 2.96 1.08-6.29-4.57-4.45 6.31-.92L12 2.8z"/>',
@@ -4007,7 +4345,8 @@ function loadAllHighlights() {
     renderHighlights(filtered.pages, filtered.totalCount, {
       countLabel: 'saved',
       allowTagChange: true,
-      allowFolderChange: true
+      allowFolderChange: true,
+      allowCommentChange: true
     });
   });
 }
@@ -4075,7 +4414,64 @@ function loadFavoriteHighlights() {
     renderHighlights(filtered.pages, filtered.totalCount, {
       countLabel: 'favorited',
       allowTagChange: true,
-      allowFolderChange: true
+      allowFolderChange: true,
+      allowCommentChange: true
+    });
+  });
+}
+
+function loadCommentHighlights() {
+  chrome.storage.local.get(null, all => {
+    setActiveLibraryPresets(all.highlightSettings);
+    activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
+    renderLibraryFolderChildren(activeLibraryFolders);
+    const index = all.highlightIndex || {};
+    const pages = [];
+    const storageFixups = {};
+    const tokens = normalizeQuery(libraryQuery);
+
+    Object.keys(all).forEach(storageKey => {
+      if (!storageKey.startsWith('highlights_')) return;
+      const url = storageKey.substring('highlights_'.length);
+      const raw = all[storageKey];
+      if (!Array.isArray(raw) || raw.length === 0) return;
+      const normalized = normalizeStoredHighlights(raw);
+      if (normalized.changed) storageFixups[storageKey] = normalized.highlights;
+      const meta = index[url] || {};
+      const title = meta.title || url;
+      const pageMatches = tokens.length > 0 && (matchesTokens(title, tokens) || matchesTokens(url, tokens));
+      const comments = normalized.highlights.filter(highlight => {
+        const comment = normalizeComment(highlight?.comment);
+        if (!comment) return false;
+        if (tokens.length === 0 || pageMatches) return true;
+        return matchesTokens(highlight.text || '', tokens) || matchesTokens(comment, tokens);
+      });
+      if (comments.length === 0) return;
+      pages.push({
+        url,
+        title,
+        lastUpdated: meta.lastUpdated || Date.now(),
+        highlights: comments.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+      });
+    });
+
+    if (Object.keys(storageFixups).length > 0) chrome.storage.local.set(storageFixups);
+    if (pages.length === 0) {
+      highlightCount.textContent = '';
+      highlightsContainer.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-title">${tokens.length > 0 ? 'No results' : 'No comments yet'}</div>
+          ${tokens.length > 0 ? 'Try a different keyword.' : 'Add a comment to a highlight to see it here.'}
+        </div>
+      `;
+      return;
+    }
+    pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+    const totalCount = pages.reduce((count, page) => count + page.highlights.length, 0);
+    renderHighlights(pages, totalCount, {
+      countLabel: 'commented',
+      allowCommentChange: true,
+      allowPageClear: false
     });
   });
 }
@@ -4348,28 +4744,41 @@ function createStarButton(pageUrl, hl) {
 
 function toggleFavorite(url, highlightId) {
   const key = 'highlights_' + url;
-  chrome.storage.local.get(key, (result) => {
-    const highlights = result[key] || [];
-    let changed = false;
-    const next = highlights.map(h => {
-      if (h.id !== highlightId) return h;
-      changed = true;
-      const copy = { ...h };
-      if (copy.favorited === true) {
-        delete copy.favorited;
-      } else {
-        copy.favorited = true;
+  queueLibraryHighlightMutation(() => new Promise((resolve, reject) => {
+    chrome.storage.local.get(key, result => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
       }
-      return copy;
+      const highlights = Array.isArray(result[key]) ? result[key] : [];
+      const index = highlights.findIndex(highlight => highlight?.id === highlightId);
+      if (index < 0) {
+        resolve(false);
+        return;
+      }
+      const copy = { ...highlights[index] };
+      if (copy.favorited === true) delete copy.favorited;
+      else copy.favorited = true;
+      const next = highlights.slice();
+      next[index] = copy;
+      chrome.storage.local.set({ [key]: next }, () => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(true);
+      });
     });
-    if (!changed) return;
-    chrome.storage.local.set({ [key]: next }, refreshLibrary);
+  })).then(changed => {
+    if (!changed) refreshLibrary();
+  }).catch(() => {
+    showToast('Could not update favorite');
+    refreshLibrary();
   });
 }
 
 // Render all page groups
 function renderHighlights(pages, totalCount, options = {}) {
-  const countWord = options.countLabel === 'favorited' ? 'favorited' : 'saved';
+  const countWord = options.countLabel === 'favorited'
+    ? 'favorited'
+    : (options.countLabel === 'commented' ? 'commented' : 'saved');
   highlightCount.textContent = totalCount + ' ' + countWord;
   highlightsContainer.innerHTML = '';
 
@@ -4406,7 +4815,7 @@ function renderHighlights(pages, totalCount, options = {}) {
     clearBtn.addEventListener('click', () => deletePageHighlights(page.url));
 
     header.appendChild(info);
-    header.appendChild(clearBtn);
+    if (options.allowPageClear !== false) header.appendChild(clearBtn);
     group.appendChild(header);
 
     // Snippet list
@@ -4437,6 +4846,7 @@ function renderHighlights(pages, totalCount, options = {}) {
 
       const star = createStarButton(page.url, hl);
       const folder = options.allowFolderChange ? createLibraryFolderSelector(page.url, hl) : null;
+      const comment = options.allowCommentChange ? createLibraryCommentSelector(page.url, hl) : null;
 
       const del = document.createElement('button');
       del.type = 'button';
@@ -4450,6 +4860,7 @@ function renderHighlights(pages, totalCount, options = {}) {
       rowActions.className = 'snippet-item-actions';
       rowActions.appendChild(colorSlot);
       if (folder) rowActions.appendChild(folder);
+      if (comment) rowActions.appendChild(comment);
       rowActions.appendChild(star);
       rowActions.appendChild(del);
 
@@ -4464,6 +4875,7 @@ function renderHighlights(pages, totalCount, options = {}) {
 
   restorePendingLibraryTagSelectorFocus();
   restorePendingLibraryFolderSelectorFocus();
+  restorePendingLibraryCommentFocus();
 }
 
 // Delete a single highlight by ID (soft-delete into Recently Deleted)
@@ -4652,6 +5064,7 @@ initGlobalNavbarMetrics();
 initSettingsStickyHeaderMetrics();
 initLibraryTagPopoverInteractions();
 initLibraryFolderPopoverInteractions();
+initLibraryCommentPopoverInteractions();
 initLibraryFoldersNavigation();
 
 const urlParams = new URLSearchParams(window.location.search);

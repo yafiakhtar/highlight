@@ -41,6 +41,13 @@ const FOLDERS_KEY = 'highlightFoldersV1';
 const FAB_ACTION_IDS = new Set(['favorite', 'folder', 'close', 'comment', 'copyLink', 'share']);
 const MAX_FOLDER_NAME_LENGTH = 60;
 const RECENT_FOLDER_LIMIT = 5;
+const MAX_COMMENT_LENGTH = 500;
+
+function normalizeComment(value) {
+  return typeof value === 'string'
+    ? value.replace(/\r\n?/g, '\n').trim().slice(0, MAX_COMMENT_LENGTH)
+    : '';
+}
 
 function defaultFabLayoutV1() {
   return { rows: 2, cols: 4, slots: ['preset1', 'preset2', 'preset3', 'preset4', null, null, null, null] };
@@ -269,6 +276,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const key = getStorageKey();
   if (changes[key]) {
     const newHighlights = changes[key].newValue;
+    if (highlightFabCommentPopover && !fabCommentWriteInFlight) {
+      closeHighlightFabCommentPopover();
+    }
     if (
       fabPostHighlightId
       && (
@@ -432,6 +442,14 @@ function normalizeStoredHighlights(raw) {
         one.text = combined;
         changed = true;
       }
+      const comment = normalizeComment(one.comment);
+      if (comment) {
+        if (one.comment !== comment) changed = true;
+        one.comment = comment;
+      } else if (Object.prototype.hasOwnProperty.call(one, 'comment')) {
+        delete one.comment;
+        changed = true;
+      }
       merged.push(one);
       continue;
     }
@@ -467,6 +485,7 @@ function normalizeStoredHighlights(raw) {
     const createdAt = Math.min(...items.map(it => (typeof it.createdAt === 'number' ? it.createdAt : Date.now())));
     const favorited = items.some(it => it && it.favorited === true);
     const folderId = items.find(it => typeof it?.folderId === 'string' && it.folderId.trim())?.folderId || null;
+    const comment = items.map(it => normalizeComment(it?.comment)).find(Boolean) || '';
     const rawPresetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
       || base.presetId
       || DEFAULT_SETTINGS.presets[0].id;
@@ -490,6 +509,8 @@ function normalizeStoredHighlights(raw) {
     else delete out.favorited;
     if (folderId) out.folderId = folderId;
     else delete out.folderId;
+    if (comment) out.comment = comment;
+    else delete out.comment;
 
     merged.push(out);
   }
@@ -564,6 +585,8 @@ function saveHighlights({ favoriteOverrides = new Map() } = {}) {
           if (typeof oldHighlight?.folderId === 'string' && oldHighlight.folderId) {
             highlight.folderId = oldHighlight.folderId;
           }
+          const oldComment = normalizeComment(oldHighlight?.comment);
+          if (oldComment) highlight.comment = oldComment;
           if (favoriteOverrides.has(highlight.id)) {
             if (favoriteOverrides.get(highlight.id) === true) highlight.favorited = true;
           } else if (oldHighlight?.favorited === true) {
@@ -600,7 +623,7 @@ function saveHighlights({ favoriteOverrides = new Map() } = {}) {
   });
 }
 
-function patchStoredHighlight(highlightId, patch) {
+function patchStoredHighlight(highlightId, patch, { updateIndex = true } = {}) {
   const key = getStorageKey();
   const url = window.location.href;
   return new Promise((resolve) => {
@@ -634,18 +657,24 @@ function patchStoredHighlight(highlightId, patch) {
         ) {
           delete nextHighlight.folderId;
         }
+        if (Object.prototype.hasOwnProperty.call(patch, 'comment')) {
+          const comment = normalizeComment(patch.comment);
+          if (comment) nextHighlight.comment = comment;
+          else delete nextHighlight.comment;
+        }
         const nextHighlights = highlights.slice();
         nextHighlights[index] = nextHighlight;
 
-        const highlightIndex = result.highlightIndex || {};
-        highlightIndex[url] = {
-          title: document.title || url,
-          lastUpdated: Date.now()
-        };
-        chrome.storage.local.set({
-          [key]: nextHighlights,
-          highlightIndex
-        }, () => {
+        const payload = { [key]: nextHighlights };
+        if (updateIndex) {
+          const highlightIndex = result.highlightIndex || {};
+          highlightIndex[url] = {
+            title: document.title || url,
+            lastUpdated: Date.now()
+          };
+          payload.highlightIndex = highlightIndex;
+        }
+        chrome.storage.local.set(payload, () => {
           resolve(chrome.runtime.lastError ? null : nextHighlight);
         });
       });
@@ -1179,6 +1208,11 @@ let highlightFabStatusTimer = null;
 let highlightFabFolderPopover = null;
 let highlightFabFolderRequestVersion = 0;
 let highlightFabFolderRequestPending = false;
+let highlightFabCommentPopover = null;
+let highlightFabCommentAnchor = null;
+let highlightFabCommentRequestVersion = 0;
+let highlightFabCommentRequestPending = false;
+let fabCommentWriteInFlight = false;
 let fabPostHighlightId = null;
 let fabPostPresetId = null;
 let fabPostFolderId = null;
@@ -1197,7 +1231,7 @@ const FAB_FADE_OUT_MS = 170;
 function hasPostHighlightFabAction() {
   const layout = fabLayoutV1 || defaultFabLayoutV1();
   return Array.isArray(layout.slots)
-    && (layout.slots.includes('favorite') || layout.slots.includes('folder'));
+    && (layout.slots.includes('favorite') || layout.slots.includes('folder') || layout.slots.includes('comment'));
 }
 
 function clearFabPostTimeout() {
@@ -1261,6 +1295,10 @@ function syncHighlightFabState() {
         : 'Highlight first';
       button.setAttribute('aria-label', button.title);
     }
+    if (button.dataset.actionId === 'comment') {
+      button.title = fabPostHighlightId ? 'Add a comment to this highlight' : 'Highlight first';
+      button.setAttribute('aria-label', button.title);
+    }
   });
 }
 
@@ -1309,6 +1347,17 @@ function createFolderIconElement() {
   return icon;
 }
 
+function createCommentIconElement() {
+  const namespace = 'http://www.w3.org/2000/svg';
+  const icon = document.createElementNS(namespace, 'svg');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(namespace, 'path');
+  path.setAttribute('d', 'M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z');
+  icon.appendChild(path);
+  return icon;
+}
+
 function closeHighlightFabFolderPopover({ restartTimeout = true } = {}) {
   highlightFabFolderRequestVersion++;
   const hadPendingRequest = highlightFabFolderRequestPending;
@@ -1318,6 +1367,22 @@ function closeHighlightFabFolderPopover({ restartTimeout = true } = {}) {
   highlightFabFolderPopover = null;
   fabPointerPaused = false;
   fabKeyboardPaused = false;
+  if (restartTimeout) scheduleFabPostTimeout();
+}
+
+function closeHighlightFabCommentPopover({ restartTimeout = true, restoreFocus = false } = {}) {
+  highlightFabCommentRequestVersion++;
+  const hadPendingRequest = highlightFabCommentRequestPending;
+  highlightFabCommentRequestPending = false;
+  const popover = highlightFabCommentPopover;
+  const anchor = highlightFabCommentAnchor;
+  highlightFabCommentPopover = null;
+  highlightFabCommentAnchor = null;
+  popover?.remove();
+  if (!popover && !hadPendingRequest) return;
+  fabPointerPaused = false;
+  fabKeyboardPaused = false;
+  if (restoreFocus && anchor?.isConnected) anchor.focus({ preventScroll: true });
   if (restartTimeout) scheduleFabPostTimeout();
 }
 
@@ -1543,11 +1608,177 @@ function assignFabHighlightToFolder(folderId, createName = '') {
 }
 
 function handleFabFolderAction(anchor) {
+  closeHighlightFabCommentPopover({ restartTimeout: false });
   if (!fabPostHighlightId) {
     showHighlightFabStatus('Highlight first', 'folder');
     return;
   }
   openHighlightFabFolderPopover(anchor);
+}
+
+function setFabCommentEditorBusy(popover, isBusy, message = '') {
+  if (!popover) return;
+  popover.setAttribute('aria-busy', String(isBusy));
+  popover.querySelectorAll('textarea, button').forEach(control => {
+    control.disabled = isBusy;
+  });
+  const error = popover.querySelector('.text-highlighter-comment-error');
+  if (error) error.textContent = message;
+}
+
+function saveFabComment(popover, textarea) {
+  if (!popover || popover !== highlightFabCommentPopover || fabCommentWriteInFlight) return;
+  const comment = normalizeComment(textarea.value);
+  if (!comment) {
+    const error = popover.querySelector('.text-highlighter-comment-error');
+    if (error) error.textContent = 'Write a comment before saving.';
+    textarea.focus({ preventScroll: true });
+    return;
+  }
+  const highlightId = fabPostHighlightId;
+  const interactionVersion = fabInteractionVersion;
+  fabCommentWriteInFlight = true;
+  clearFabPostTimeout();
+  setFabCommentEditorBusy(popover, true);
+  const execution = fabOperationChain.then(() => (
+    patchStoredHighlight(highlightId, { comment }, { updateIndex: false })
+  ));
+  fabOperationChain = execution.catch(() => null);
+  execution.then(updated => {
+    fabCommentWriteInFlight = false;
+    if (interactionVersion !== fabInteractionVersion || popover !== highlightFabCommentPopover) return;
+    if (!updated) {
+      setFabCommentEditorBusy(popover, false, 'Could not save the comment. Try again.');
+      textarea.focus({ preventScroll: true });
+      return;
+    }
+    closeHighlightFabCommentPopover({ restartTimeout: false });
+    showHighlightFabStatus('Comment saved', 'comment');
+    hideHighlightFab({ fade: true });
+  }).catch(() => {
+    fabCommentWriteInFlight = false;
+    if (popover !== highlightFabCommentPopover) return;
+    setFabCommentEditorBusy(popover, false, 'Could not save the comment. Try again.');
+    textarea.focus({ preventScroll: true });
+  });
+}
+
+function openHighlightFabCommentPopover(anchor) {
+  if (!fabPostHighlightId || !anchor) {
+    showHighlightFabStatus('Highlight first', 'comment');
+    return;
+  }
+  if (highlightFabCommentPopover || highlightFabCommentRequestPending) {
+    closeHighlightFabCommentPopover({ restoreFocus: true });
+    return;
+  }
+  closeHighlightFabFolderPopover({ restartTimeout: false });
+  clearFabPostTimeout();
+  fabPointerPaused = true;
+  fabKeyboardPaused = true;
+  const requestVersion = ++highlightFabCommentRequestVersion;
+  highlightFabCommentRequestPending = true;
+  const key = getStorageKey();
+  chrome.storage.local.get(key, result => {
+    if (requestVersion !== highlightFabCommentRequestVersion) return;
+    highlightFabCommentRequestPending = false;
+    const highlights = Array.isArray(result[key]) ? result[key] : [];
+    const highlight = highlights.find(item => item?.id === fabPostHighlightId);
+    if (chrome.runtime.lastError || !highlight || !anchor.isConnected) {
+      fabPointerPaused = false;
+      fabKeyboardPaused = false;
+      showHighlightFabStatus('Could not open comment', 'comment');
+      scheduleFabPostTimeout();
+      return;
+    }
+
+    const popover = document.createElement('div');
+    popover.className = 'text-highlighter-comment-editor';
+    popover.classList.toggle('is-dark-page', getPageTheme() === 'dark');
+    popover.setAttribute('role', 'dialog');
+    popover.setAttribute('aria-label', 'Add comment');
+
+    const heading = document.createElement('div');
+    heading.className = 'text-highlighter-comment-heading';
+    heading.textContent = 'Add comment';
+    const textarea = document.createElement('textarea');
+    textarea.maxLength = MAX_COMMENT_LENGTH;
+    textarea.rows = 4;
+    textarea.placeholder = 'Write a note…';
+    textarea.setAttribute('aria-label', 'Comment');
+    textarea.value = normalizeComment(highlight.comment);
+    const meta = document.createElement('div');
+    meta.className = 'text-highlighter-comment-meta';
+    const error = document.createElement('span');
+    error.className = 'text-highlighter-comment-error';
+    error.setAttribute('role', 'status');
+    error.setAttribute('aria-live', 'polite');
+    const counter = document.createElement('span');
+    counter.className = 'text-highlighter-comment-counter';
+    const updateCounter = () => {
+      counter.textContent = `${textarea.value.length} / ${MAX_COMMENT_LENGTH}`;
+      const save = popover.querySelector('.text-highlighter-comment-save');
+      if (save) save.disabled = !normalizeComment(textarea.value);
+      error.textContent = '';
+    };
+    updateCounter();
+    meta.append(error, counter);
+    const actions = document.createElement('div');
+    actions.className = 'text-highlighter-comment-actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'text-highlighter-comment-cancel';
+    cancel.textContent = 'Cancel';
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'text-highlighter-comment-save';
+    save.textContent = 'Save';
+    save.disabled = !normalizeComment(textarea.value);
+    actions.append(cancel, save);
+    popover.append(heading, textarea, meta, actions);
+    textarea.addEventListener('input', updateCounter);
+    textarea.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        saveFabComment(popover, textarea);
+      }
+    });
+    cancel.addEventListener('click', () => closeHighlightFabCommentPopover({ restoreFocus: true }));
+    save.addEventListener('click', () => saveFabComment(popover, textarea));
+    popover.addEventListener('mousedown', event => event.stopPropagation());
+    popover.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeHighlightFabCommentPopover({ restoreFocus: true });
+    });
+    popover.addEventListener('pointerenter', () => {
+      fabPointerPaused = true;
+      clearFabPostTimeout();
+    });
+    popover.addEventListener('focusin', () => {
+      fabKeyboardPaused = true;
+      clearFabPostTimeout();
+    });
+    document.body.appendChild(popover);
+    highlightFabCommentPopover = popover;
+    highlightFabCommentAnchor = anchor;
+    positionHighlightFabFolderPopover(popover, anchor);
+    requestAnimationFrame(() => {
+      if (highlightFabCommentPopover !== popover) return;
+      popover.classList.add('is-open');
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    });
+  });
+}
+
+function handleFabCommentAction(anchor) {
+  if (!fabPostHighlightId) {
+    showHighlightFabStatus('Highlight first', 'comment');
+    return;
+  }
+  openHighlightFabCommentPopover(anchor);
 }
 
 function persistLastUsedPresetId(presetId) {
@@ -1580,6 +1811,7 @@ function confirmFavoriteAndClose() {
 }
 
 function handleFabPresetAction(presetId) {
+  closeHighlightFabCommentPopover({ restartTimeout: false });
   runFabOperation(async (interactionVersion) => {
     if (fabPostHighlightId) {
       const updated = await updateHighlightPreset(fabPostHighlightId, presetId);
@@ -1615,6 +1847,7 @@ function handleFabPresetAction(presetId) {
 }
 
 function handleFabFavoriteAction() {
+  closeHighlightFabCommentPopover({ restartTimeout: false });
   runFabOperation(async (interactionVersion) => {
     if (fabPostHighlightId) {
       const updated = await patchStoredHighlight(fabPostHighlightId, { favorited: true });
@@ -1642,6 +1875,7 @@ function handleFabFavoriteAction() {
 function rebuildHighlightFab() {
   if (!highlightFab) return;
   closeHighlightFabFolderPopover({ restartTimeout: false });
+  closeHighlightFabCommentPopover({ restartTimeout: false });
   hideHighlightFab();
   highlightFab.innerHTML = '';
   highlightFabButtons = [];
@@ -1792,6 +2026,31 @@ function buildFabButtonsInto(container) {
     return btn;
   };
 
+  const makeCommentBtn = () => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'text-highlighter-fab-action text-highlighter-fab-comment';
+    btn.dataset.fabKind = 'action';
+    btn.dataset.actionId = 'comment';
+    btn.style.padding = '0';
+    btn.style.margin = '0';
+    btn.style.width = '18px';
+    btn.style.height = '18px';
+    btn.style.borderRadius = '999px';
+    btn.style.cursor = 'pointer';
+    btn.appendChild(createCommentIconElement());
+    btn.addEventListener('mousedown', event => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    btn.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      handleFabCommentAction(btn);
+    });
+    return btn;
+  };
+
   layout.slots.forEach((slotId) => {
     if (!slotId) {
       appendSpacer();
@@ -1851,6 +2110,13 @@ function buildFabButtonsInto(container) {
       return;
     }
 
+    if (slotId === 'comment') {
+      const commentBtn = makeCommentBtn();
+      container.appendChild(commentBtn);
+      highlightFabButtons.push(commentBtn);
+      return;
+    }
+
     if (FAB_ACTION_IDS.has(slotId)) {
       const actionBtn = makePlaceholderBtn(slotId);
       container.appendChild(actionBtn);
@@ -1878,6 +2144,9 @@ function createHighlightFab() {
     fabLastInputWasKeyboard = false;
     if (highlightFabFolderPopover && !e.target.closest('.text-highlighter-fab-folder')) {
       closeHighlightFabFolderPopover({ restartTimeout: false });
+    }
+    if (highlightFabCommentPopover && !e.target.closest('.text-highlighter-fab-comment')) {
+      closeHighlightFabCommentPopover({ restartTimeout: false });
     }
     e.preventDefault();
     e.stopPropagation();
@@ -1911,7 +2180,11 @@ function createHighlightFab() {
 
   highlightFab.addEventListener('focusout', () => {
     setTimeout(() => {
-      if (highlightFab?.contains(document.activeElement)) return;
+      if (
+        highlightFab?.contains(document.activeElement)
+        || highlightFabFolderPopover?.contains(document.activeElement)
+        || highlightFabCommentPopover?.contains(document.activeElement)
+      ) return;
       fabKeyboardPaused = false;
       fabLastInputWasKeyboard = false;
       scheduleFabPostTimeout();
@@ -1952,6 +2225,7 @@ async function showHighlightFab(x, y) {
 function hideHighlightFab({ fade = false } = {}) {
   fabInteractionVersion++;
   closeHighlightFabFolderPopover({ restartTimeout: false });
+  closeHighlightFabCommentPopover({ restartTimeout: false });
   clearFabPostState();
   if (!highlightFab) return;
 
@@ -1988,7 +2262,7 @@ function hideHighlightFab({ fade = false } = {}) {
 // Show FAB when text is selected
 document.addEventListener('mouseup', (e) => {
   // Ignore if clicking on the FAB itself
-  if ((highlightFab && highlightFab.contains(e.target)) || highlightFabFolderPopover?.contains(e.target)) {
+  if ((highlightFab && highlightFab.contains(e.target)) || highlightFabFolderPopover?.contains(e.target) || highlightFabCommentPopover?.contains(e.target)) {
     return;
   }
   
@@ -2024,7 +2298,7 @@ document.addEventListener('mouseup', (e) => {
 
 // Hide FAB when clicking elsewhere
 document.addEventListener('mousedown', (e) => {
-  if (highlightFab && !highlightFab.contains(e.target) && !highlightFabFolderPopover?.contains(e.target)) {
+  if (highlightFab && !highlightFab.contains(e.target) && !highlightFabFolderPopover?.contains(e.target) && !highlightFabCommentPopover?.contains(e.target)) {
     hideHighlightFab();
   }
 });
@@ -2039,6 +2313,7 @@ document.addEventListener('keydown', (event) => {
 // Hide FAB on scroll to avoid orphan button
 document.addEventListener('scroll', event => {
   if (highlightFabFolderPopover?.contains(event.target)) return;
+  if (highlightFabCommentPopover?.contains(event.target)) return;
   hideHighlightFab();
 }, true);
 
