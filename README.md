@@ -21,10 +21,11 @@
 - **Flexible controls** — place, swap, reorder, replace, or remove tag presets and actions
 - **Favorite action** — create a default-tag favorite directly, or choose a tag color first and favorite that same highlight during the retained FAB window
 - **Folder action** — file a newly highlighted selection through a searchable recent-folder picker, including create-from-search
+- **Comment action** — add a multiline note to a newly created highlight during the retained FAB window
 - **Close action** — dismiss the FAB while keeping the current text selection available
 - **In-place recoloring** — choosing another tag during the retained window updates the same highlight instead of creating a duplicate
 - **Visibility control** — toggle the FAB from the popup or Settings
-- **Coming soon** — Comment, Copy link, and Share remain clearly labeled as unfinished
+- **Coming soon** — Copy link and Share remain clearly labeled as unfinished
 
 ### Color Presets & Tags
 
@@ -44,6 +45,7 @@ A full-page options view (`options.html`) with a collapsible sidebar and several
 | **All** | Every highlight, grouped by page, sorted by most recently updated |
 | **Favorites** | Highlights you've starred, across all pages |
 | **Tags** | Color presets as tag folders; click any folder to see its highlights |
+| **Comments** | Highlights with comments, grouped by page and searchable by note text |
 | **Folders** | Create, rename, delete, and browse single-membership highlight folders |
 | **Recently Deleted** | Soft-deleted highlights; restore or permanently delete |
 
@@ -52,6 +54,7 @@ A full-page options view (`options.html`) with a collapsible sidebar and several
 - **Reassign tags in place** — click a highlight's tag color in All or Favorites, choose any built-in or custom tag, or jump directly to Tag Presets management
 - **Immediate recoloring** — tag reassignment updates already-open webpages and is preserved on future visits
 - **Folder organization** — assign or move highlights from All and Favorites, expand folder navigation in the sidebar, and browse each folder by webpage
+- **Comments and notes** — create, view, edit, search, and delete one 500-character comment per highlight from All, Favorites, or Comments
 - **Safe folder deletion** — keep a deleted folder's highlights as unfiled or move them to Recently Deleted
 - **Soft delete** — deleted highlights go to Recently Deleted before permanent removal
 - **Bulk cleanup** — clear every highlight from one page or empty Recently Deleted entirely
