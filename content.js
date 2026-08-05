@@ -1695,12 +1695,21 @@ function openHighlightFabCommentPopover(anchor) {
     const popover = document.createElement('div');
     popover.className = 'text-highlighter-comment-editor';
     popover.classList.toggle('is-dark-page', getPageTheme() === 'dark');
+    popover.style.setProperty('--comment-accent', getPresetColor(fabPostPresetId));
     popover.setAttribute('role', 'dialog');
     popover.setAttribute('aria-label', 'Add comment');
 
     const heading = document.createElement('div');
     heading.className = 'text-highlighter-comment-heading';
-    heading.textContent = 'Add comment';
+    const accent = document.createElement('span');
+    accent.className = 'text-highlighter-comment-accent';
+    accent.style.backgroundColor = 'var(--comment-accent)';
+    accent.setAttribute('aria-hidden', 'true');
+    const headingLabel = document.createElement('span');
+    headingLabel.textContent = 'Note';
+    const counter = document.createElement('span');
+    counter.className = 'text-highlighter-comment-counter';
+    heading.append(accent, headingLabel, counter);
     const textarea = document.createElement('textarea');
     textarea.maxLength = MAX_COMMENT_LENGTH;
     textarea.rows = 4;
@@ -1713,8 +1722,6 @@ function openHighlightFabCommentPopover(anchor) {
     error.className = 'text-highlighter-comment-error';
     error.setAttribute('role', 'status');
     error.setAttribute('aria-live', 'polite');
-    const counter = document.createElement('span');
-    counter.className = 'text-highlighter-comment-counter';
     const updateCounter = () => {
       counter.textContent = `${textarea.value.length} / ${MAX_COMMENT_LENGTH}`;
       const save = popover.querySelector('.text-highlighter-comment-save');
@@ -1722,7 +1729,10 @@ function openHighlightFabCommentPopover(anchor) {
       error.textContent = '';
     };
     updateCounter();
-    meta.append(error, counter);
+    const hint = document.createElement('span');
+    hint.className = 'text-highlighter-comment-hint';
+    hint.textContent = '↵ save  ·  ⇧↵ new line';
+    meta.append(error, hint);
     const actions = document.createElement('div');
     actions.className = 'text-highlighter-comment-actions';
     const cancel = document.createElement('button');

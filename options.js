@@ -3451,11 +3451,20 @@ function openLibraryCommentPopover(anchor, pageUrl, highlight) {
   const existing = normalizeComment(highlight.comment);
   const popover = document.createElement('div');
   popover.className = 'fab-popover library-comment-popover';
+  popover.style.setProperty('--comment-accent', getLibraryHighlightColor(highlight));
   popover.setAttribute('role', 'dialog');
   popover.setAttribute('aria-label', existing ? 'View or edit comment' : 'Add comment');
   const title = document.createElement('div');
-  title.className = 'fab-popover-title';
-  title.textContent = existing ? 'Edit comment' : 'Add comment';
+  title.className = 'fab-popover-title library-comment-heading';
+  const accent = document.createElement('span');
+  accent.className = 'library-comment-accent';
+  accent.style.backgroundColor = 'var(--comment-accent)';
+  accent.setAttribute('aria-hidden', 'true');
+  const titleLabel = document.createElement('span');
+  titleLabel.textContent = 'Note';
+  const counter = document.createElement('span');
+  counter.className = 'library-comment-counter';
+  title.append(accent, titleLabel, counter);
   const textarea = document.createElement('textarea');
   textarea.className = 'library-comment-textarea';
   textarea.maxLength = MAX_COMMENT_LENGTH;
@@ -3469,9 +3478,10 @@ function openLibraryCommentPopover(anchor, pageUrl, highlight) {
   error.className = 'library-comment-error';
   error.setAttribute('role', 'status');
   error.setAttribute('aria-live', 'polite');
-  const counter = document.createElement('span');
-  counter.className = 'library-comment-counter';
-  meta.append(error, counter);
+  const hint = document.createElement('span');
+  hint.className = 'library-comment-hint';
+  hint.textContent = '↵ save  ·  ⇧↵ new line';
+  meta.append(error, hint);
   const actions = document.createElement('div');
   actions.className = 'library-comment-actions';
   if (existing) {
