@@ -3929,6 +3929,7 @@ function countHighlightsByFolder(all, folders) {
 
 function loadFoldersView() {
   chrome.storage.local.get(null, all => {
+    setActiveLibraryPresets(all.highlightSettings);
     activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
     if (activeLibraryFolders.length === 0) folderDeleteMode = false;
     renderLibraryFolderChildren(activeLibraryFolders);
@@ -4352,12 +4353,7 @@ function loadAllHighlights() {
       return;
     }
 
-    renderHighlights(filtered.pages, filtered.totalCount, {
-      countLabel: 'saved',
-      allowTagChange: true,
-      allowFolderChange: true,
-      allowCommentChange: true
-    });
+    renderHighlights(filtered.pages, filtered.totalCount, { countLabel: 'saved' });
   });
 }
 
@@ -4421,12 +4417,7 @@ function loadFavoriteHighlights() {
     }
 
     filtered.pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
-    renderHighlights(filtered.pages, filtered.totalCount, {
-      countLabel: 'favorited',
-      allowTagChange: true,
-      allowFolderChange: true,
-      allowCommentChange: true
-    });
+    renderHighlights(filtered.pages, filtered.totalCount, { countLabel: 'favorited' });
   });
 }
 
@@ -4480,7 +4471,6 @@ function loadCommentHighlights() {
     const totalCount = pages.reduce((count, page) => count + page.highlights.length, 0);
     renderHighlights(pages, totalCount, {
       countLabel: 'commented',
-      allowCommentChange: true,
       allowPageClear: false
     });
   });
@@ -4840,23 +4830,10 @@ function renderHighlights(pages, totalCount, options = {}) {
       text.className = 'snippet-text';
       text.textContent = hl.text;
 
-      let colorSlot;
-      if (options.allowTagChange) {
-        colorSlot = createLibraryTagSelector(page.url, hl);
-      } else {
-        colorSlot = document.createElement('span');
-        colorSlot.className = 'snippet-color-slot';
-        const dot = document.createElement('span');
-        dot.className = 'snippet-color-dot';
-        const resolvedColor = getLibraryHighlightColor(hl);
-        dot.style.backgroundColor = resolvedColor;
-        dot.title = getLibraryPresetForHighlight(hl).name || resolvedColor;
-        colorSlot.appendChild(dot);
-      }
-
+      const colorSlot = createLibraryTagSelector(page.url, hl);
+      const folder = createLibraryFolderSelector(page.url, hl);
+      const comment = createLibraryCommentSelector(page.url, hl);
       const star = createStarButton(page.url, hl);
-      const folder = options.allowFolderChange ? createLibraryFolderSelector(page.url, hl) : null;
-      const comment = options.allowCommentChange ? createLibraryCommentSelector(page.url, hl) : null;
 
       const del = document.createElement('button');
       del.type = 'button';
@@ -4869,8 +4846,8 @@ function renderHighlights(pages, totalCount, options = {}) {
       const rowActions = document.createElement('div');
       rowActions.className = 'snippet-item-actions';
       rowActions.appendChild(colorSlot);
-      if (folder) rowActions.appendChild(folder);
-      if (comment) rowActions.appendChild(comment);
+      rowActions.appendChild(folder);
+      rowActions.appendChild(comment);
       rowActions.appendChild(star);
       rowActions.appendChild(del);
 
