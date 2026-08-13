@@ -91,5 +91,3 @@ A full-page options view (`options.html`) with a collapsible sidebar and several
 ---
 
 Built by [yafiakhtar.me](https://www.yafiakhtar.me/) · Version 1.0.1
-
-
