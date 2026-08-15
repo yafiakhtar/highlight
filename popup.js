@@ -38,12 +38,37 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 });
 
-// Trash button: clear highlights for current page
-document.getElementById('trash').addEventListener('click', async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
-    chrome.tabs.sendMessage(tab.id, { action: 'clearAll' });
-    window.close();
+// Trash button: ask the current page to confirm before clearing its highlights.
+const trashBtn = document.getElementById('trash');
+const popupStatus = document.getElementById('popupStatus');
+let trashRequestPending = false;
+
+function showPopupStatus(message) {
+  if (popupStatus) popupStatus.textContent = message;
+}
+
+trashBtn.addEventListener('click', async () => {
+  if (trashRequestPending) return;
+  trashRequestPending = true;
+  trashBtn.disabled = true;
+  trashBtn.setAttribute('aria-busy', 'true');
+  showPopupStatus('');
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error('No active tab');
+    const response = await chrome.tabs.sendMessage(tab.id, { action: 'clearAll' });
+    if (response?.status === 'opened' || response?.status === 'empty') {
+      window.close();
+      return;
+    }
+    showPopupStatus('Could not check highlights on this page.');
+  } catch {
+    showPopupStatus('Highlight is unavailable on this page.');
+  } finally {
+    trashRequestPending = false;
+    trashBtn.disabled = false;
+    trashBtn.removeAttribute('aria-busy');
   }
 });
 

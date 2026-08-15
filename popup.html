@@ -79,6 +79,23 @@
       padding: 0;
     }
 
+    .popup-status {
+      min-height: 17px;
+      margin: -5px 0 5px;
+      color: #a73535;
+      font-size: 11.5px;
+      font-weight: 400;
+      line-height: 1.45;
+    }
+
+    body.dark .popup-status {
+      color: #ff9e9e;
+    }
+
+    .popup-status:empty {
+      display: none;
+    }
+
     kbd {
       display: inline-block;
       padding: 1px 5px;
@@ -130,6 +147,11 @@
 
     .toolbar-btn:active {
       opacity: 0.7;
+    }
+
+    .toolbar-btn:disabled {
+      cursor: wait;
+      opacity: 0.5;
     }
 
     .toolbar-btn svg,
@@ -193,6 +215,7 @@
     <p class="info-line">Select text and use <kbd id="modifierKey">Ctrl</kbd><span class="kbd-plus">+</span><kbd>Shift</kbd><span class="kbd-plus">+</span><kbd>H</kbd> or right-click to highlight.</p>
     <p class="info-line">Click any highlight to remove it.</p>
   </div>
+  <div class="popup-status" id="popupStatus" role="status" aria-live="polite"></div>
   <div class="toolbar" id="toolbar">
     <button type="button" class="toolbar-btn" id="trash" draggable="true" title="Clear page highlights">
       <img src="assets/icons/trash.svg" alt="Clear highlights" class="toolbar-icon">

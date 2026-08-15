@@ -383,6 +383,12 @@ function getStorageKey() {
 
 const RECENTLY_DELETED_KEY = 'recentlyDeletedHighlights';
 
+let clearHighlightsDialog = null;
+let clearHighlightsPreviousFocus = null;
+let clearHighlightsPending = false;
+let pageNotice = null;
+let pageNoticeTimer = null;
+
 function generateTrashId() {
   return 'tr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11);
 }
@@ -1034,53 +1040,245 @@ function removeSelectedHighlight() {
   }
 }
 
-// Clear all highlights on the page
+function removeAllHighlightMarks() {
+  document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
+    const parent = mark.parentNode;
+    if (!parent) return;
+    while (mark.firstChild) {
+      parent.insertBefore(mark.firstChild, mark);
+    }
+    parent.removeChild(mark);
+    parent.normalize();
+  });
+}
+
+// Clear all highlights on the page after confirmation and report the persisted result.
 function clearAllHighlights() {
   const key = getStorageKey();
   const url = window.location.href;
 
-  if (!isExtensionContextValid()) return;
-  try {
-    chrome.storage.local.get([key, RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
-      if (chrome.runtime.lastError) return;
-    const highlights = result[key] || [];
-    const trash = Array.isArray(result[RECENTLY_DELETED_KEY])
-      ? [...result[RECENTLY_DELETED_KEY]]
-      : [];
-    const index = result.highlightIndex || {};
-    const pageTitle = (index[url] && index[url].title) || document.title || url;
-    const now = Date.now();
-
-    for (let i = highlights.length - 1; i >= 0; i--) {
-      trash.unshift({
-        trashId: generateTrashId(),
-        pageUrl: url,
-        pageTitle,
-        deletedAt: now,
-        highlight: { ...highlights[i] }
-      });
+  return new Promise(resolve => {
+    if (!isExtensionContextValid()) {
+      resolve({ status: 'error', count: 0 });
+      return;
     }
+    try {
+      chrome.storage.local.get([key, RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
+        if (chrome.runtime.lastError) {
+          resolve({ status: 'error', count: 0 });
+          return;
+        }
+        const highlights = Array.isArray(result[key]) ? result[key] : [];
+        if (highlights.length === 0) {
+          resolve({ status: 'empty', count: 0 });
+          return;
+        }
+        const trash = Array.isArray(result[RECENTLY_DELETED_KEY])
+          ? [...result[RECENTLY_DELETED_KEY]]
+          : [];
+        const index = result.highlightIndex && typeof result.highlightIndex === 'object'
+          ? { ...result.highlightIndex }
+          : {};
+        const pageTitle = (index[url] && index[url].title) || document.title || url;
+        const now = Date.now();
 
-    document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
-      const parent = mark.parentNode;
-      while (mark.firstChild) {
-        parent.insertBefore(mark.firstChild, mark);
-      }
-      parent.removeChild(mark);
-      parent.normalize();
-    });
+        for (let i = highlights.length - 1; i >= 0; i--) {
+          trash.unshift({
+            trashId: generateTrashId(),
+            pageUrl: url,
+            pageTitle,
+            deletedAt: now,
+            highlight: { ...highlights[i] }
+          });
+        }
 
-    delete index[url];
-    chrome.storage.local.remove(key, () => {
-      chrome.storage.local.set({
-        highlightIndex: index,
-        [RECENTLY_DELETED_KEY]: trash
+        delete index[url];
+        chrome.storage.local.set({
+          [key]: [],
+          highlightIndex: index,
+          [RECENTLY_DELETED_KEY]: trash
+        }, () => {
+          if (chrome.runtime.lastError) {
+            resolve({ status: 'error', count: 0 });
+            return;
+          }
+          removeAllHighlightMarks();
+          resolve({ status: 'cleared', count: highlights.length });
+        });
       });
-    });
-    });
-  } catch {
-    // ignore
+    } catch {
+      resolve({ status: 'error', count: 0 });
+    }
+  });
+}
+
+function showPageNotice(message) {
+  if (pageNoticeTimer !== null) {
+    clearTimeout(pageNoticeTimer);
+    pageNoticeTimer = null;
   }
+  pageNotice?.remove();
+  const notice = document.createElement('div');
+  notice.className = 'text-highlighter-page-notice';
+  notice.classList.toggle('is-dark-page', getPageTheme() === 'dark');
+  notice.setAttribute('role', 'status');
+  notice.setAttribute('aria-live', 'polite');
+  notice.textContent = message;
+  (document.body || document.documentElement).appendChild(notice);
+  pageNotice = notice;
+  requestAnimationFrame(() => notice.classList.add('is-visible'));
+  pageNoticeTimer = setTimeout(() => {
+    notice.classList.remove('is-visible');
+    pageNoticeTimer = null;
+    const removeDelay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 160;
+    setTimeout(() => {
+      if (pageNotice === notice) pageNotice = null;
+      notice.remove();
+    }, removeDelay);
+  }, 1800);
+}
+
+function setClearHighlightsDialogBusy(dialog, isBusy, message = '') {
+  clearHighlightsPending = isBusy;
+  dialog.setAttribute('aria-busy', String(isBusy));
+  dialog.querySelectorAll('button').forEach(button => {
+    button.disabled = isBusy;
+  });
+  const error = dialog.querySelector('.text-highlighter-clear-dialog-error');
+  if (error) error.textContent = message;
+}
+
+function ensureClearHighlightsDialog() {
+  if (clearHighlightsDialog?.isConnected) return clearHighlightsDialog;
+
+  const dialog = document.createElement('dialog');
+  dialog.className = 'text-highlighter-clear-dialog';
+  dialog.setAttribute('aria-labelledby', 'textHighlighterClearDialogTitle');
+  dialog.setAttribute('aria-describedby', 'textHighlighterClearDialogDescription');
+
+  const panel = document.createElement('div');
+  panel.className = 'text-highlighter-clear-dialog-panel';
+  const title = document.createElement('h2');
+  title.className = 'text-highlighter-clear-dialog-title';
+  title.id = 'textHighlighterClearDialogTitle';
+  title.textContent = 'Clear page highlights?';
+  const description = document.createElement('p');
+  description.className = 'text-highlighter-clear-dialog-description';
+  description.id = 'textHighlighterClearDialogDescription';
+  const error = document.createElement('p');
+  error.className = 'text-highlighter-clear-dialog-error';
+  error.setAttribute('role', 'status');
+  error.setAttribute('aria-live', 'polite');
+  const actions = document.createElement('div');
+  actions.className = 'text-highlighter-clear-dialog-actions';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'text-highlighter-clear-dialog-button text-highlighter-clear-dialog-cancel';
+  cancel.textContent = 'Cancel';
+  const confirm = document.createElement('button');
+  confirm.type = 'button';
+  confirm.className = 'text-highlighter-clear-dialog-button text-highlighter-clear-dialog-confirm';
+  confirm.textContent = 'Clear highlights';
+  actions.append(cancel, confirm);
+  panel.append(title, description, error, actions);
+  dialog.appendChild(panel);
+
+  cancel.addEventListener('click', () => dialog.close('cancel'));
+  dialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    if (!clearHighlightsPending) dialog.close('cancel');
+  });
+  dialog.addEventListener('close', () => {
+    setClearHighlightsDialogBusy(dialog, false);
+    const previousFocus = clearHighlightsPreviousFocus;
+    clearHighlightsPreviousFocus = null;
+    requestAnimationFrame(() => {
+      if (previousFocus?.isConnected && typeof previousFocus.focus === 'function') {
+        previousFocus.focus({ preventScroll: true });
+      }
+    });
+  });
+  confirm.addEventListener('click', async () => {
+    if (clearHighlightsPending) return;
+    setClearHighlightsDialogBusy(dialog, true);
+    const result = await clearAllHighlights();
+    if (result.status === 'error') {
+      setClearHighlightsDialogBusy(dialog, false, 'Could not clear these highlights. Try again.');
+      cancel.focus({ preventScroll: true });
+      return;
+    }
+    dialog.close('confirm');
+    if (result.status === 'empty') {
+      showPageNotice('No highlights on this page');
+      return;
+    }
+    const label = result.count === 1 ? 'Highlight' : 'Highlights';
+    showPageNotice(`${label} moved to Recently Deleted`);
+  });
+
+  (document.body || document.documentElement).appendChild(dialog);
+  clearHighlightsDialog = dialog;
+  return dialog;
+}
+
+function openClearHighlightsDialog(count) {
+  hideHighlightFab();
+  hideHighlightFabStatus();
+  const dialog = ensureClearHighlightsDialog();
+  dialog.classList.toggle('is-dark-page', getPageTheme() === 'dark');
+  const description = dialog.querySelector('.text-highlighter-clear-dialog-description');
+  const noun = count === 1 ? 'highlight' : 'highlights';
+  description.textContent = `${count} ${noun} will be moved to Recently Deleted.`;
+  if (dialog.open) {
+    if (!clearHighlightsPending) {
+      dialog.querySelector('.text-highlighter-clear-dialog-cancel')?.focus({ preventScroll: true });
+    }
+    return true;
+  }
+  setClearHighlightsDialogBusy(dialog, false);
+  clearHighlightsPreviousFocus = document.activeElement;
+  try {
+    dialog.showModal();
+  } catch {
+    clearHighlightsPreviousFocus = null;
+    return false;
+  }
+  requestAnimationFrame(() => {
+    dialog.querySelector('.text-highlighter-clear-dialog-cancel')?.focus({ preventScroll: true });
+  });
+  return true;
+}
+
+function requestClearAllHighlights() {
+  const key = getStorageKey();
+  return new Promise(resolve => {
+    if (!isExtensionContextValid()) {
+      resolve({ status: 'error' });
+      return;
+    }
+    try {
+      chrome.storage.local.get(key, result => {
+        if (chrome.runtime.lastError) {
+          resolve({ status: 'error' });
+          return;
+        }
+        const highlights = Array.isArray(result[key]) ? result[key] : [];
+        hideHighlightFab();
+        hideHighlightFabStatus();
+        if (highlights.length === 0) {
+          showPageNotice('No highlights on this page');
+          resolve({ status: 'empty', count: 0 });
+          return;
+        }
+        const opened = openClearHighlightsDialog(highlights.length);
+        resolve(opened
+          ? { status: 'opened', count: highlights.length }
+          : { status: 'error' });
+      });
+    } catch {
+      resolve({ status: 'error' });
+    }
+  });
 }
 
 // Restore highlights from storage
@@ -2342,9 +2540,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       removeSelectedHighlight();
       break;
     case 'clearAll':
-      clearAllHighlights();
-      break;
+      requestClearAllHighlights()
+        .then(sendResponse)
+        .catch(() => sendResponse({ status: 'error' }));
+      return true;
   }
+  return false;
 });
 
 // Re-read settings when tab becomes visible (catches changes made on options page)
