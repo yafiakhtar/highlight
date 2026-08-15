@@ -3636,6 +3636,34 @@
       gap: 4px;
     }
 
+    .snippet-delete-forever {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      padding: 7px 9px;
+      border: none;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--opt-danger);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11.5px;
+      font-weight: 500;
+      line-height: 1.2;
+      white-space: nowrap;
+      transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+    }
+
+    .snippet-delete-forever:hover {
+      background: color-mix(in srgb, var(--opt-danger) 12%, transparent);
+    }
+
+    .snippet-delete-forever:focus-visible {
+      outline: 2px solid var(--opt-accent);
+      outline-offset: 2px;
+    }
+
     .tags-toolbar {
       min-height: 36px;
       margin-bottom: 18px;
@@ -3790,6 +3818,11 @@
         flex-basis: 44px;
       }
 
+      .snippet-delete-forever {
+        min-height: 44px;
+        padding-inline: 10px;
+      }
+
       .snippet-tag-selector {
         width: 44px;
         height: 44px;
@@ -3848,6 +3881,7 @@
       #tab-library .page-title,
       #tab-library .page-clear-btn,
       #tab-library .library-action-btn,
+      #tab-library .snippet-delete-forever,
       #tab-library .snippet-tag-selector,
       #tab-library .snippet-folder-selector,
       #tab-library .snippet-comment-selector,
@@ -3966,6 +4000,17 @@
 
     .reset-dialog-note {
       margin: 12px 0 0;
+    }
+
+    .reset-dialog-error {
+      margin: 10px 0 0;
+      color: var(--opt-danger);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .reset-dialog-error:empty {
+      display: none;
     }
 
     .reset-dialog-actions {
@@ -4611,6 +4656,17 @@
         <button type="button" class="btn btn-secondary" id="cancelFolderDeleteBtn">Cancel</button>
         <button type="button" class="btn btn-secondary" id="keepFolderHighlightsBtn">Keep highlights</button>
         <button type="button" class="btn btn-danger" id="deleteFolderHighlightsBtn">Delete highlights</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog class="reset-dialog" id="emptyTrashDialog" aria-labelledby="emptyTrashDialogTitle" aria-describedby="emptyTrashDialogDescription">
+    <div class="reset-dialog-panel">
+      <h2 class="reset-dialog-title" id="emptyTrashDialogTitle">Empty Recently Deleted?</h2>
+      <p class="reset-dialog-description" id="emptyTrashDialogDescription"></p>
+      <p class="reset-dialog-error" id="emptyTrashDialogError" role="status" aria-live="polite"></p>
+      <div class="reset-dialog-actions">
+        <button type="button" class="btn btn-secondary" id="cancelEmptyTrashBtn">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmEmptyTrashBtn">Delete forever</button>
       </div>
     </div>
   </dialog>

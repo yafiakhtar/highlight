@@ -2346,6 +2346,9 @@ let libraryHighlightWriteQueue = Promise.resolve();
 let pendingLibraryCommentFocus = null;
 let libraryCommentDeleteTarget = null;
 let libraryCommentDeleteTrigger = null;
+let emptyTrashDialogTrigger = null;
+let emptyTrashPending = false;
+let emptyTrashOpenPending = false;
 
 const RECENTLY_DELETED_KEY = 'recentlyDeletedHighlights';
 const FOLDERS_KEY = 'highlightFoldersV1';
@@ -2376,6 +2379,11 @@ const deleteFolderHighlightsBtn = document.getElementById('deleteFolderHighlight
 const commentDeleteDialog = document.getElementById('commentDeleteDialog');
 const cancelCommentDeleteBtn = document.getElementById('cancelCommentDeleteBtn');
 const confirmCommentDeleteBtn = document.getElementById('confirmCommentDeleteBtn');
+const emptyTrashDialog = document.getElementById('emptyTrashDialog');
+const emptyTrashDialogDescription = document.getElementById('emptyTrashDialogDescription');
+const emptyTrashDialogError = document.getElementById('emptyTrashDialogError');
+const cancelEmptyTrashBtn = document.getElementById('cancelEmptyTrashBtn');
+const confirmEmptyTrashBtn = document.getElementById('confirmEmptyTrashBtn');
 
 function normalizeFolderName(name) {
   return (name || '').toString().replace(/\s+/g, ' ').trim().slice(0, MAX_FOLDER_NAME_LENGTH);
@@ -4579,7 +4587,7 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
   emptyTrashBtn.type = 'button';
   emptyTrashBtn.className = 'page-clear-btn';
   emptyTrashBtn.textContent = 'Empty Recently Deleted';
-  emptyTrashBtn.addEventListener('click', emptyRecentlyDeleted);
+  emptyTrashBtn.addEventListener('click', () => openEmptyTrashDialog(emptyTrashBtn));
   toolbar.appendChild(emptyTrashBtn);
   highlightsContainer.innerHTML = '';
   highlightsContainer.appendChild(toolbar);
@@ -4647,9 +4655,8 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
 
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
-      delBtn.className = 'library-action-btn snippet-delete is-danger';
-      delBtn.innerHTML = libraryIconMarkup('trash');
-      delBtn.title = 'Delete forever';
+      delBtn.className = 'snippet-delete-forever';
+      delBtn.textContent = 'Delete forever';
       delBtn.setAttribute('aria-label', 'Delete highlight forever');
       delBtn.addEventListener('click', () => deleteForeverFromTrash(entry.trashId));
 
@@ -4671,11 +4678,111 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
   });
 }
 
-function emptyRecentlyDeleted() {
-  chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: [] }, () => {
-    refreshLibrary();
+function setEmptyTrashDialogBusy(isBusy, errorMessage = '') {
+  emptyTrashPending = isBusy;
+  emptyTrashDialog?.setAttribute('aria-busy', String(isBusy));
+  if (cancelEmptyTrashBtn) cancelEmptyTrashBtn.disabled = isBusy;
+  if (confirmEmptyTrashBtn) confirmEmptyTrashBtn.disabled = isBusy;
+  if (emptyTrashDialogError) emptyTrashDialogError.textContent = errorMessage;
+}
+
+function getEmptyTrashDialogDescription(count) {
+  const scope = count === 1 ? '1 highlight' : `all ${count} highlights`;
+  return `Delete ${scope} forever? This cannot be undone.`;
+}
+
+function openEmptyTrashDialog(trigger) {
+  if (emptyTrashOpenPending || emptyTrashPending) return;
+  if (emptyTrashDialog?.open) {
+    cancelEmptyTrashBtn?.focus({ preventScroll: true });
+    return;
+  }
+  emptyTrashOpenPending = true;
+  chrome.storage.local.get(RECENTLY_DELETED_KEY, result => {
+    emptyTrashOpenPending = false;
+    if (chrome.runtime.lastError) {
+      showToast('Could not check Recently Deleted');
+      return;
+    }
+    const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
+    if (trash.length === 0) {
+      showToast('Recently Deleted is already empty');
+      refreshLibrary();
+      return;
+    }
+    emptyTrashDialogDescription.textContent = getEmptyTrashDialogDescription(trash.length);
+    emptyTrashDialogTrigger = trigger;
+    setEmptyTrashDialogBusy(false);
+
+    if (!emptyTrashDialog || typeof emptyTrashDialog.showModal !== 'function') {
+      if (window.confirm(emptyTrashDialogDescription.textContent)) {
+        emptyTrashDialogTrigger = null;
+        emptyRecentlyDeleted();
+      } else {
+        emptyTrashDialogTrigger = null;
+      }
+      return;
+    }
+    emptyTrashDialog.returnValue = '';
+    try {
+      emptyTrashDialog.showModal();
+    } catch {
+      emptyTrashDialogTrigger = null;
+      showToast('Could not open confirmation');
+      return;
+    }
+    requestAnimationFrame(() => cancelEmptyTrashBtn?.focus({ preventScroll: true }));
   });
 }
+
+function emptyRecentlyDeleted() {
+  if (emptyTrashPending) return;
+  setEmptyTrashDialogBusy(true);
+  queueLibraryHighlightMutation(() => new Promise((resolve, reject) => {
+    chrome.storage.local.get(RECENTLY_DELETED_KEY, result => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
+      if (trash.length === 0) {
+        resolve(0);
+        return;
+      }
+      chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: [] }, () => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(trash.length);
+      });
+    });
+  })).then(deletedCount => {
+    setEmptyTrashDialogBusy(false);
+    if (emptyTrashDialog?.open) emptyTrashDialog.close('confirm');
+    showToast(deletedCount > 0 ? 'Recently Deleted emptied' : 'Recently Deleted is already empty');
+    refreshLibrary();
+  }).catch(() => {
+    if (emptyTrashDialog?.open) {
+      setEmptyTrashDialogBusy(false, 'Could not delete these highlights. Try again.');
+      cancelEmptyTrashBtn?.focus({ preventScroll: true });
+    } else {
+      setEmptyTrashDialogBusy(false);
+      showToast('Could not empty Recently Deleted');
+    }
+  });
+}
+
+cancelEmptyTrashBtn?.addEventListener('click', () => emptyTrashDialog?.close('cancel'));
+confirmEmptyTrashBtn?.addEventListener('click', emptyRecentlyDeleted);
+emptyTrashDialog?.addEventListener('cancel', event => {
+  if (emptyTrashPending) event.preventDefault();
+});
+emptyTrashDialog?.addEventListener('close', () => {
+  const trigger = emptyTrashDialogTrigger;
+  emptyTrashDialogTrigger = null;
+  setEmptyTrashDialogBusy(false);
+  requestAnimationFrame(() => {
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+  });
+});
 
 function restoreFromTrash(trashId) {
   chrome.storage.local.get([RECENTLY_DELETED_KEY, 'highlightIndex', FOLDERS_KEY], (result) => {
@@ -4716,10 +4823,28 @@ function restoreFromTrash(trashId) {
 }
 
 function deleteForeverFromTrash(trashId) {
-  chrome.storage.local.get(RECENTLY_DELETED_KEY, (result) => {
-    const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
-    const newTrash = trash.filter(t => t.trashId !== trashId);
-    chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: newTrash }, refreshLibrary);
+  queueLibraryHighlightMutation(() => new Promise((resolve, reject) => {
+    chrome.storage.local.get(RECENTLY_DELETED_KEY, result => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
+      const newTrash = trash.filter(entry => entry?.trashId !== trashId);
+      if (newTrash.length === trash.length) {
+        resolve(false);
+        return;
+      }
+      chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: newTrash }, () => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(true);
+      });
+    });
+  })).then(() => {
+    refreshLibrary();
+  }).catch(() => {
+    showToast('Could not delete highlight');
+    refreshLibrary();
   });
 }
 
@@ -4964,6 +5089,17 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
   if (hasFolderExpansionChange) {
     setFoldersExpanded(changes[FOLDERS_EXPANDED_KEY].newValue === true);
+  }
+  if (hasTrashChange && emptyTrashDialog?.open && !emptyTrashPending) {
+    const nextTrash = Array.isArray(changes[RECENTLY_DELETED_KEY].newValue)
+      ? changes[RECENTLY_DELETED_KEY].newValue
+      : [];
+    if (nextTrash.length === 0) {
+      emptyTrashDialog.close('external-empty');
+      showToast('Recently Deleted is already empty');
+    } else {
+      emptyTrashDialogDescription.textContent = getEmptyTrashDialogDescription(nextTrash.length);
+    }
   }
 
   if ((hasHighlightChange || hasTrashChange || hasFolderChange) && isLibraryTabActive()) {
