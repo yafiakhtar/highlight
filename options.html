@@ -435,6 +435,418 @@
       margin: 0;
     }
 
+    /* ---- Guide ---- */
+
+    .guide-content {
+      display: block;
+      width: 100%;
+      padding: 0 32px 72px 24px;
+      background: var(--opt-content);
+    }
+
+    .guide-inner {
+      width: 100%;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    .guide-hero {
+      padding: 38px 0 30px;
+      border-bottom: 1px solid color-mix(in srgb, var(--opt-text) 11%, transparent);
+    }
+
+    .guide-eyebrow {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--opt-text-muted);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+    }
+
+    .guide-title {
+      margin: 0;
+      color: var(--opt-text-strong);
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+
+    .guide-intro {
+      max-width: 680px;
+      margin: 9px 0 0;
+      color: var(--opt-text);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .guide-section {
+      margin-top: 32px;
+    }
+
+    .guide-section-header {
+      margin-bottom: 12px;
+    }
+
+    .guide-section-title {
+      margin: 0;
+      color: var(--opt-text-strong);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+
+    .guide-section-description {
+      margin: 5px 0 0;
+      color: var(--opt-text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.6;
+      letter-spacing: 0.55px;
+      text-transform: uppercase;
+    }
+
+    .guide-surface {
+      background: var(--opt-surface-alt);
+      padding: 24px;
+    }
+
+    .guide-step-list,
+    .guide-info-list,
+    .guide-library-list,
+    .guide-safety-list,
+    .guide-note-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .guide-step-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .guide-step {
+      min-width: 0;
+      padding: 4px 20px 4px 0;
+    }
+
+    .guide-step + .guide-step {
+      padding-left: 20px;
+      border-left: 1px solid color-mix(in srgb, var(--opt-text) 11%, transparent);
+    }
+
+    .guide-step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      margin-bottom: 12px;
+      border: 1px solid var(--opt-border);
+      border-radius: 999px;
+      background: var(--opt-surface);
+      color: var(--opt-text-strong);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .guide-step strong,
+    .guide-info-copy strong,
+    .guide-library-copy strong,
+    .guide-safety-action strong {
+      display: block;
+      color: var(--opt-text-strong);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.45;
+    }
+
+    .guide-step p,
+    .guide-info-copy span,
+    .guide-library-copy span,
+    .guide-safety-action span,
+    .guide-safety-result,
+    .guide-note-list li {
+      color: var(--opt-text);
+      font-size: 12.5px;
+      line-height: 1.65;
+    }
+
+    .guide-step p {
+      margin: 5px 0 0;
+    }
+
+    .guide-info-row,
+    .guide-library-row,
+    .guide-note-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 15px 0;
+    }
+
+    .guide-info-row:first-child,
+    .guide-library-row:first-child,
+    .guide-note-list li:first-child {
+      padding-top: 0;
+    }
+
+    .guide-info-row:last-child,
+    .guide-library-row:last-child,
+    .guide-note-list li:last-child {
+      padding-bottom: 0;
+    }
+
+    .guide-info-row + .guide-info-row,
+    .guide-library-row + .guide-library-row,
+    .guide-note-list li + li {
+      border-top: 1px solid color-mix(in srgb, var(--opt-text) 11%, transparent);
+    }
+
+    .guide-row-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 34px;
+      width: 34px;
+      height: 34px;
+      color: var(--opt-text-muted);
+    }
+
+    .guide-row-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .guide-info-copy,
+    .guide-library-copy,
+    .guide-safety-action {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .guide-library-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 28px;
+    }
+
+    .guide-library-row:nth-child(2) {
+      padding-top: 0;
+    }
+
+    .guide-library-row:nth-child(2) {
+      border-top: none;
+    }
+
+    .guide-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .guide-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 36px;
+      padding: 8px 11px;
+      border: 1px solid var(--opt-border);
+      border-radius: 7px;
+      background: var(--opt-surface);
+      color: var(--opt-text);
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+    }
+
+    .guide-action:hover {
+      border-color: color-mix(in srgb, var(--opt-text) 24%, transparent);
+      background: var(--opt-hover);
+      color: var(--opt-text-strong);
+    }
+
+    .guide-action:focus-visible {
+      outline: 2px solid var(--opt-accent);
+      outline-offset: 2px;
+    }
+
+    .guide-action-arrow {
+      color: var(--opt-text-muted);
+      font-size: 13px;
+    }
+
+    .guide-safety-header,
+    .guide-safety-row {
+      display: grid;
+      grid-template-columns: minmax(190px, 1.25fr) minmax(120px, 0.75fr) minmax(230px, 1.4fr);
+      align-items: center;
+      gap: 20px;
+    }
+
+    .guide-safety-header {
+      padding: 0 0 10px;
+      color: var(--opt-text-muted);
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+    }
+
+    .guide-safety-row {
+      padding: 14px 0;
+      border-top: 1px solid color-mix(in srgb, var(--opt-text) 11%, transparent);
+    }
+
+    .guide-safety-status {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      min-height: 26px;
+      padding: 4px 8px;
+      border: 1px solid var(--opt-border);
+      border-radius: 999px;
+      background: var(--opt-surface);
+      color: var(--opt-text-muted);
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .guide-safety-status.is-dialog {
+      color: var(--opt-text-strong);
+    }
+
+    .guide-safety-status.is-permanent {
+      border-color: color-mix(in srgb, var(--opt-danger) 35%, var(--opt-border));
+      color: var(--opt-danger);
+    }
+
+    .guide-note-list li::before {
+      content: "";
+      flex: 0 0 6px;
+      width: 6px;
+      height: 6px;
+      margin-top: 7px;
+      border-radius: 999px;
+      background: var(--opt-text-muted);
+    }
+
+    @media (max-width: 760px) {
+      .guide-content {
+        padding-right: 16px;
+        padding-left: 16px;
+      }
+
+      .guide-step-list,
+      .guide-library-list {
+        grid-template-columns: 1fr;
+      }
+
+      .guide-step {
+        padding: 15px 0;
+      }
+
+      .guide-step:first-child {
+        padding-top: 0;
+      }
+
+      .guide-step:last-child {
+        padding-bottom: 0;
+      }
+
+      .guide-step + .guide-step {
+        padding-left: 0;
+        border-top: 1px solid color-mix(in srgb, var(--opt-text) 11%, transparent);
+        border-left: none;
+      }
+
+      .guide-library-row:nth-child(2) {
+        padding-top: 15px;
+        border-top: 1px solid color-mix(in srgb, var(--opt-text) 11%, transparent);
+      }
+
+      .guide-safety-header {
+        display: none;
+      }
+
+      .guide-safety-row {
+        grid-template-columns: 1fr auto;
+        gap: 8px 14px;
+      }
+
+      .guide-safety-result {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .navbar-left,
+      .highlight-count {
+        display: none;
+      }
+
+      .navbar-center {
+        min-width: 0;
+        justify-content: flex-start;
+      }
+
+      .navbar-right {
+        flex: 0 0 auto;
+      }
+
+      .guide-action {
+        min-height: 44px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .guide-hero {
+        padding: 28px 0 24px;
+      }
+
+      .guide-title {
+        font-size: 24px;
+      }
+
+      .guide-section {
+        margin-top: 26px;
+      }
+
+      .guide-surface {
+        margin-right: -16px;
+        margin-left: -16px;
+        padding: 20px 16px;
+      }
+
+      .guide-safety-row {
+        grid-template-columns: 1fr;
+      }
+
+      .guide-safety-status,
+      .guide-safety-result {
+        grid-column: 1;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .guide-action {
+        transition: none;
+      }
+    }
+
     /* Responsive navigation */
     @media (max-width: 768px) {
       .main-layout {
@@ -4205,6 +4617,7 @@
         <div class="navbar-tabs">
           <button type="button" class="tab-btn active" data-tab="library">Library</button>
           <button type="button" class="tab-btn" data-tab="settings">Settings</button>
+          <button type="button" class="tab-btn" data-tab="guide">Guide</button>
           <button type="button" class="tab-btn" data-tab="about">About</button>
         </div>
       </div>
@@ -4612,6 +5025,223 @@
             </div>
           </div>
         </section>
+      </main>
+    </div>
+
+    <!-- ==================== GUIDE TAB ==================== -->
+    <div class="tab-panel" id="tab-guide">
+      <main class="content-area guide-content">
+        <div class="guide-inner">
+          <header class="guide-hero">
+            <span class="guide-eyebrow">Start here</span>
+            <h1 class="guide-title">Guide</h1>
+            <p class="guide-intro">Learn the basics, organize your highlights, and understand what can and cannot be undone.</p>
+          </header>
+
+          <section class="guide-section" aria-labelledby="guideQuickStartHeading">
+            <header class="guide-section-header">
+              <h2 class="guide-section-title" id="guideQuickStartHeading">Quick Start</h2>
+              <p class="guide-section-description">Save your first highlight in three steps.</p>
+            </header>
+            <div class="guide-surface">
+              <ol class="guide-step-list">
+                <li class="guide-step">
+                  <span class="guide-step-number" aria-hidden="true">1</span>
+                  <strong>Select some text</strong>
+                  <p>Drag across a useful sentence or idea on any webpage.</p>
+                </li>
+                <li class="guide-step">
+                  <span class="guide-step-number" aria-hidden="true">2</span>
+                  <strong>Choose how to save it</strong>
+                  <p>Pick a tag color from the floating button, or use your keyboard shortcut.</p>
+                </li>
+                <li class="guide-step">
+                  <span class="guide-step-number" aria-hidden="true">3</span>
+                  <strong>Find it in Library</strong>
+                  <p>Your highlight is saved automatically and grouped with its webpage.</p>
+                </li>
+              </ol>
+              <div class="guide-actions">
+                <button type="button" class="guide-action" data-guide-target="library" data-guide-view="all">Open Library <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+              </div>
+            </div>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guideHighlightHeading">
+            <header class="guide-section-header">
+              <h2 class="guide-section-title" id="guideHighlightHeading">Ways to Highlight</h2>
+              <p class="guide-section-description">Use whichever method feels most natural.</p>
+            </header>
+            <div class="guide-surface">
+              <ul class="guide-info-list">
+                <li class="guide-info-row">
+                  <span class="guide-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10"/></svg></span>
+                  <div class="guide-info-copy">
+                    <strong>Floating action button</strong>
+                    <span>Select text and choose a tag color. If Folder or Comment is in your layout, highlight first and then use that action while the button remains open. Favorite can save a default-tag favorite immediately.</span>
+                  </div>
+                </li>
+                <li class="guide-info-row">
+                  <span class="guide-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M6 16h12"/></svg></span>
+                  <div class="guide-info-copy">
+                    <strong>Keyboard shortcut</strong>
+                    <span>Use the shortcut shown in Settings to quickly save selected text with your default tag.</span>
+                  </div>
+                </li>
+                <li class="guide-info-row">
+                  <span class="guide-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg></span>
+                  <div class="guide-info-copy">
+                    <strong>Right-click menu</strong>
+                    <span>Select text, right-click, and choose the Highlight command when you do not want to use the floating button.</span>
+                  </div>
+                </li>
+              </ul>
+              <div class="guide-actions">
+                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="shortcuts">View Shortcut <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+              </div>
+            </div>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guideOrganizeHeading">
+            <header class="guide-section-header">
+              <h2 class="guide-section-title" id="guideOrganizeHeading">Organize Your Highlights</h2>
+              <p class="guide-section-description">Use each tool for a different kind of organization.</p>
+            </header>
+            <div class="guide-surface">
+              <ul class="guide-info-list">
+                <li class="guide-info-row">
+                  <span class="guide-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><path d="M7 7h.01"/></svg></span>
+                  <div class="guide-info-copy"><strong>Tags</strong><span>Every highlight has one tag. Its tag controls its name and color, and changing a tag preset updates every highlight using it.</span></div>
+                </li>
+                <li class="guide-info-row">
+                  <span class="guide-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/></svg></span>
+                  <div class="guide-info-copy"><strong>Favorites</strong><span>Star the highlights you want to reach quickly. Favoriting does not change their tag, folder, or comment.</span></div>
+                </li>
+                <li class="guide-info-row">
+                  <span class="guide-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg></span>
+                  <div class="guide-info-copy"><strong>Folders</strong><span>A highlight can be in one folder or left unfiled. Folders are useful for projects, classes, or topics.</span></div>
+                </li>
+                <li class="guide-info-row">
+                  <span class="guide-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg></span>
+                  <div class="guide-info-copy"><strong>Comments</strong><span>Add one short note to remember why a passage mattered. You can create or edit it from the webpage or Library.</span></div>
+                </li>
+              </ul>
+              <div class="guide-actions">
+                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="presets-tags">Manage Tags <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+              </div>
+            </div>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guideLibraryHeading">
+            <header class="guide-section-header">
+              <h2 class="guide-section-title" id="guideLibraryHeading">Using the Library</h2>
+              <p class="guide-section-description">Choose a view based on what you are looking for.</p>
+            </header>
+            <div class="guide-surface">
+              <ul class="guide-library-list">
+                <li class="guide-library-row"><div class="guide-library-copy"><strong>All</strong><span>Every saved highlight, grouped by webpage.</span></div></li>
+                <li class="guide-library-row"><div class="guide-library-copy"><strong>Favorites</strong><span>Only the highlights you have starred.</span></div></li>
+                <li class="guide-library-row"><div class="guide-library-copy"><strong>Tags</strong><span>Browse highlights by their name and color.</span></div></li>
+                <li class="guide-library-row"><div class="guide-library-copy"><strong>Comments</strong><span>Review highlights that contain notes.</span></div></li>
+                <li class="guide-library-row"><div class="guide-library-copy"><strong>Folders</strong><span>Create, rename, and browse your folders.</span></div></li>
+                <li class="guide-library-row"><div class="guide-library-copy"><strong>Recently Deleted</strong><span>Restore removed highlights or delete them forever.</span></div></li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guideCustomizeHeading">
+            <header class="guide-section-header">
+              <h2 class="guide-section-title" id="guideCustomizeHeading">Customize Your Setup</h2>
+              <p class="guide-section-description">Make highlighting fit the way you read and organize.</p>
+            </header>
+            <div class="guide-surface">
+              <ul class="guide-info-list">
+                <li class="guide-info-row"><div class="guide-info-copy"><strong>Choose your colors</strong><span>Edit the default tag in Appearance or manage the complete palette in Tag Presets. Existing highlights update with their tag.</span></div></li>
+                <li class="guide-info-row"><div class="guide-info-copy"><strong>Build your floating button</strong><span>Add, remove, drag, and reorder up to eight tag and action buttons. Close, Favorite, Folder, and Comment are optional.</span></div></li>
+                <li class="guide-info-row"><div class="guide-info-copy"><strong>No manual saving needed</strong><span>Changes made in Settings save automatically.</span></div></li>
+              </ul>
+              <div class="guide-actions">
+                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="appearance">Open Appearance <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="fab">Customize FAB <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+              </div>
+            </div>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guideDeleteHeading">
+            <header class="guide-section-header">
+              <h2 class="guide-section-title" id="guideDeleteHeading">Before You Delete</h2>
+              <p class="guide-section-description">Know what can be restored and what is permanent.</p>
+            </header>
+            <div class="guide-surface">
+              <div class="guide-safety-header" aria-hidden="true"><span>Action</span><span>Confirmation</span><span>What happens</span></div>
+              <ul class="guide-safety-list">
+                <li class="guide-safety-row">
+                  <div class="guide-safety-action"><strong>Delete a normal highlight</strong><span>From a webpage or Library row</span></div>
+                  <span class="guide-safety-status">No dialog</span>
+                  <span class="guide-safety-result">Moves to Recently Deleted and can be restored.</span>
+                </li>
+                <li class="guide-safety-row">
+                  <div class="guide-safety-action"><strong>Clear one webpage in Library</strong><span>Use Clear all beside that webpage</span></div>
+                  <span class="guide-safety-status">No dialog</span>
+                  <span class="guide-safety-result">Moves that webpage’s highlights to Recently Deleted.</span>
+                </li>
+                <li class="guide-safety-row">
+                  <div class="guide-safety-action"><strong>Clear the current webpage</strong><span>Use the trash button in the popup</span></div>
+                  <span class="guide-safety-status is-dialog">Asks first</span>
+                  <span class="guide-safety-result">Moves the page’s highlights to Recently Deleted.</span>
+                </li>
+                <li class="guide-safety-row">
+                  <div class="guide-safety-action"><strong>Delete a comment</strong><span>The highlight remains saved</span></div>
+                  <span class="guide-safety-status is-dialog">Asks first</span>
+                  <span class="guide-safety-result">Permanently removes only the comment.</span>
+                </li>
+                <li class="guide-safety-row">
+                  <div class="guide-safety-action"><strong>Delete a folder</strong><span>You choose what happens to its highlights</span></div>
+                  <span class="guide-safety-status is-dialog">Asks first</span>
+                  <span class="guide-safety-result">Keeps highlights unfiled or moves them to Recently Deleted.</span>
+                </li>
+                <li class="guide-safety-row">
+                  <div class="guide-safety-action"><strong>Delete a custom tag</strong><span>Built-in default tag cannot be deleted</span></div>
+                  <span class="guide-safety-status">No dialog</span>
+                  <span class="guide-safety-result">Removes the tag; affected highlights use the default tag.</span>
+                </li>
+                <li class="guide-safety-row">
+                  <div class="guide-safety-action"><strong>Reset settings</strong><span>Library records stay saved</span></div>
+                  <span class="guide-safety-status is-dialog">Asks first</span>
+                  <span class="guide-safety-result">Restores default tags and FAB settings without deleting highlights.</span>
+                </li>
+                <li class="guide-safety-row">
+                  <div class="guide-safety-action"><strong>Delete one item forever</strong><span>From Recently Deleted</span></div>
+                  <span class="guide-safety-status is-permanent">No dialog</span>
+                  <span class="guide-safety-result">Permanently deletes that highlight and cannot be undone.</span>
+                </li>
+                <li class="guide-safety-row">
+                  <div class="guide-safety-action"><strong>Empty Recently Deleted</strong><span>Deletes every item inside it</span></div>
+                  <span class="guide-safety-status is-dialog">Asks first</span>
+                  <span class="guide-safety-result">Permanently deletes everything after confirmation.</span>
+                </li>
+              </ul>
+              <div class="guide-actions">
+                <button type="button" class="guide-action" data-guide-target="library" data-guide-view="recently-deleted">Open Recently Deleted <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+              </div>
+            </div>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guideGoodToKnowHeading">
+            <header class="guide-section-header">
+              <h2 class="guide-section-title" id="guideGoodToKnowHeading">Good to Know</h2>
+              <p class="guide-section-description">A few details that make the extension easier to understand.</p>
+            </header>
+            <div class="guide-surface">
+              <ul class="guide-note-list">
+                <li>Your highlights, folders, comments, and preferences currently stay in this Chrome browser profile.</li>
+                <li>Cross-device Sync is planned but is not available yet.</li>
+                <li>Copy Link and Share appear in the FAB Builder as coming-soon actions and do not work yet.</li>
+                <li>Renaming or recoloring a tag updates every highlight connected to that tag.</li>
+              </ul>
+            </div>
+          </section>
+        </div>
       </main>
     </div>
 

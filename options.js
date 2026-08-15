@@ -239,6 +239,7 @@ function activateMainTab(tabName) {
   closeMobileLibrarySearch();
   if (currentTab === tabName) {
     if (tabName === 'settings') scheduleSettingsScrollSpy();
+    else if (tabName === 'guide') window.scrollTo({ top: 0, behavior: 'auto' });
     else resetSidebarForTab(tabName);
     return;
   }
@@ -251,10 +252,35 @@ function activateMainTab(tabName) {
 
   if (tabName === 'settings') restoreSettingsScrollPosition();
   else resetSidebarForTab(tabName);
+  if (tabName === 'guide' || currentTab === 'guide') {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => activateMainTab(btn.dataset.tab));
+});
+
+document.querySelectorAll('.guide-action').forEach(button => {
+  button.addEventListener('click', () => {
+    const target = button.dataset.guideTarget;
+    const viewName = button.dataset.guideView;
+    if (target === 'library') {
+      activateMainTab('library');
+      if (viewName) switchSidebarView('library', viewName);
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      requestAnimationFrame(() => {
+        document.getElementById('libraryViewHeading')?.focus({ preventScroll: true });
+      });
+      return;
+    }
+    if (target === 'settings' && SETTINGS_SECTION_VIEW_ORDER.includes(viewName)) {
+      activateMainTab('settings');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => scrollToSettingsSection(viewName, { focusHeading: true }));
+      });
+    }
+  });
 });
 
 window.addEventListener('scroll', () => {
@@ -5200,7 +5226,7 @@ initLibraryFoldersNavigation();
 
 const urlParams = new URLSearchParams(window.location.search);
 const tabParam = urlParams.get('tab');
-const hasValidTabParam = ['library', 'settings', 'about'].includes(tabParam);
+const hasValidTabParam = ['library', 'settings', 'guide', 'about'].includes(tabParam);
 if (hasValidTabParam) {
   switchToTab(tabParam);
 }
