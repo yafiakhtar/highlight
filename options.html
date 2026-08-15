@@ -3359,7 +3359,7 @@
     }
 
     .folder-delete-dialog-actions {
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }
 
     .folder-delete-dialog-actions .btn {
@@ -3953,6 +3953,19 @@
       color: var(--opt-text-muted);
       font-size: 12px;
       line-height: 1.65;
+    }
+
+    .reset-dialog-list {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .reset-dialog-list li + li {
+      margin-top: 5px;
+    }
+
+    .reset-dialog-note {
+      margin: 12px 0 0;
     }
 
     .reset-dialog-actions {
@@ -4596,17 +4609,22 @@
       <p class="reset-dialog-description" id="folderDeleteDialogDescription"></p>
       <div class="reset-dialog-actions folder-delete-dialog-actions">
         <button type="button" class="btn btn-secondary" id="cancelFolderDeleteBtn">Cancel</button>
-        <button type="button" class="btn btn-secondary" id="keepFolderHighlightsBtn">Delete folder, keep highlights</button>
-        <button type="button" class="btn btn-danger" id="deleteFolderHighlightsBtn">Delete folder and highlights</button>
+        <button type="button" class="btn btn-secondary" id="keepFolderHighlightsBtn">Keep highlights</button>
+        <button type="button" class="btn btn-danger" id="deleteFolderHighlightsBtn">Delete highlights</button>
       </div>
     </div>
   </dialog>
   <dialog class="reset-dialog" id="resetConfirmDialog" aria-labelledby="resetDialogTitle" aria-describedby="resetDialogDescription">
     <div class="reset-dialog-panel">
       <h2 class="reset-dialog-title" id="resetDialogTitle">Reset all settings?</h2>
-      <p class="reset-dialog-description" id="resetDialogDescription">
-        This restores the four built-in tag presets, their colors, FAB visibility, and the default FAB layout. Custom presets will be removed. Saved highlights and Library records will not be deleted; highlights linked to removed presets will use the default tag.
-      </p>
+      <div class="reset-dialog-description" id="resetDialogDescription">
+        <ul class="reset-dialog-list">
+          <li>Restore the four built-in tag presets and default colors.</li>
+          <li>Remove custom tag presets.</li>
+          <li>Turn on the FAB and restore its default four-button layout.</li>
+        </ul>
+        <p class="reset-dialog-note">Saved highlights and Library records stay intact. Highlights using removed custom presets will use the default tag.</p>
+      </div>
       <div class="reset-dialog-actions">
         <button type="button" class="btn btn-secondary" id="cancelResetBtn">Cancel</button>
         <button type="button" class="btn btn-danger" id="confirmResetBtn">Reset settings</button>

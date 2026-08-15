@@ -4148,7 +4148,15 @@ function openFolderDeleteDialog(folderId, highlightCountForFolder, trigger = nul
   folderDeleteDialogDescription.textContent = hasHighlights
     ? `This folder contains ${highlightCountForFolder} ${highlightCountForFolder === 1 ? 'highlight' : 'highlights'}. Keep them as unfiled, or move them to Recently Deleted.`
     : 'This folder is empty and can be deleted safely.';
-  keepFolderHighlightsBtn.textContent = hasHighlights ? 'Delete folder, keep highlights' : 'Delete folder';
+  keepFolderHighlightsBtn.textContent = hasHighlights ? 'Keep highlights' : 'Delete folder';
+  keepFolderHighlightsBtn.setAttribute(
+    'aria-label',
+    hasHighlights ? 'Delete folder and keep highlights as unfiled' : 'Delete empty folder'
+  );
+  deleteFolderHighlightsBtn.setAttribute(
+    'aria-label',
+    'Delete folder and move highlights to Recently Deleted'
+  );
   deleteFolderHighlightsBtn.hidden = !hasHighlights;
   if (!folderDeleteDialog || typeof folderDeleteDialog.showModal !== 'function') {
     if (window.confirm(`Delete “${folder.name}”? Highlights will be kept as unfiled.`)) {
