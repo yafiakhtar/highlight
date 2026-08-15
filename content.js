@@ -321,6 +321,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
         const postHighlight = highlightsById.get(fabPostHighlightId);
         fabPostPresetId = getPresetById(postHighlight?.presetId).id;
         fabPostFolderId = typeof postHighlight?.folderId === 'string' ? postHighlight.folderId : null;
+        fabPostFavorited = postHighlight?.favorited === true;
         syncHighlightFabState();
       }
       if (presetAssignmentChanged) applyCustomColors();
@@ -815,7 +816,7 @@ async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {
     // Use surroundContents for simple selections
     range.surroundContents(mark);
     
-    // Add click handler to remove
+    // A click reopens this saved highlight in the FAB.
     mark.addEventListener('click', handleHighlightClick);
     
     selection.removeAllRanges();
@@ -940,11 +941,50 @@ function getTextNodesInRange(range) {
   return textNodes;
 }
 
-// Handle click on highlight to remove it
+const HIGHLIGHT_DRAG_THRESHOLD_PX = 5;
+let highlightPointerGesture = null;
+
+function getHighlightMark(target) {
+  return target instanceof Element ? target.closest('.text-highlighter-mark') : null;
+}
+
+function hasMeaningfulSelection() {
+  const selection = window.getSelection();
+  return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
+}
+
+document.addEventListener('pointerdown', event => {
+  const mark = getHighlightMark(event.target);
+  if (!mark || event.button !== 0) {
+    highlightPointerGesture = null;
+    return;
+  }
+  highlightPointerGesture = {
+    x: event.clientX,
+    y: event.clientY,
+    moved: false
+  };
+}, true);
+
+document.addEventListener('pointermove', event => {
+  if (!highlightPointerGesture) return;
+  if (
+    Math.abs(event.clientX - highlightPointerGesture.x) >= HIGHLIGHT_DRAG_THRESHOLD_PX
+    || Math.abs(event.clientY - highlightPointerGesture.y) >= HIGHLIGHT_DRAG_THRESHOLD_PX
+  ) highlightPointerGesture.moved = true;
+}, true);
+
+// A simple click reopens the FAB. Selection drags retain native text behavior.
 function handleHighlightClick(e) {
+  const mark = getHighlightMark(e.target);
+  if (!mark) return;
+  const gesture = highlightPointerGesture;
+  highlightPointerGesture = null;
+  if (gesture?.moved || hasMeaningfulSelection()) return;
   e.preventDefault();
   e.stopPropagation();
-  removeHighlight(e.target);
+  const rect = mark.getBoundingClientRect();
+  showExistingHighlightFab(mark, e.clientX || rect.right, e.clientY || (rect.top + rect.height / 2));
 }
 
 // Remove a highlight (and all parts if it spans multiple elements)
@@ -953,7 +993,7 @@ function removeHighlight(mark) {
     mark = mark.closest('.text-highlighter-mark');
   }
 
-  if (!mark) return;
+  if (!mark) return Promise.resolve(false);
 
   const highlightId = mark.dataset.highlightId;
   const key = getStorageKey();
@@ -961,63 +1001,92 @@ function removeHighlight(mark) {
 
   const allParts = document.querySelectorAll(`.text-highlighter-mark[data-highlight-id="${highlightId}"]`);
 
-  if (!isExtensionContextValid()) return;
-  try {
-    chrome.storage.local.get([key, RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
-      if (chrome.runtime.lastError) return;
-    const highlights = result[key] || [];
-    const hl = highlights.find(h => h.id === highlightId);
-    const trash = Array.isArray(result[RECENTLY_DELETED_KEY])
-      ? [...result[RECENTLY_DELETED_KEY]]
-      : [];
-    const index = result.highlightIndex || {};
-    const pageTitle = (index[url] && index[url].title) || document.title || url;
+  if (!isExtensionContextValid()) return Promise.resolve(false);
+  return new Promise(resolve => {
+    try {
+      chrome.storage.local.get([key, RECENTLY_DELETED_KEY, 'highlightIndex'], (result) => {
+        if (chrome.runtime.lastError) {
+          resolve(false);
+          return;
+        }
+        const highlights = result[key] || [];
+        const hl = highlights.find(h => h.id === highlightId);
+        if (!hl) {
+          resolve(false);
+          return;
+        }
+        const trash = Array.isArray(result[RECENTLY_DELETED_KEY])
+          ? [...result[RECENTLY_DELETED_KEY]]
+          : [];
+        const index = result.highlightIndex || {};
+        const pageTitle = (index[url] && index[url].title) || document.title || url;
 
-    if (hl) {
-      trash.unshift({
-        trashId: generateTrashId(),
-        pageUrl: url,
-        pageTitle,
-        deletedAt: Date.now(),
-        highlight: { ...hl }
-      });
-    }
-
-    allParts.forEach(part => {
-      const parent = part.parentNode;
-      while (part.firstChild) {
-        parent.insertBefore(part.firstChild, part);
-      }
-      parent.removeChild(part);
-      parent.normalize();
-    });
-
-    const newHighlights = highlights.filter(h => h.id !== highlightId);
-
-    if (newHighlights.length > 0) {
-      index[url] = {
-        title: document.title || url,
-        lastUpdated: Date.now()
-      };
-      chrome.storage.local.set({
-        [key]: newHighlights,
-        highlightIndex: index,
-        [RECENTLY_DELETED_KEY]: trash
-      });
-    } else {
-      delete index[url];
-      chrome.storage.local.remove(key, () => {
-        chrome.storage.local.set({
-          highlightIndex: index,
-          [RECENTLY_DELETED_KEY]: trash
+        trash.unshift({
+          trashId: generateTrashId(),
+          pageUrl: url,
+          pageTitle,
+          deletedAt: Date.now(),
+          highlight: { ...hl }
         });
+
+        const newHighlights = highlights.filter(h => h.id !== highlightId);
+        const finish = success => {
+          if (!success) {
+            resolve(false);
+            return;
+          }
+          allParts.forEach(part => {
+            const parent = part.parentNode;
+            if (!parent) return;
+            while (part.firstChild) parent.insertBefore(part.firstChild, part);
+            parent.removeChild(part);
+            parent.normalize();
+          });
+          resolve(true);
+        };
+
+        if (newHighlights.length > 0) {
+          index[url] = {
+            title: document.title || url,
+            lastUpdated: Date.now()
+          };
+          chrome.storage.local.set({
+            [key]: newHighlights,
+            highlightIndex: index,
+            [RECENTLY_DELETED_KEY]: trash
+          }, () => finish(!chrome.runtime.lastError));
+        } else {
+          delete index[url];
+          chrome.storage.local.set({
+            [key]: [],
+            highlightIndex: index,
+            [RECENTLY_DELETED_KEY]: trash
+          }, () => {
+            if (chrome.runtime.lastError) {
+              finish(false);
+              return;
+            }
+            chrome.storage.local.remove(key, () => finish(!chrome.runtime.lastError));
+          });
+        }
       });
+    } catch {
+      resolve(false);
     }
-    });
-  } catch {
-    // ignore
-  }
+  });
 }
+
+// Only an unselected extension highlight owns the no-selection context menu.
+document.addEventListener('contextmenu', event => {
+  const mark = getHighlightMark(event.target);
+  if (!mark || hasMeaningfulSelection()) return;
+  event.preventDefault();
+  event.stopPropagation();
+  hideHighlightFab();
+  removeHighlight(mark).then(removed => {
+    if (removed) showPageNotice('Moved to Recently Deleted');
+  });
+}, true);
 
 // Remove highlight from current selection
 function removeSelectedHighlight() {
@@ -1414,6 +1483,8 @@ let fabCommentWriteInFlight = false;
 let fabPostHighlightId = null;
 let fabPostPresetId = null;
 let fabPostFolderId = null;
+let fabPostFavorited = false;
+let fabExistingHighlightMode = false;
 let fabPostTimeout = null;
 let fabHideTimeout = null;
 let fabPointerPaused = false;
@@ -1441,7 +1512,7 @@ function clearFabPostTimeout() {
 
 function scheduleFabPostTimeout() {
   clearFabPostTimeout();
-  if (!fabPostHighlightId || fabPointerPaused || fabKeyboardPaused) return;
+  if (fabExistingHighlightMode || !fabPostHighlightId || fabPointerPaused || fabKeyboardPaused) return;
   fabPostTimeout = setTimeout(() => {
     fabPostTimeout = null;
     hideHighlightFab({ fade: true });
@@ -1453,6 +1524,8 @@ function clearFabPostState() {
   fabPostHighlightId = null;
   fabPostPresetId = null;
   fabPostFolderId = null;
+  fabPostFavorited = false;
+  fabExistingHighlightMode = false;
   fabPointerPaused = false;
   fabKeyboardPaused = false;
   syncHighlightFabState();
@@ -1478,10 +1551,10 @@ function syncHighlightFabState() {
     if (button.dataset.actionId === 'favorite') {
       button.classList.toggle(
         'is-favorited',
-        Boolean(highlightFab?.classList.contains('is-confirming-favorite'))
+        fabPostFavorited || Boolean(highlightFab?.classList.contains('is-confirming-favorite'))
       );
       button.title = fabPostHighlightId
-        ? 'Add this highlight to favorites'
+        ? (fabPostFavorited ? 'This highlight is in favorites' : 'Add this highlight to favorites')
         : 'Highlight with the default tag and add to favorites';
       button.setAttribute('aria-label', button.title);
     }
@@ -1852,7 +1925,8 @@ function saveFabComment(popover, textarea) {
     }
     closeHighlightFabCommentPopover({ restartTimeout: false });
     showHighlightFabStatus('Comment saved', 'comment');
-    hideHighlightFab({ fade: true });
+    if (fabExistingHighlightMode) syncHighlightFabState();
+    else hideHighlightFab({ fade: true });
   }).catch(() => {
     fabCommentWriteInFlight = false;
     if (popover !== highlightFabCommentPopover) return;
@@ -2049,6 +2123,7 @@ function handleFabPresetAction(presetId) {
 
     fabPostHighlightId = created.highlightId;
     fabPostPresetId = created.presetId;
+    fabPostFavorited = false;
     syncHighlightFabState();
     scheduleFabPostTimeout();
   });
@@ -2064,7 +2139,10 @@ function handleFabFavoriteAction() {
         hideHighlightFab();
         return;
       }
-      confirmFavoriteAndClose();
+      fabPostFavorited = true;
+      syncHighlightFabState();
+      showHighlightFabStatus('Added to Favorites', 'favorite');
+      if (!fabExistingHighlightMode) hideHighlightFab({ fade: true });
       return;
     }
 
@@ -2430,6 +2508,46 @@ async function showHighlightFab(x, y) {
   highlightFab.style.display = 'grid';
 }
 
+async function showExistingHighlightFab(mark, clientX, clientY) {
+  const highlightId = mark?.dataset?.highlightId;
+  if (!highlightId) return;
+  const openVersion = ++fabInteractionVersion;
+  await loadUserSettings();
+  if (openVersion !== fabInteractionVersion || !userSettings.showFab || !isExtensionContextValid()) return;
+
+  const key = getStorageKey();
+  const result = await new Promise(resolve => {
+    try {
+      chrome.storage.local.get(key, value => resolve(chrome.runtime.lastError ? null : value));
+    } catch {
+      resolve(null);
+    }
+  });
+  const highlights = Array.isArray(result?.[key]) ? result[key] : [];
+  const highlight = highlights.find(item => item?.id === highlightId);
+  if (openVersion !== fabInteractionVersion || !highlight || !mark.isConnected) return;
+
+  if (!highlightFab) createHighlightFab();
+  clearFabPostState();
+  hideHighlightFabStatus();
+  if (fabHideTimeout !== null) {
+    clearTimeout(fabHideTimeout);
+    fabHideTimeout = null;
+  }
+  fabPostHighlightId = highlight.id;
+  fabPostPresetId = getPresetById(highlight.presetId).id;
+  fabPostFolderId = typeof highlight.folderId === 'string' ? highlight.folderId : null;
+  fabPostFavorited = highlight.favorited === true;
+  fabExistingHighlightMode = true;
+  highlightFab.classList.remove('is-expiring', 'is-confirming-favorite');
+  highlightFab.style.pointerEvents = '';
+  applyCustomColors();
+  syncHighlightFabState();
+  highlightFab.style.left = `${clientX + window.scrollX + 8}px`;
+  highlightFab.style.top = `${clientY + window.scrollY - 12}px`;
+  highlightFab.style.display = 'grid';
+}
+
 function hideHighlightFab({ fade = false } = {}) {
   fabInteractionVersion++;
   closeHighlightFabFolderPopover({ restartTimeout: false });
@@ -2477,6 +2595,12 @@ document.addEventListener('mouseup', (e) => {
   // Small delay to let selection finalize
   setTimeout(() => {
     const selection = window.getSelection();
+    const releasedOnHighlight = getHighlightMark(e.target);
+
+    if (releasedOnHighlight) {
+      if (selection && !selection.isCollapsed && selection.toString().trim()) hideHighlightFab();
+      return;
+    }
     
     if (!selection || selection.isCollapsed || !selection.toString().trim()) {
       hideHighlightFab();
@@ -2506,7 +2630,8 @@ document.addEventListener('mouseup', (e) => {
 
 // Hide FAB when clicking elsewhere
 document.addEventListener('mousedown', (e) => {
-  if (highlightFab && !highlightFab.contains(e.target) && !highlightFabFolderPopover?.contains(e.target) && !highlightFabCommentPopover?.contains(e.target)) {
+  const clickedHighlight = getHighlightMark(e.target);
+  if (highlightFab && !clickedHighlight && !highlightFab.contains(e.target) && !highlightFabFolderPopover?.contains(e.target) && !highlightFabCommentPopover?.contains(e.target)) {
     hideHighlightFab();
   }
 });

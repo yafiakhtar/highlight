@@ -1,6 +1,6 @@
 /* Highlight marker style - minimal to avoid layout disruption */
 .text-highlighter-mark {
-  cursor: pointer;
+  cursor: text;
   /* Preserve all original styling */
   font: inherit !important;
   line-height: inherit !important;
