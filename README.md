@@ -70,6 +70,13 @@ A full-page options view (`options.html`) with a collapsible sidebar and several
 - **Reset settings** — restore the built-in presets, appearance, FAB visibility, and default FAB layout without deleting saved highlights or Library records
 - **Sync** — placeholder for cross-device sync (coming soon)
 
+### Guide
+
+- **Quick start** — learn how to create and find a first highlight in three steps
+- **Plain-language workflows** — understand the FAB, tags, favorites, folders, comments, and Library views
+- **Deletion safety** — see which actions ask for confirmation, which items can be restored, and which deletions are permanent
+- **Direct navigation** — jump from the Guide to Library, Recently Deleted, Appearance, Tag Presets, FAB settings, or Shortcuts
+
 ### Popup
 
 - **Quick-access toolbar** — clear page highlights, toggle theme, open Settings, toggle the FAB, or open Library
