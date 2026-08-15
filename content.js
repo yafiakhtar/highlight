@@ -953,6 +953,31 @@ function hasMeaningfulSelection() {
   return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
 }
 
+function getFullySelectedHighlightMark(selection) {
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  const intersectingMarks = Array.from(document.querySelectorAll('.text-highlighter-mark')).filter(mark => {
+    try {
+      return range.intersectsNode(mark);
+    } catch {
+      return false;
+    }
+  });
+  if (intersectingMarks.length === 0) return null;
+  const highlightIds = new Set(intersectingMarks.map(mark => mark.dataset.highlightId).filter(Boolean));
+  if (highlightIds.size !== 1) return null;
+
+  const highlightId = intersectingMarks[0].dataset.highlightId;
+  const allParts = Array.from(
+    document.querySelectorAll(`.text-highlighter-mark[data-highlight-id="${highlightId}"]`)
+  );
+  if (allParts.length === 0 || allParts.some(mark => !intersectingMarks.includes(mark))) return null;
+
+  const selectedText = tightenPunctuation(collapseWhitespace(selection.toString()));
+  const highlightText = tightenPunctuation(collapseWhitespace(allParts.map(mark => mark.textContent || '').join(' ')));
+  return selectedText === highlightText ? allParts[0] : null;
+}
+
 document.addEventListener('pointerdown', event => {
   const mark = getHighlightMark(event.target);
   if (!mark || event.button !== 0) {
@@ -2596,6 +2621,17 @@ document.addEventListener('mouseup', (e) => {
   setTimeout(() => {
     const selection = window.getSelection();
     const releasedOnHighlight = getHighlightMark(e.target);
+
+    const fullySelectedHighlight = getFullySelectedHighlightMark(selection);
+    if (fullySelectedHighlight) {
+      const rect = selection.getRangeAt(0).getBoundingClientRect();
+      showExistingHighlightFab(
+        fullySelectedHighlight,
+        rect.right || e.clientX,
+        rect.top + (rect.height / 2) || e.clientY
+      );
+      return;
+    }
 
     if (releasedOnHighlight) {
       if (selection && !selection.isCollapsed && selection.toString().trim()) hideHighlightFab();
