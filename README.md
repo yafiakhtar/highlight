@@ -9,7 +9,7 @@
 ### Core Highlighting
 
 - **Select & highlight** any text on any webpage via keyboard shortcut (`Ctrl+Shift+H` / `Cmd+Shift+H`), right-click context menu, or the floating action button
-- **Click to remove** any highlight directly on the page
+- **Safe existing-highlight controls** — click a highlight to reopen its FAB, drag across it to select and copy, or right-click it without a selection to move it to Recently Deleted
 - **Multi-part highlights** — selections that span across DOM elements are handled gracefully, stored as a unified highlight with multiple parts
 - **Highlight restoration** — highlights are re-applied automatically when you revisit a page
 - **Light & dark mode aware** — highlight colors adapt to the page's background theme
@@ -24,6 +24,7 @@
 - **Comment action** — add a multiline note to a newly created highlight during the retained FAB window
 - **Close action** — dismiss the FAB while keeping the current text selection available
 - **In-place recoloring** — choosing another tag during the retained window updates the same highlight instead of creating a duplicate
+- **Edit existing highlights** — reopen the FAB from any saved webpage highlight and update its tag, favorite, folder, or comment without creating a duplicate
 - **Visibility control** — toggle the FAB from the popup or Settings
 - **Coming soon** — Copy link and Share remain clearly labeled as unfinished
 
