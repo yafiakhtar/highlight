@@ -4446,6 +4446,71 @@
       display: none;
     }
 
+    .backup-import-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0 0;
+    }
+
+    .backup-import-meta div {
+      min-width: 0;
+    }
+
+    .backup-import-meta dt {
+      margin-bottom: 3px;
+      color: var(--opt-text-muted);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.55px;
+      text-transform: uppercase;
+    }
+
+    .backup-import-meta dd {
+      margin: 0;
+      overflow: hidden;
+      color: var(--opt-text-strong);
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .backup-import-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1px;
+      margin: 18px 0 0;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid var(--opt-border);
+      border-radius: 8px;
+      background: var(--opt-border);
+      list-style: none;
+    }
+
+    .backup-import-summary li {
+      padding: 10px 12px;
+      background: var(--opt-surface-alt);
+      color: var(--opt-text-muted);
+      font-size: 11.5px;
+    }
+
+    .backup-import-summary strong {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--opt-text-strong);
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .backup-import-warning {
+      line-height: 1.55;
+    }
+
+    .backup-import-dialog[aria-busy="true"] .reset-dialog-panel {
+      opacity: 0.72;
+    }
+
     .reset-dialog-actions {
       display: flex;
       justify-content: flex-end;
@@ -4755,9 +4820,9 @@
               <span class="sidebar-icon"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M6 16h12"/></svg></span>
               <span class="sidebar-label">Shortcuts</span>
             </button>
-            <button type="button" class="sidebar-item" data-view="data" title="Reset settings">
+            <button type="button" class="sidebar-item" data-view="data" title="Data & Backup">
               <span class="sidebar-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></span>
-              <span class="sidebar-label">Reset settings</span>
+              <span class="sidebar-label">Data & Backup</span>
             </button>
             <button type="button" class="sidebar-item" data-view="sync" title="Sync">
               <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span>
@@ -5004,15 +5069,30 @@
           </div>
         </section>
 
-        <!-- Reset Settings View -->
+        <!-- Data & Backup View -->
         <section class="settings-view" id="settings-data" data-view="data" aria-labelledby="settingsDataHeading">
           <div class="section simple-settings-section">
             <div class="simple-settings-header">
-              <h2 class="simple-settings-title" id="settingsDataHeading" tabindex="-1">Reset Settings</h2>
-              <p class="simple-settings-description">Restore extension preferences to their defaults without deleting saved highlights or Library records.</p>
+              <h2 class="simple-settings-title" id="settingsDataHeading" tabindex="-1">Data & Backup</h2>
+              <p class="simple-settings-description">Back up or restore your complete extension data, or reset preferences without deleting your Library.</p>
             </div>
 
             <div class="simple-settings-list">
+              <div class="simple-settings-row">
+                <div class="simple-settings-copy">
+                  <strong>Export backup</strong>
+                  <span>Download highlights, folders, tags, notes, Recently Deleted, and preferences as JSON. The file contains webpage URLs and saved text, so keep it private.</span>
+                </div>
+                <button type="button" class="btn btn-secondary simple-settings-action" id="exportBackupBtn">Export backup</button>
+              </div>
+              <div class="simple-settings-row">
+                <div class="simple-settings-copy">
+                  <strong>Import backup</strong>
+                  <span>Choose a Highlight backup to preview it. Importing replaces the extension data currently stored in this Chrome profile.</span>
+                </div>
+                <button type="button" class="btn btn-secondary simple-settings-action" id="importBackupBtn">Import backup</button>
+                <input type="file" id="importBackupInput" accept=".json,application/json" hidden>
+              </div>
               <div class="simple-settings-row">
                 <div class="simple-settings-copy">
                   <strong>Restore defaults</strong>
@@ -5184,6 +5264,7 @@
                 <li class="guide-info-row"><div class="guide-info-copy"><strong>Choose your colors</strong><span>Edit the default tag in Appearance or manage the complete palette in Tag Presets. Existing highlights update with their tag.</span></div></li>
                 <li class="guide-info-row"><div class="guide-info-copy"><strong>Build your floating button</strong><span>Add, remove, drag, and reorder up to eight tag and action buttons. Close, Favorite, Folder, and Note are optional.</span></div></li>
                 <li class="guide-info-row"><div class="guide-info-copy"><strong>No manual saving needed</strong><span>Changes made in Settings save automatically.</span></div></li>
+                <li class="guide-info-row"><div class="guide-info-copy"><strong>Keep a backup</strong><span>Data &amp; Backup can export your highlights and setup to a private JSON file. Import shows a preview and asks before replacing your current data.</span></div></li>
               </ul>
               <div class="guide-actions">
                 <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="appearance">Open Appearance <span class="guide-action-arrow" aria-hidden="true">→</span></button>
@@ -5339,6 +5420,23 @@
       <div class="reset-dialog-actions">
         <button type="button" class="btn btn-secondary" id="cancelResetBtn">Cancel</button>
         <button type="button" class="btn btn-danger" id="confirmResetBtn">Reset settings</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog class="reset-dialog backup-import-dialog" id="backupImportDialog" aria-labelledby="backupImportDialogTitle" aria-describedby="backupImportDialogDescription">
+    <div class="reset-dialog-panel">
+      <h2 class="reset-dialog-title" id="backupImportDialogTitle">Import this backup?</h2>
+      <p class="reset-dialog-description" id="backupImportDialogDescription">Review what will replace the data currently stored in this Chrome profile.</p>
+      <dl class="backup-import-meta">
+        <div><dt>Created</dt><dd id="backupImportCreated">—</dd></div>
+        <div><dt>Extension version</dt><dd id="backupImportVersion">—</dd></div>
+      </dl>
+      <ul class="backup-import-summary" id="backupImportSummary"></ul>
+      <p class="reset-dialog-note backup-import-warning">This replacement cannot be undone from inside the extension. Export your current data first if you may need it.</p>
+      <p class="reset-dialog-error" id="backupImportError" role="status" aria-live="polite"></p>
+      <div class="reset-dialog-actions">
+        <button type="button" class="btn btn-secondary" id="cancelBackupImportBtn">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmBackupImportBtn">Replace current data</button>
       </div>
     </div>
   </dialog>

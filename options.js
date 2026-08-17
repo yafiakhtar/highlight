@@ -571,6 +571,16 @@ const resetBtn = document.getElementById('resetBtn');
 const resetConfirmDialog = document.getElementById('resetConfirmDialog');
 const cancelResetBtn = document.getElementById('cancelResetBtn');
 const confirmResetBtn = document.getElementById('confirmResetBtn');
+const exportBackupBtn = document.getElementById('exportBackupBtn');
+const importBackupBtn = document.getElementById('importBackupBtn');
+const importBackupInput = document.getElementById('importBackupInput');
+const backupImportDialog = document.getElementById('backupImportDialog');
+const backupImportCreated = document.getElementById('backupImportCreated');
+const backupImportVersion = document.getElementById('backupImportVersion');
+const backupImportSummary = document.getElementById('backupImportSummary');
+const backupImportError = document.getElementById('backupImportError');
+const cancelBackupImportBtn = document.getElementById('cancelBackupImportBtn');
+const confirmBackupImportBtn = document.getElementById('confirmBackupImportBtn');
 const openShortcuts = document.getElementById('openShortcuts');
 const shortcutDisplay = document.getElementById('shortcutDisplay');
 const toast = document.getElementById('toast');
@@ -2136,7 +2146,456 @@ function resetSettings() {
   });
 }
 
+const BACKUP_FORMAT = 'highlight-backup';
+const BACKUP_SCHEMA_VERSION = 1;
+const MAX_BACKUP_FILE_BYTES = 25 * 1024 * 1024;
+const BACKUP_PREFERENCE_KEYS = [
+  'popupTheme',
+  'popupButtonOrder',
+  'lastUsedPresetId',
+  'optionsSidebarCollapsed',
+  'libraryFoldersExpanded'
+];
+const BACKUP_CORE_KEYS = [
+  'highlightSettings',
+  FAB_LAYOUT_KEY,
+  'highlightFoldersV1',
+  'recentlyDeletedHighlights',
+  'highlightIndex',
+  ...BACKUP_PREFERENCE_KEYS
+];
+const DEFAULT_POPUP_BUTTON_ORDER = ['trash', 'theme', 'settings', 'fab-toggle', 'home'];
+let pendingBackupImport = null;
+let backupOperationPending = false;
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function storageGet(keys = null) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(keys, result => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(result || {});
+    });
+  });
+}
+
+function storageSet(payload) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set(payload, () => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve();
+    });
+  });
+}
+
+function storageRemove(keys) {
+  if (!Array.isArray(keys) || keys.length === 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.remove(keys, () => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve();
+    });
+  });
+}
+
+function waitForScopedSettingsIdle({ discardPending = false } = {}) {
+  if (discardPending) cancelScopedSettingsAutosave();
+  else {
+    if (scopedSettingsSaveTimer) {
+      clearTimeout(scopedSettingsSaveTimer);
+      scopedSettingsSaveTimer = null;
+    }
+    flushScopedSettingsPatch();
+  }
+  return new Promise(resolve => {
+    const check = () => {
+      const hasPendingPatch = Object.keys(pendingScopedSettingsPatch).length > 0;
+      if (
+        !scopedSettingsWriteInFlight
+        && !scopedSettingsBarrierInFlight
+        && scopedSettingsBarrierQueue.length === 0
+        && (discardPending || !hasPendingPatch)
+      ) {
+        resolve();
+        return;
+      }
+      if (!discardPending && hasPendingPatch) flushScopedSettingsPatch();
+      setTimeout(check, 20);
+    };
+    check();
+  });
+}
+
+function normalizePopupButtonOrder(raw) {
+  const source = Array.isArray(raw) ? raw : [];
+  const seen = new Set();
+  const order = source.filter(id => {
+    if (!DEFAULT_POPUP_BUTTON_ORDER.includes(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  DEFAULT_POPUP_BUTTON_ORDER.forEach(id => {
+    if (!seen.has(id)) order.push(id);
+  });
+  return order;
+}
+
+function normalizeBackupFabLayout(raw, presets) {
+  const base = defaultFabLayout();
+  const allowed = new Set([
+    ...presets.map(preset => preset.id),
+    ...FAB_ACTION_DEFS.map(action => action.id)
+  ]);
+  const source = isPlainObject(raw) && Array.isArray(raw.slots) ? raw.slots.slice(0, 8) : [];
+  while (source.length < 8) source.push(null);
+  const present = new Set(source.filter(slotId => typeof slotId === 'string' && allowed.has(slotId)));
+  const seen = new Set();
+  const slots = source.map((slotId, index) => {
+    if (slotId == null) return null;
+    if (typeof slotId === 'string' && allowed.has(slotId) && !seen.has(slotId)) {
+      seen.add(slotId);
+      return slotId;
+    }
+    if (typeof slotId === 'string' && allowed.has(slotId)) return null;
+    const fallback = index < 4 ? `preset${index + 1}` : null;
+    if (fallback && allowed.has(fallback) && !present.has(fallback) && !seen.has(fallback)) {
+      seen.add(fallback);
+      return fallback;
+    }
+    return null;
+  });
+  return { rows: base.rows, cols: base.cols, slots };
+}
+
+function normalizeBackupHighlightList(raw, settings, folderIds) {
+  const previousPresets = activeLibraryPresets;
+  try {
+    activeLibraryPresets = settings.presets.map(preset => ({ ...preset }));
+    return normalizeStoredHighlights(raw).highlights.map(highlight => {
+      const next = { ...highlight };
+      if (typeof next.folderId === 'string' && !folderIds.has(next.folderId)) delete next.folderId;
+      return next;
+    });
+  } finally {
+    activeLibraryPresets = previousPresets;
+  }
+}
+
+function normalizeBackupDocument(raw) {
+  if (!isPlainObject(raw) || raw.format !== BACKUP_FORMAT) {
+    throw new Error('This is not a Highlight backup file.');
+  }
+  if (!Number.isInteger(raw.schemaVersion)) throw new Error('The backup version is missing.');
+  if (raw.schemaVersion > BACKUP_SCHEMA_VERSION) {
+    throw new Error('This backup was created by a newer version of Highlight.');
+  }
+  if (raw.schemaVersion !== BACKUP_SCHEMA_VERSION || !isPlainObject(raw.data)) {
+    throw new Error('This backup format is not supported.');
+  }
+  const recognizedDataKeys = ['settings', 'fabLayout', 'folders', 'recentlyDeleted', 'highlightIndex', 'highlightsByUrl', 'preferences'];
+  if (!recognizedDataKeys.some(key => Object.prototype.hasOwnProperty.call(raw.data, key))) {
+    throw new Error('This backup does not contain recognizable Highlight data.');
+  }
+
+  const parsedDate = new Date(raw.exportedAt);
+  if (!Number.isFinite(parsedDate.getTime())) throw new Error('The backup creation date is invalid.');
+  const settings = normalizeScopedSettingsWrite(raw.data.settings, {});
+  const folders = normalizeFolders(raw.data.folders);
+  const folderIds = new Set(folders.map(folder => folder.id));
+  const highlightsByUrl = {};
+  const rawPages = isPlainObject(raw.data.highlightsByUrl) ? raw.data.highlightsByUrl : {};
+  let activeHighlightCount = 0;
+  let noteCount = 0;
+  let favoriteCount = 0;
+
+  Object.entries(rawPages).forEach(([url, list]) => {
+    if (!url || url.length > 8192 || ['__proto__', 'prototype', 'constructor'].includes(url) || !Array.isArray(list)) return;
+    const highlights = normalizeBackupHighlightList(list, settings, folderIds);
+    if (highlights.length === 0) return;
+    highlightsByUrl[url] = highlights;
+    activeHighlightCount += highlights.length;
+    noteCount += highlights.filter(highlight => normalizeComment(highlight.comment)).length;
+    favoriteCount += highlights.filter(highlight => highlight.favorited === true).length;
+  });
+
+  const rawIndex = isPlainObject(raw.data.highlightIndex) ? raw.data.highlightIndex : {};
+  const highlightIndex = {};
+  Object.entries(highlightsByUrl).forEach(([url, highlights]) => {
+    const rawMeta = isPlainObject(rawIndex[url]) ? rawIndex[url] : {};
+    const latestCreated = highlights.reduce((latest, highlight) => (
+      Math.max(latest, Number.isFinite(highlight.createdAt) ? highlight.createdAt : 0)
+    ), 0);
+    highlightIndex[url] = {
+      title: typeof rawMeta.title === 'string' && rawMeta.title.trim() ? rawMeta.title : url,
+      lastUpdated: Number.isFinite(rawMeta.lastUpdated) ? rawMeta.lastUpdated : (latestCreated || parsedDate.getTime())
+    };
+  });
+
+  const recentlyDeleted = (Array.isArray(raw.data.recentlyDeleted) ? raw.data.recentlyDeleted : [])
+    .map(entry => {
+      if (!isPlainObject(entry) || !isPlainObject(entry.highlight) || typeof entry.pageUrl !== 'string') return null;
+      const highlight = normalizeBackupHighlightList([entry.highlight], settings, folderIds)[0];
+      if (!highlight) return null;
+      return {
+        trashId: typeof entry.trashId === 'string' && entry.trashId ? entry.trashId : generateTrashId(),
+        pageUrl: entry.pageUrl,
+        pageTitle: typeof entry.pageTitle === 'string' && entry.pageTitle ? entry.pageTitle : entry.pageUrl,
+        deletedAt: Number.isFinite(entry.deletedAt) ? entry.deletedAt : parsedDate.getTime(),
+        highlight
+      };
+    })
+    .filter(Boolean);
+
+  const preferences = isPlainObject(raw.data.preferences) ? raw.data.preferences : {};
+  const presetIds = new Set(settings.presets.map(preset => preset.id));
+  const normalized = {
+    format: BACKUP_FORMAT,
+    schemaVersion: BACKUP_SCHEMA_VERSION,
+    exportedAt: parsedDate.toISOString(),
+    extensionVersion: typeof raw.extensionVersion === 'string' ? raw.extensionVersion : 'Unknown',
+    data: {
+      settings,
+      fabLayout: normalizeBackupFabLayout(raw.data.fabLayout, settings.presets),
+      folders,
+      recentlyDeleted,
+      highlightIndex,
+      highlightsByUrl,
+      preferences: {
+        popupTheme: preferences.popupTheme === 'dark' ? 'dark' : 'light',
+        popupButtonOrder: normalizePopupButtonOrder(preferences.popupButtonOrder),
+        lastUsedPresetId: presetIds.has(preferences.lastUsedPresetId) ? preferences.lastUsedPresetId : 'preset1',
+        optionsSidebarCollapsed: preferences.optionsSidebarCollapsed === true,
+        [FOLDERS_EXPANDED_KEY]: preferences[FOLDERS_EXPANDED_KEY] === true
+      }
+    }
+  };
+  normalized.summary = {
+    activeHighlights: activeHighlightCount,
+    folders: folders.length,
+    tags: settings.presets.length,
+    notes: noteCount,
+    favorites: favoriteCount,
+    recentlyDeleted: recentlyDeleted.length
+  };
+  return normalized;
+}
+
+function createBackupDocument(storage) {
+  const highlightsByUrl = {};
+  Object.entries(storage).forEach(([key, value]) => {
+    if (key.startsWith('highlights_') && Array.isArray(value)) {
+      highlightsByUrl[key.substring('highlights_'.length)] = value;
+    }
+  });
+  return normalizeBackupDocument({
+    format: BACKUP_FORMAT,
+    schemaVersion: BACKUP_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    extensionVersion: chrome.runtime.getManifest().version,
+    data: {
+      settings: storage.highlightSettings || cloneDefaults(),
+      fabLayout: storage[FAB_LAYOUT_KEY] || defaultFabLayout(),
+      folders: storage[FOLDERS_KEY] || [],
+      recentlyDeleted: storage[RECENTLY_DELETED_KEY] || [],
+      highlightIndex: storage.highlightIndex || {},
+      highlightsByUrl,
+      preferences: {
+        popupTheme: storage.popupTheme,
+        popupButtonOrder: storage.popupButtonOrder,
+        lastUsedPresetId: storage.lastUsedPresetId,
+        optionsSidebarCollapsed: storage.optionsSidebarCollapsed,
+        [FOLDERS_EXPANDED_KEY]: storage[FOLDERS_EXPANDED_KEY]
+      }
+    }
+  });
+}
+
+function backupDocumentToStorage(backup) {
+  const data = backup.data;
+  const payload = {
+    highlightSettings: data.settings,
+    [FAB_LAYOUT_KEY]: data.fabLayout,
+    [FOLDERS_KEY]: data.folders,
+    [RECENTLY_DELETED_KEY]: data.recentlyDeleted,
+    highlightIndex: data.highlightIndex,
+    popupTheme: data.preferences.popupTheme,
+    popupButtonOrder: data.preferences.popupButtonOrder,
+    lastUsedPresetId: data.preferences.lastUsedPresetId,
+    optionsSidebarCollapsed: data.preferences.optionsSidebarCollapsed,
+    [FOLDERS_EXPANDED_KEY]: data.preferences[FOLDERS_EXPANDED_KEY]
+  };
+  Object.entries(data.highlightsByUrl).forEach(([url, highlights]) => {
+    payload[`highlights_${url}`] = highlights;
+  });
+  return payload;
+}
+
+function isRecognizedBackupStorageKey(key) {
+  return BACKUP_CORE_KEYS.includes(key) || key.startsWith('highlights_');
+}
+
+function setBackupControlsBusy(isBusy) {
+  backupOperationPending = isBusy;
+  if (exportBackupBtn) exportBackupBtn.disabled = isBusy;
+  if (importBackupBtn) importBackupBtn.disabled = isBusy;
+  if (confirmBackupImportBtn) confirmBackupImportBtn.disabled = isBusy;
+  if (cancelBackupImportBtn) cancelBackupImportBtn.disabled = isBusy;
+  backupImportDialog?.setAttribute('aria-busy', String(isBusy));
+}
+
+async function exportBackup() {
+  if (backupOperationPending) return;
+  setBackupControlsBusy(true);
+  try {
+    await waitForScopedSettingsIdle();
+    const storage = await storageGet(null);
+    const backup = createBackupDocument(storage);
+    const serializable = { ...backup };
+    delete serializable.summary;
+    const blob = new Blob([JSON.stringify(serializable, null, 2) + '\n'], { type: 'application/json' });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = `highlight-backup-${backup.exportedAt.slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    showToast('Backup exported');
+  } catch {
+    showToast('Could not export backup');
+  } finally {
+    setBackupControlsBusy(false);
+  }
+}
+
+function formatBackupDate(value) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : 'Unknown';
+}
+
+function openBackupImportPreview(backup) {
+  pendingBackupImport = backup;
+  if (backupImportCreated) backupImportCreated.textContent = formatBackupDate(backup.exportedAt);
+  if (backupImportVersion) backupImportVersion.textContent = backup.extensionVersion || 'Unknown';
+  if (backupImportError) backupImportError.textContent = '';
+  if (backupImportSummary) {
+    const rows = [
+      ['Highlights', backup.summary.activeHighlights],
+      ['Folders', backup.summary.folders],
+      ['Tags', backup.summary.tags],
+      ['Notes', backup.summary.notes],
+      ['Favorites', backup.summary.favorites],
+      ['Recently Deleted', backup.summary.recentlyDeleted]
+    ];
+    backupImportSummary.replaceChildren(...rows.map(([label, count]) => {
+      const item = document.createElement('li');
+      const strong = document.createElement('strong');
+      strong.textContent = String(count);
+      item.append(strong, label);
+      return item;
+    }));
+  }
+  if (!backupImportDialog || typeof backupImportDialog.showModal !== 'function') return;
+  backupImportDialog.returnValue = '';
+  backupImportDialog.showModal();
+  requestAnimationFrame(() => cancelBackupImportBtn?.focus({ preventScroll: true }));
+}
+
+async function readBackupFile(file) {
+  if (!file) return;
+  if (file.size > MAX_BACKUP_FILE_BYTES) throw new Error('This backup is larger than 25 MB.');
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch {
+    throw new Error('The selected file is not valid JSON.');
+  }
+  return normalizeBackupDocument(parsed);
+}
+
+async function restoreStorageSnapshot(snapshot) {
+  const current = await storageGet(null);
+  const currentRecognized = Object.keys(current).filter(isRecognizedBackupStorageKey);
+  const snapshotRecognized = Object.fromEntries(
+    Object.entries(snapshot).filter(([key]) => isRecognizedBackupStorageKey(key))
+  );
+  await storageSet(snapshotRecognized);
+  await storageRemove(currentRecognized.filter(key => !Object.prototype.hasOwnProperty.call(snapshotRecognized, key)));
+}
+
+async function importPendingBackup() {
+  if (!pendingBackupImport || backupOperationPending) return;
+  setBackupControlsBusy(true);
+  if (backupImportError) backupImportError.textContent = '';
+  let snapshot = null;
+  try {
+    await waitForScopedSettingsIdle({ discardPending: true });
+    snapshot = await storageGet(null);
+    const payload = backupDocumentToStorage(pendingBackupImport);
+    await storageSet(payload);
+    const currentAfterWrite = await storageGet(null);
+    const staleKeys = Object.keys(currentAfterWrite).filter(key => (
+      isRecognizedBackupStorageKey(key) && !Object.prototype.hasOwnProperty.call(payload, key)
+    ));
+    await storageRemove(staleKeys);
+    pendingBackupImport = null;
+    backupImportDialog?.close('imported');
+    showToast('Backup imported');
+    setTimeout(() => window.location.reload(), 450);
+  } catch {
+    if (snapshot) {
+      try {
+        await restoreStorageSnapshot(snapshot);
+      } catch {
+        // The original error remains the most useful message for the user.
+      }
+    }
+    if (backupImportError) backupImportError.textContent = 'Could not replace your data. Your previous data was restored when possible.';
+    setBackupControlsBusy(false);
+  }
+}
+
 // ---- Button handlers ----
+
+exportBackupBtn?.addEventListener('click', exportBackup);
+
+importBackupBtn?.addEventListener('click', () => {
+  if (backupOperationPending || !importBackupInput) return;
+  importBackupInput.value = '';
+  importBackupInput.click();
+});
+
+importBackupInput?.addEventListener('change', async () => {
+  const file = importBackupInput.files?.[0];
+  if (!file) return;
+  setBackupControlsBusy(true);
+  try {
+    const backup = await readBackupFile(file);
+    setBackupControlsBusy(false);
+    openBackupImportPreview(backup);
+  } catch (error) {
+    setBackupControlsBusy(false);
+    showToast(error instanceof Error ? error.message : 'Could not read backup');
+  } finally {
+    importBackupInput.value = '';
+  }
+});
+
+cancelBackupImportBtn?.addEventListener('click', () => backupImportDialog?.close('cancel'));
+confirmBackupImportBtn?.addEventListener('click', importPendingBackup);
+backupImportDialog?.addEventListener('cancel', event => {
+  if (backupOperationPending) event.preventDefault();
+});
+backupImportDialog?.addEventListener('close', () => {
+  if (backupImportDialog.returnValue !== 'imported') pendingBackupImport = null;
+  if (!backupOperationPending) importBackupBtn?.focus({ preventScroll: true });
+  if (backupImportError) backupImportError.textContent = '';
+});
 
 resetBtn.addEventListener('click', () => {
   if (!resetConfirmDialog || typeof resetConfirmDialog.showModal !== 'function') {
