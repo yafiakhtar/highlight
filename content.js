@@ -1592,7 +1592,7 @@ function syncHighlightFabState() {
       button.setAttribute('aria-label', button.title);
     }
     if (button.dataset.actionId === 'comment') {
-      button.title = fabPostHighlightId ? 'Add a comment to this highlight' : 'Highlight first';
+      button.title = fabPostHighlightId ? 'Add a note to this highlight' : 'Highlight first';
       button.setAttribute('aria-label', button.title);
     }
   });
@@ -1649,8 +1649,11 @@ function createCommentIconElement() {
   icon.setAttribute('viewBox', '0 0 24 24');
   icon.setAttribute('aria-hidden', 'true');
   const path = document.createElementNS(namespace, 'path');
-  path.setAttribute('d', 'M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z');
+  path.setAttribute('d', 'M6 3h12a3 3 0 0 1 3 3v9l-6 6H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z');
   icon.appendChild(path);
+  const fold = document.createElementNS(namespace, 'path');
+  fold.setAttribute('d', 'M15 21v-6h6');
+  icon.appendChild(fold);
   return icon;
 }
 
@@ -1927,7 +1930,7 @@ function saveFabComment(popover, textarea) {
   const comment = normalizeComment(textarea.value);
   if (!comment) {
     const error = popover.querySelector('.text-highlighter-comment-error');
-    if (error) error.textContent = 'Write a comment before saving.';
+    if (error) error.textContent = 'Write a note before saving.';
     textarea.focus({ preventScroll: true });
     return;
   }
@@ -1944,18 +1947,18 @@ function saveFabComment(popover, textarea) {
     fabCommentWriteInFlight = false;
     if (interactionVersion !== fabInteractionVersion || popover !== highlightFabCommentPopover) return;
     if (!updated) {
-      setFabCommentEditorBusy(popover, false, 'Could not save the comment. Try again.');
+      setFabCommentEditorBusy(popover, false, 'Could not save the note. Try again.');
       textarea.focus({ preventScroll: true });
       return;
     }
     closeHighlightFabCommentPopover({ restartTimeout: false });
-    showHighlightFabStatus('Comment saved', 'comment');
+    showHighlightFabStatus('Note saved', 'comment');
     if (fabExistingHighlightMode) syncHighlightFabState();
     else hideHighlightFab({ fade: true });
   }).catch(() => {
     fabCommentWriteInFlight = false;
     if (popover !== highlightFabCommentPopover) return;
-    setFabCommentEditorBusy(popover, false, 'Could not save the comment. Try again.');
+    setFabCommentEditorBusy(popover, false, 'Could not save the note. Try again.');
     textarea.focus({ preventScroll: true });
   });
 }
@@ -1984,7 +1987,7 @@ function openHighlightFabCommentPopover(anchor) {
     if (chrome.runtime.lastError || !highlight || !anchor.isConnected) {
       fabPointerPaused = false;
       fabKeyboardPaused = false;
-      showHighlightFabStatus('Could not open comment', 'comment');
+      showHighlightFabStatus('Could not open note', 'comment');
       scheduleFabPostTimeout();
       return;
     }
@@ -1994,7 +1997,7 @@ function openHighlightFabCommentPopover(anchor) {
     popover.classList.toggle('is-dark-page', getPageTheme() === 'dark');
     popover.style.setProperty('--comment-accent', getPresetColor(fabPostPresetId));
     popover.setAttribute('role', 'dialog');
-    popover.setAttribute('aria-label', 'Add comment');
+    popover.setAttribute('aria-label', 'Add note');
 
     const heading = document.createElement('div');
     heading.className = 'text-highlighter-comment-heading';
@@ -2011,7 +2014,7 @@ function openHighlightFabCommentPopover(anchor) {
     textarea.maxLength = MAX_COMMENT_LENGTH;
     textarea.rows = 4;
     textarea.placeholder = 'Write a note…';
-    textarea.setAttribute('aria-label', 'Comment');
+    textarea.setAttribute('aria-label', 'Note');
     textarea.value = normalizeComment(highlight.comment);
     const meta = document.createElement('div');
     meta.className = 'text-highlighter-comment-meta';

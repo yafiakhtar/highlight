@@ -341,8 +341,8 @@ const LIBRARY_VIEW_META = {
     description: 'Browse your saved highlights by tag.'
   },
   comments: {
-    title: 'Comments',
-    description: 'Review highlights with comments and notes.'
+    title: 'Notes',
+    description: 'Review highlights with notes you have added.'
   },
   folders: {
     title: 'Folders',
@@ -601,7 +601,7 @@ const FAB_ACTION_DEFS = [
   { id: 'favorite', label: 'Favorite', type: 'action', glyph: '☆', paletteGlyph: '☆' },
   { id: 'folder', label: 'Folder', type: 'action', glyph: '', paletteGlyph: '', icon: 'folder' },
   { id: 'close', label: 'Close', type: 'action', glyph: '', paletteGlyph: '', icon: 'close' },
-  { id: 'comment', label: 'Comment', type: 'action', glyph: '', paletteGlyph: '', icon: 'comment' },
+  { id: 'comment', label: 'Note', type: 'action', glyph: '', paletteGlyph: '', icon: 'comment' },
   { id: 'copyLink', label: 'Copy link', type: 'placeholder', glyph: '⋯', paletteGlyph: '⧉' },
   { id: 'share', label: 'Share', type: 'placeholder', glyph: '⋯', paletteGlyph: '↗' }
 ];
@@ -3408,7 +3408,7 @@ function saveLibraryComment(pageUrl, highlightId, comment, popover) {
   const error = popover.querySelector('.library-comment-error');
   const normalized = normalizeComment(comment);
   if (!normalized) {
-    if (error) error.textContent = 'Write a comment before saving.';
+    if (error) error.textContent = 'Write a note before saving.';
     textarea?.focus({ preventScroll: true });
     return;
   }
@@ -3425,7 +3425,7 @@ function saveLibraryComment(pageUrl, highlightId, comment, popover) {
         return;
       }
       closeLibraryCommentPopover({ immediate: true });
-      showToast('Comment saved');
+      showToast('Note saved');
       if (result.status === 'unchanged') restorePendingLibraryCommentFocus();
     })
     .catch(() => {
@@ -3433,7 +3433,7 @@ function saveLibraryComment(pageUrl, highlightId, comment, popover) {
       if (popover !== currentLibraryCommentPopover) return;
       popover.setAttribute('aria-busy', 'false');
       popover.querySelectorAll('textarea, button').forEach(control => { control.disabled = false; });
-      if (error) error.textContent = 'Could not save the comment. Try again.';
+      if (error) error.textContent = 'Could not save the note. Try again.';
       textarea?.focus({ preventScroll: true });
     });
 }
@@ -3460,14 +3460,14 @@ function confirmLibraryCommentDelete() {
         pendingLibraryCommentFocus = null;
         showToast('Highlight is no longer available');
       } else {
-        showToast('Comment deleted');
+        showToast('Note deleted');
       }
       commentDeleteDialog?.close('deleted');
       refreshLibrary();
     })
     .catch(() => {
       pendingLibraryCommentFocus = null;
-      showToast('Could not delete comment');
+      showToast('Could not delete note');
       commentDeleteDialog?.close('error');
     });
 }
@@ -3487,7 +3487,7 @@ function openLibraryCommentPopover(anchor, pageUrl, highlight) {
   popover.className = 'fab-popover library-comment-popover';
   popover.style.setProperty('--comment-accent', getLibraryHighlightColor(highlight));
   popover.setAttribute('role', 'dialog');
-  popover.setAttribute('aria-label', existing ? 'View or edit comment' : 'Add comment');
+  popover.setAttribute('aria-label', existing ? 'View or edit note' : 'Add note');
   const title = document.createElement('div');
   title.className = 'fab-popover-title library-comment-heading';
   const accent = document.createElement('span');
@@ -3504,7 +3504,7 @@ function openLibraryCommentPopover(anchor, pageUrl, highlight) {
   textarea.maxLength = MAX_COMMENT_LENGTH;
   textarea.rows = 5;
   textarea.placeholder = 'Write a note…';
-  textarea.setAttribute('aria-label', 'Comment');
+  textarea.setAttribute('aria-label', 'Note');
   textarea.value = existing;
   const meta = document.createElement('div');
   meta.className = 'library-comment-meta';
@@ -3522,7 +3522,7 @@ function openLibraryCommentPopover(anchor, pageUrl, highlight) {
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'btn btn-secondary library-comment-delete';
-    remove.textContent = 'Delete comment';
+    remove.textContent = 'Delete note';
     remove.addEventListener('click', () => openCommentDeleteDialog(pageUrl, highlight.id, anchor));
     actions.appendChild(remove);
   }
@@ -3578,7 +3578,7 @@ function createLibraryCommentSelector(pageUrl, highlight) {
   button.type = 'button';
   button.className = 'library-action-btn snippet-comment-selector' + (hasComment ? ' has-comment' : '');
   button.innerHTML = libraryIconMarkup('comment');
-  button.title = hasComment ? 'View or edit comment' : 'Add comment';
+  button.title = hasComment ? 'View or edit note' : 'Add note';
   button.setAttribute('aria-label', button.title);
   button.setAttribute('aria-haspopup', 'dialog');
   button.setAttribute('aria-expanded', 'false');
@@ -3830,7 +3830,7 @@ function libraryIconMarkup(iconName) {
     close: '<path d="M6 6l12 12M18 6 6 18"/>',
     chevron: '<path d="m8 10 4 4 4-4"/>',
     folder: '<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/>',
-    comment: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>',
+    comment: '<path d="M6 3h12a3 3 0 0 1 3 3v9l-6 6H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z"/><path d="M15 21v-6h6"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4z"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     star: '<path d="M12 2.8l2.82 5.72 6.31.92-4.57 4.45 1.08 6.29L12 17.22l-5.64 2.96 1.08-6.29-4.57-4.45 6.31-.92L12 2.8z"/>',
@@ -4503,8 +4503,8 @@ function loadCommentHighlights() {
       highlightCount.textContent = '';
       highlightsContainer.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-title">${tokens.length > 0 ? 'No results' : 'No comments yet'}</div>
-          ${tokens.length > 0 ? 'Try a different keyword.' : 'Add a comment to a highlight to see it here.'}
+          <div class="empty-state-title">${tokens.length > 0 ? 'No results' : 'No notes yet'}</div>
+          ${tokens.length > 0 ? 'Try a different keyword.' : 'Add a note to a highlight to see it here.'}
         </div>
       `;
       return;
@@ -4512,7 +4512,7 @@ function loadCommentHighlights() {
     pages.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
     const totalCount = pages.reduce((count, page) => count + page.highlights.length, 0);
     renderHighlights(pages, totalCount, {
-      countLabel: 'commented',
+      countLabel: 'notes',
       allowPageClear: false
     });
   });
@@ -4937,7 +4937,7 @@ function toggleFavorite(url, highlightId) {
 function renderHighlights(pages, totalCount, options = {}) {
   const countWord = options.countLabel === 'favorited'
     ? 'favorited'
-    : (options.countLabel === 'commented' ? 'commented' : 'saved');
+    : (options.countLabel === 'notes' ? (totalCount === 1 ? 'note' : 'notes') : 'saved');
   highlightCount.textContent = totalCount + ' ' + countWord;
   highlightsContainer.innerHTML = '';
 

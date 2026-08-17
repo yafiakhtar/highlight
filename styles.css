@@ -169,7 +169,8 @@
 }
 
 .text-highlighter-fab-status[data-kind="comment"]::before {
-  content: "✎";
+  content: "■";
+  font-size: 8px;
   color: #8ab4e6;
 }
 
