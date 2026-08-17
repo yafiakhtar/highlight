@@ -20,6 +20,8 @@
       --plus: #999;
       --btn-color: #888;
       --btn-color-hover: #555;
+      --inline-icon-color: #888;
+      --inline-icon-color-hover: #555;
       --btn-hover: rgba(0, 0, 0, 0.05);
       --btn-hover-strong: rgba(0, 0, 0, 0.08);
       --icon-filter: brightness(0) saturate(100%) invert(54%) sepia(10%) saturate(0%) hue-rotate(160deg) brightness(95%) contrast(92%);
@@ -36,6 +38,8 @@
       --plus: #808080;
       --btn-color: #a0a0a0;
       --btn-color-hover: #d0d0d0;
+      --inline-icon-color: #dedede;
+      --inline-icon-color-hover: #ffffff;
       --btn-hover: rgba(255, 255, 255, 0.06);
       --btn-hover-strong: rgba(255, 255, 255, 0.1);
       --icon-filter: brightness(0) saturate(100%) invert(90%) sepia(5%) saturate(0%) hue-rotate(160deg) brightness(95%) contrast(92%);
@@ -160,6 +164,15 @@
       height: 18px;
     }
 
+    .toolbar-btn .home-icon {
+      color: var(--inline-icon-color);
+      stroke-width: 2;
+    }
+
+    .toolbar-btn:hover .home-icon {
+      color: var(--inline-icon-color-hover);
+    }
+
     .toolbar-btn img.toolbar-icon {
       filter: var(--icon-filter);
     }
@@ -242,7 +255,7 @@
       </svg>
     </button>
     <button type="button" class="toolbar-btn" id="home" draggable="true" title="Open options">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg class="home-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
         <polyline points="9 22 9 12 15 12 15 22"></polyline>
       </svg>
