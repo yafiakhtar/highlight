@@ -68,8 +68,11 @@ A full-page options view (`options.html`) with a collapsible sidebar and several
 - **Tag Presets** — add, rename, recolor, or delete custom presets; matching controls derive a harmonious paired theme color using HSL math
 - **FAB Builder** — toggle the floating button, click or drag items into the 2×4 layout, swap/reorder/remove buttons, and review a centered compact preview
 - **Shortcuts** — display the detected Chrome shortcut as individual keyboard keycaps and open the browser's shortcut settings
+- **Data & Backup** — export highlights, folders, tags, notes, Recently Deleted, FAB configuration, and preferences to one JSON file; preview and validate a backup before it replaces current extension data
 - **Reset settings** — restore the built-in presets, appearance, FAB visibility, and default FAB layout without deleting saved highlights or Library records
 - **Sync** — placeholder for cross-device sync (coming soon)
+
+Backup files contain saved text and webpage URLs. Treat them as private data and store or share them carefully.
 
 ### Guide
 
