@@ -3834,7 +3834,7 @@ function libraryIconMarkup(iconName) {
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4z"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     star: '<path d="M12 2.8l2.82 5.72 6.31.92-4.57 4.45 1.08 6.29L12 17.22l-5.64 2.96 1.08-6.29-4.57-4.45 6.31-.92L12 2.8z"/>',
-    trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6"/>',
+    trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
     restore: '<path d="M3 7v5h5"/><path d="M5.1 16a8 8 0 1 0 .5-9.4L3 9"/>'
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[iconName] || ''}</svg>`;
