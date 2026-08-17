@@ -4092,7 +4092,7 @@ function createFolderManagerActions(hasFolders) {
   add.className = 'btn btn-secondary presets-footer-icon';
   add.title = 'Add folder';
   add.setAttribute('aria-label', 'Add folder');
-  add.innerHTML = '<span class="preset-add-icon" aria-hidden="true">+</span>';
+  add.innerHTML = '<span class="preset-add-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>';
   add.addEventListener('click', createFolderFromManager);
 
   const remove = document.createElement('button');
@@ -4104,7 +4104,7 @@ function createFolderManagerActions(hasFolders) {
   remove.title = removeLabel;
   remove.setAttribute('aria-label', removeLabel);
   remove.innerHTML = `
-    <span class="preset-delete-trash-icon" aria-hidden="true">${libraryIconMarkup('trash')}</span>
+    <span class="preset-delete-start-icon preset-delete-x-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></span>
     <span class="preset-delete-done-icon" aria-hidden="true">${libraryIconMarkup('check')}</span>
   `;
   remove.addEventListener('click', () => {

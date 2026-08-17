@@ -1395,19 +1395,27 @@
       stroke-linejoin: round;
     }
 
-    .preset-add-icon {
-      display: block;
-      font-size: 22px;
-      font-weight: 400;
-      line-height: 1;
-      transform: translateY(-1px);
+    .preset-add-icon,
+    .preset-delete-x-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+    }
+
+    .presets-footer-icon .preset-add-icon svg,
+    .presets-footer-icon .preset-delete-x-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke-width: 2.25;
     }
 
     .preset-delete-done-icon {
       display: none;
     }
 
-    .preset-delete-mode-toggle[aria-pressed="true"] .preset-delete-trash-icon {
+    .preset-delete-mode-toggle[aria-pressed="true"] .preset-delete-start-icon {
       display: none;
     }
 
@@ -4877,15 +4885,10 @@
 
               <div class="presets-footer-actions">
                 <button type="button" id="addTagPreset" class="btn btn-secondary presets-footer-icon preset-add-tag-btn" aria-label="Add tag" title="Add tag">
-                  <span class="preset-add-icon" aria-hidden="true">+</span>
+                  <span class="preset-add-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
                 </button>
                 <button type="button" id="deleteTagPreset" class="btn btn-secondary presets-footer-icon preset-delete-mode-toggle" aria-label="Delete tags" title="Delete tags" aria-pressed="false">
-                  <span class="preset-delete-trash-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                      <polyline points="3 6 5 6 21 6"/>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    </svg>
-                  </span>
+                  <span class="preset-delete-start-icon preset-delete-x-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></span>
                   <span class="preset-delete-done-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24">
                       <path d="m5 12 4 4L19 6"/>
