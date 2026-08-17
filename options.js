@@ -346,7 +346,7 @@ const LIBRARY_VIEW_META = {
   },
   folders: {
     title: 'Folders',
-    description: 'Create folders and organize highlights into one place.'
+    description: 'Create folders and organize highlights into one place. Use the edit icon to rename a folder.'
   },
   'recently-deleted': {
     title: 'Recently Deleted',
