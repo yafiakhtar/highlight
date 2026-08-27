@@ -649,42 +649,48 @@
     .guide-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 6px 20px;
       margin-top: 18px;
     }
 
     .guide-action {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      gap: 7px;
+      justify-content: flex-start;
+      gap: 6px;
       min-height: 36px;
-      padding: 8px 11px;
-      border: 1px solid var(--opt-border);
-      border-radius: 7px;
-      background: var(--opt-surface);
+      padding: 7px 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
       color: var(--opt-text);
       cursor: pointer;
       font: inherit;
       font-size: 12px;
-      font-weight: 500;
-      transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+      font-weight: 600;
+      text-align: left;
+      transition: color 0.16s ease;
     }
 
     .guide-action:hover {
-      border-color: color-mix(in srgb, var(--opt-text) 24%, transparent);
-      background: var(--opt-hover);
       color: var(--opt-text-strong);
     }
 
     .guide-action:focus-visible {
-      outline: 2px solid var(--opt-accent);
-      outline-offset: 2px;
+      outline: none;
+      box-shadow: inset 0 -2px var(--opt-accent);
     }
 
     .guide-action-arrow {
       color: var(--opt-text-muted);
       font-size: 13px;
+      transition: color 0.16s ease, transform 0.16s ease;
+    }
+
+    .guide-action:hover .guide-action-arrow,
+    .guide-action:focus-visible .guide-action-arrow {
+      color: currentColor;
+      transform: translateX(3px);
     }
 
     .guide-safety-header,
@@ -836,8 +842,14 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .guide-action {
+      .guide-action,
+      .guide-action-arrow {
         transition: none;
+      }
+
+      .guide-action:hover .guide-action-arrow,
+      .guide-action:focus-visible .guide-action-arrow {
+        transform: none;
       }
     }
 
@@ -5154,7 +5166,7 @@
                 </li>
               </ol>
               <div class="guide-actions">
-                <button type="button" class="guide-action" data-guide-target="library" data-guide-view="all">Open Library <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+                <button type="button" class="guide-action" data-guide-target="library" data-guide-view="all">Open Library <span class="guide-action-arrow" aria-hidden="true">›</span></button>
               </div>
             </div>
           </section>
@@ -5196,7 +5208,7 @@
                 </li>
               </ul>
               <div class="guide-actions">
-                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="shortcuts">View Shortcut <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="shortcuts">View Shortcut <span class="guide-action-arrow" aria-hidden="true">›</span></button>
               </div>
             </div>
           </section>
@@ -5226,7 +5238,7 @@
                 </li>
               </ul>
               <div class="guide-actions">
-                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="presets-tags">Manage Tags <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="presets-tags">Manage Tags <span class="guide-action-arrow" aria-hidden="true">›</span></button>
               </div>
             </div>
           </section>
@@ -5261,8 +5273,8 @@
                 <li class="guide-info-row"><div class="guide-info-copy"><strong>Keep a backup</strong><span>Data &amp; Backup can export your highlights and setup to a private JSON file. Import shows a preview and asks before replacing your current data.</span></div></li>
               </ul>
               <div class="guide-actions">
-                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="appearance">Open Appearance <span class="guide-action-arrow" aria-hidden="true">→</span></button>
-                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="fab">Customize FAB <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="appearance">Open Appearance <span class="guide-action-arrow" aria-hidden="true">›</span></button>
+                <button type="button" class="guide-action" data-guide-target="settings" data-guide-view="fab">Customize FAB <span class="guide-action-arrow" aria-hidden="true">›</span></button>
               </div>
             </div>
           </section>
@@ -5322,7 +5334,7 @@
                 </li>
               </ul>
               <div class="guide-actions">
-                <button type="button" class="guide-action" data-guide-target="library" data-guide-view="recently-deleted">Open Recently Deleted <span class="guide-action-arrow" aria-hidden="true">→</span></button>
+                <button type="button" class="guide-action" data-guide-target="library" data-guide-view="recently-deleted">Open Recently Deleted <span class="guide-action-arrow" aria-hidden="true">›</span></button>
               </div>
             </div>
           </section>
