@@ -8,7 +8,7 @@
 
 ### Core Highlighting
 
-- **Select & highlight** any text on any webpage via keyboard shortcut (`Ctrl+Shift+H` / `Cmd+Shift+H`), right-click context menu, or the floating action button
+- **Select & highlight** text on supported webpages via keyboard shortcut (`Ctrl+Shift+H` / `Cmd+Shift+H`), right-click context menu, or the floating action button
 - **Safe existing-highlight controls** — click a highlight to reopen its FAB, drag across it to select and copy, or right-click it without a selection to move it to Recently Deleted
 - **Multi-part highlights** — selections that span across DOM elements are handled gracefully, stored as a unified highlight with multiple parts
 - **Highlight restoration** — highlights are re-applied automatically when you revisit a page
@@ -52,10 +52,11 @@ A full-page options view (`options.html`) with a collapsible sidebar and several
 
 - **Search** filters highlights and page titles in real time across all views
 - **Star/favorite** any highlight with a single click
-- **Reassign tags in place** — click a highlight's tag color in All or Favorites, choose any built-in or custom tag, or jump directly to Tag Presets management
+- **Reassign tags in place** — click a highlight's tag color in any active highlight collection, choose any built-in or custom tag, or jump directly to Tag Presets management
 - **Immediate recoloring** — tag reassignment updates already-open webpages and is preserved on future visits
-- **Folder organization** — assign or move highlights from All and Favorites, expand folder navigation in the sidebar, and browse each folder by webpage
-- **Notes** — create, view, edit, search, and delete one 500-character note per highlight from All, Favorites, or Notes
+- **Consistent row actions** — reassign tags and folders, create or edit notes, toggle favorites, and delete highlights from All, Favorites, selected Tags, Notes, and selected Folders
+- **Folder organization** — assign or move highlights from active collection rows, expand folder navigation in the sidebar, and browse each folder by webpage
+- **Notes** — create, view, edit, search, and delete one 500-character note per highlight from any active highlight collection
 - **Safe folder deletion** — keep a deleted folder's highlights as unfiled or move them to Recently Deleted
 - **Soft delete** — deleted highlights go to Recently Deleted before permanent removal
 - **Bulk cleanup** — clear every highlight from one page or empty Recently Deleted entirely
@@ -95,7 +96,7 @@ Backup files contain saved text and webpage URLs. Treat them as private data and
 
 ### Storage & Data
 
-- **Local-first storage** — all data remains in `chrome.storage.local`; no external service is used
+- **Local-first storage** — highlight data remains in `chrome.storage.local` and is not transmitted to an external service by the extension
 - **Indexed Library** — page titles and last-updated timestamps support fast rendering and ordering
 - **Self-healing records** — duplicate highlight IDs are merged and malformed data is normalized on read
 
