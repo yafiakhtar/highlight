@@ -2609,18 +2609,6 @@
       }
     }
 
-    .simple-settings-status {
-      display: inline-flex;
-      align-items: center;
-      flex-shrink: 0;
-      padding: 5px 8px;
-      border-radius: 999px;
-      background: var(--opt-surface-alt);
-      color: var(--opt-text-muted);
-      font-size: 11px;
-      font-weight: 500;
-    }
-
     @media (max-width: 720px) {
       .simple-settings-row {
         align-items: flex-start;
@@ -4830,10 +4818,6 @@
               <span class="sidebar-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></span>
               <span class="sidebar-label">Data & Backup</span>
             </button>
-            <button type="button" class="sidebar-item" data-view="sync" title="Sync">
-              <span class="sidebar-icon"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span>
-              <span class="sidebar-label">Sync</span>
-            </button>
           </nav>
         </div>
       </aside>
@@ -5110,25 +5094,6 @@
           </div>
         </section>
 
-        <!-- Sync View -->
-        <section class="settings-view" id="settings-sync" data-view="sync" aria-labelledby="settingsSyncHeading">
-          <div class="section simple-settings-section">
-            <div class="simple-settings-header">
-              <h2 class="simple-settings-title" id="settingsSyncHeading" tabindex="-1">Sync</h2>
-              <p class="simple-settings-description">Cross-device access for highlights is planned for a future update.</p>
-            </div>
-
-            <div class="simple-settings-list">
-              <div class="simple-settings-row">
-                <div class="simple-settings-copy">
-                  <strong>Cross-device sync</strong>
-                  <span>Sync is not available yet. Highlights currently remain in this Chrome browser profile and are not sent to another device.</span>
-                </div>
-                <span class="simple-settings-status">Coming soon</span>
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
     </div>
 
@@ -5350,8 +5315,6 @@
             <div class="guide-surface">
               <ul class="guide-note-list">
                 <li>Your highlights, folders, notes, and preferences currently stay in this Chrome browser profile.</li>
-                <li>Cross-device Sync is planned but is not available yet.</li>
-                <li>Copy Link and Share appear in the FAB Builder as coming-soon actions and do not work yet.</li>
                 <li>Renaming or recoloring a tag updates every highlight connected to that tag.</li>
               </ul>
             </div>

@@ -38,7 +38,8 @@ let fabLayoutV1 = null;
 
 const FAB_LAYOUT_KEY = 'fabLayoutV1';
 const FOLDERS_KEY = 'highlightFoldersV1';
-const FAB_ACTION_IDS = new Set(['favorite', 'folder', 'close', 'comment', 'copyLink', 'share']);
+const FAB_ACTION_IDS = new Set(['favorite', 'folder', 'close', 'comment']);
+const RETIRED_FAB_ACTION_IDS = new Set(['copyLink', 'share']);
 const MAX_FOLDER_NAME_LENGTH = 60;
 const RECENT_FOLDER_LIMIT = 5;
 const MAX_COMMENT_LENGTH = 500;
@@ -65,6 +66,7 @@ function reconcileFabLayoutV1(raw) {
   const slots = rawSlots.map((slotId, index) => {
     if (slotId == null) return null;
     if (typeof slotId === 'string' && allowed.has(slotId)) return slotId;
+    if (RETIRED_FAB_ACTION_IDS.has(slotId)) return null;
 
     const expectedPresetId = index < 4 ? `preset${index + 1}` : null;
     if (expectedPresetId && presetIds.has(expectedPresetId) && !presentValidIds.has(expectedPresetId)) {
@@ -2217,38 +2219,6 @@ function buildFabButtonsInto(container) {
     container.appendChild(spacer);
   };
 
-  const makePlaceholderBtn = (slotId) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'text-highlighter-fab-action';
-    btn.dataset.fabKind = 'placeholder';
-    btn.dataset.actionId = slotId;
-    btn.title = slotId;
-    btn.style.border = '1px solid rgba(0,0,0,0.12)';
-    btn.style.padding = '0';
-    btn.style.margin = '0';
-    btn.style.width = '18px';
-    btn.style.height = '18px';
-    btn.style.borderRadius = '999px';
-    btn.style.cursor = 'pointer';
-    btn.style.background = 'rgba(255,255,255,0.85)';
-    btn.style.color = '#333';
-    btn.style.fontSize = '11px';
-    btn.style.lineHeight = '18px';
-    btn.textContent = '⋯';
-    btn.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      // Placeholder action (no-op for now)
-      hideHighlightFab();
-    });
-    return btn;
-  };
-
   const makeFavoriteBtn = () => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -2428,13 +2398,6 @@ function buildFabButtonsInto(container) {
       const commentBtn = makeCommentBtn();
       container.appendChild(commentBtn);
       highlightFabButtons.push(commentBtn);
-      return;
-    }
-
-    if (FAB_ACTION_IDS.has(slotId)) {
-      const actionBtn = makePlaceholderBtn(slotId);
-      container.appendChild(actionBtn);
-      highlightFabButtons.push(actionBtn);
       return;
     }
 

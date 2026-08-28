@@ -75,8 +75,7 @@ const SETTINGS_SECTION_VIEW_ORDER = [
   'presets-tags',
   'fab',
   'shortcuts',
-  'data',
-  'sync'
+  'data'
 ];
 
 let settingsScrollPosition = 0;
@@ -611,10 +610,9 @@ const FAB_ACTION_DEFS = [
   { id: 'favorite', label: 'Favorite', type: 'action', glyph: '☆', paletteGlyph: '☆' },
   { id: 'folder', label: 'Folder', type: 'action', glyph: '', paletteGlyph: '', icon: 'folder' },
   { id: 'close', label: 'Close', type: 'action', glyph: '', paletteGlyph: '', icon: 'close' },
-  { id: 'comment', label: 'Note', type: 'action', glyph: '', paletteGlyph: '', icon: 'comment' },
-  { id: 'copyLink', label: 'Copy link', type: 'placeholder', glyph: '⋯', paletteGlyph: '⧉' },
-  { id: 'share', label: 'Share', type: 'placeholder', glyph: '⋯', paletteGlyph: '↗' }
+  { id: 'comment', label: 'Note', type: 'action', glyph: '', paletteGlyph: '', icon: 'comment' }
 ];
+const RETIRED_FAB_ACTION_IDS = new Set(['copyLink', 'share']);
 
 let fabLayoutState = null;
 let draggedFabToolboxItem = null;
@@ -654,6 +652,7 @@ function reconcileFabLayout(raw) {
   const slots = rawSlots.map((slotId, index) => {
     if (slotId == null) return null;
     if (typeof slotId === 'string' && allowed.has(slotId)) return slotId;
+    if (RETIRED_FAB_ACTION_IDS.has(slotId)) return null;
 
     // Repair a stale built-in slot only when its canonical preset is missing
     // everywhere else. Other unknown IDs are safer as empty slots.
@@ -881,10 +880,6 @@ function openFabPicker(slotIndex, anchor) {
     'Actions',
     defs.filter(def => def.type === 'action')
   ));
-  popover.appendChild(createFabPickerGroup(
-    'Coming soon',
-    defs.filter(def => def.type === 'placeholder')
-  ));
 
   mountFabPopover(popover, anchor, slotIndex);
 }
@@ -1050,10 +1045,6 @@ function renderFabToolbox() {
   fabToolboxEl.appendChild(createFabToolboxGroup(
     'Actions',
     defs.filter(def => def.type === 'action')
-  ));
-  fabToolboxEl.appendChild(createFabToolboxGroup(
-    'Coming soon',
-    defs.filter(def => def.type === 'placeholder')
   ));
 }
 
@@ -2259,6 +2250,7 @@ function normalizeBackupFabLayout(raw, presets) {
       return slotId;
     }
     if (typeof slotId === 'string' && allowed.has(slotId)) return null;
+    if (RETIRED_FAB_ACTION_IDS.has(slotId)) return null;
     const fallback = index < 4 ? `preset${index + 1}` : null;
     if (fallback && allowed.has(fallback) && !present.has(fallback) && !seen.has(fallback)) {
       seen.add(fallback);
