@@ -39,7 +39,7 @@
 }
 
 .text-highlighter-fab button:disabled {
-  cursor: wait !important;
+  cursor: default !important;
   opacity: 0.62 !important;
 }
 
@@ -70,13 +70,6 @@
   pointer-events: none !important;
 }
 
-.text-highlighter-fab-favorite.is-favorited,
-.text-highlighter-fab.is-confirming-favorite .text-highlighter-fab-favorite {
-  border-color: #b98e19 !important;
-  background: #fff8d7 !important;
-  color: #c49a20 !important;
-}
-
 .text-highlighter-fab-favorite.is-favorited svg,
 .text-highlighter-fab.is-confirming-favorite .text-highlighter-fab-favorite svg {
   fill: currentColor !important;
@@ -94,6 +87,7 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.12) !important;
 }
 
+.text-highlighter-fab.is-dark-page .text-highlighter-fab-favorite,
 .text-highlighter-fab.is-dark-page .text-highlighter-fab-folder,
 .text-highlighter-fab.is-dark-page .text-highlighter-fab-comment,
 .text-highlighter-fab.is-dark-page .text-highlighter-fab-close {
