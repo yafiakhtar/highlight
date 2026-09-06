@@ -57,7 +57,9 @@ function defaultFabLayoutV1() {
 function reconcileFabLayoutV1(raw) {
   const base = defaultFabLayoutV1();
   const expected = base.rows * base.cols;
-  const rawSlots = raw && Array.isArray(raw.slots) ? raw.slots.slice(0, expected) : [];
+  const rawSlots = raw == null
+    ? base.slots.slice()
+    : (Array.isArray(raw.slots) ? raw.slots.slice(0, expected) : []);
   while (rawSlots.length < expected) rawSlots.push(null);
 
   const presetIds = new Set(getPresets().map(preset => preset.id));

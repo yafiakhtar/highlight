@@ -644,7 +644,9 @@ function getFabButtonDefs() {
 function reconcileFabLayout(raw) {
   const base = defaultFabLayout();
   const expected = base.rows * base.cols;
-  const rawSlots = raw && Array.isArray(raw.slots) ? raw.slots.slice(0, expected) : [];
+  const rawSlots = raw == null
+    ? base.slots.slice()
+    : (Array.isArray(raw.slots) ? raw.slots.slice(0, expected) : []);
   while (rawSlots.length < expected) rawSlots.push(null);
 
   const allowed = new Set(getFabButtonDefs().map(d => d.id));
@@ -2239,7 +2241,9 @@ function normalizeBackupFabLayout(raw, presets) {
     ...presets.map(preset => preset.id),
     ...FAB_ACTION_DEFS.map(action => action.id)
   ]);
-  const source = isPlainObject(raw) && Array.isArray(raw.slots) ? raw.slots.slice(0, 8) : [];
+  const source = raw == null
+    ? base.slots.slice()
+    : (isPlainObject(raw) && Array.isArray(raw.slots) ? raw.slots.slice(0, 8) : []);
   while (source.length < 8) source.push(null);
   const present = new Set(source.filter(slotId => typeof slotId === 'string' && allowed.has(slotId)));
   const seen = new Set();
