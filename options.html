@@ -1293,6 +1293,39 @@
       justify-content: flex-end;
     }
 
+    .presets-history-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 4px;
+      padding-left: 10px;
+      border-left: 1px solid var(--opt-border);
+    }
+
+    .presets-tools .preset-history-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      min-width: 36px;
+      padding: 0;
+    }
+
+    .preset-history-btn svg {
+      width: 17px;
+      height: 17px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .presets-tools .preset-history-btn:disabled {
+      cursor: default;
+      opacity: 0.38;
+    }
+
     .presets-tools .btn-secondary {
       min-height: 36px;
       padding: 5px 8px;
@@ -4580,6 +4613,11 @@
         flex-basis: 44px;
       }
 
+      #tab-settings .preset-history-btn {
+        width: 44px;
+        min-width: 44px;
+      }
+
       #tab-settings .color-swatch {
         width: 44px;
         height: 44px;
@@ -4931,6 +4969,14 @@
                   <button type="button" id="autoMatchAllDarkToLight" class="btn btn-secondary btn-small" title="Auto-match all (Dark → Light)">
                     Dark → Light
                   </button>
+                  <span class="presets-history-actions">
+                    <button type="button" id="undoPresetColors" class="btn btn-secondary preset-history-btn" title="Undo color change" aria-label="Undo tag color change" disabled>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M5 12h8a6 6 0 0 1 6 6"/></svg>
+                    </button>
+                    <button type="button" id="redoPresetColors" class="btn btn-secondary preset-history-btn" title="Redo color change" aria-label="Redo tag color change" disabled>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5"/><path d="M19 12h-8a6 6 0 0 0-6 6"/></svg>
+                    </button>
+                  </span>
                 </div>
               </div>
 

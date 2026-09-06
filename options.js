@@ -44,6 +44,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         if (isLibraryTabActive()) refreshLibrary();
         return;
       }
+      clearPresetColorHistory();
       setPending(s);
       syncLightColor(pendingSettings.colorLight ?? DEFAULTS.colorLight);
       syncDarkColor(pendingSettings.colorDark ?? DEFAULTS.colorDark);
@@ -587,9 +588,14 @@ const toast = document.getElementById('toast');
 const presetsEditorRowsEl = document.getElementById('presetsEditorRows');
 const addTagPresetBtn = document.getElementById('addTagPreset');
 const deleteTagPresetBtn = document.getElementById('deleteTagPreset');
+const undoPresetColorsBtn = document.getElementById('undoPresetColors');
+const redoPresetColorsBtn = document.getElementById('redoPresetColors');
 let presetRows = [];
 let presetDeleteMode = false;
 const lastChangedSideByPreset = new Map();
+const PRESET_COLOR_HISTORY_LIMIT = 50;
+let presetColorUndoStack = [];
+let presetColorRedoStack = [];
 
 const autoMatchAllLightToDarkBtn = document.getElementById('autoMatchAllLightToDark');
 const autoMatchAllDarkToLightBtn = document.getElementById('autoMatchAllDarkToLight');
@@ -1635,6 +1641,87 @@ function schedulePresetSettingsSave() {
   });
 }
 
+function getPresetColorSnapshot(presets = pendingSettings?.presets) {
+  return normalizePresets(presets).map(preset => ({
+    id: preset.id,
+    colorLight: preset.colorLight,
+    colorDark: preset.colorDark
+  }));
+}
+
+function presetColorSnapshotsMatch(first, second) {
+  return JSON.stringify(first) === JSON.stringify(second);
+}
+
+function syncPresetColorHistoryControls() {
+  if (undoPresetColorsBtn) undoPresetColorsBtn.disabled = presetColorUndoStack.length === 0;
+  if (redoPresetColorsBtn) redoPresetColorsBtn.disabled = presetColorRedoStack.length === 0;
+}
+
+function clearPresetColorHistory() {
+  presetColorUndoStack = [];
+  presetColorRedoStack = [];
+  syncPresetColorHistoryControls();
+}
+
+function recordPresetColorMutation(mutation) {
+  if (!pendingSettings || typeof mutation !== 'function') return;
+  const before = getPresetColorSnapshot();
+  mutation();
+  const after = getPresetColorSnapshot();
+  if (presetColorSnapshotsMatch(before, after)) return;
+  presetColorUndoStack.push({ before, after });
+  if (presetColorUndoStack.length > PRESET_COLOR_HISTORY_LIMIT) presetColorUndoStack.shift();
+  presetColorRedoStack = [];
+  syncPresetColorHistoryControls();
+}
+
+function applyPresetColorSnapshot(snapshot) {
+  if (!pendingSettings || !Array.isArray(snapshot)) return false;
+  const colorsById = new Map(snapshot.map(item => [item.id, item]));
+  const presets = normalizePresets(pendingSettings.presets);
+  let changed = false;
+  presets.forEach(preset => {
+    const colors = colorsById.get(preset.id);
+    if (!colors || !isValidHex(colors.colorLight) || !isValidHex(colors.colorDark)) return;
+    if (preset.colorLight !== colors.colorLight || preset.colorDark !== colors.colorDark) changed = true;
+    preset.colorLight = colors.colorLight;
+    preset.colorDark = colors.colorDark;
+  });
+  if (!changed) return false;
+
+  pendingSettings.presets = presets;
+  const defaultPreset = getDefaultPreset(presets);
+  pendingSettings.colorLight = defaultPreset.colorLight;
+  pendingSettings.colorDark = defaultPreset.colorDark;
+  syncAppearanceFromPresets(presets);
+  syncPresetsEditor(presets);
+  rerenderFabBuilder();
+  refreshTagsLibraryIfLive();
+  schedulePresetSettingsSave();
+  return true;
+}
+
+function undoPresetColorChange() {
+  const entry = presetColorUndoStack.pop();
+  if (!entry) return;
+  if (applyPresetColorSnapshot(entry.before)) presetColorRedoStack.push(entry);
+  syncPresetColorHistoryControls();
+}
+
+function redoPresetColorChange() {
+  const entry = presetColorRedoStack.pop();
+  if (!entry) return;
+  if (applyPresetColorSnapshot(entry.after)) {
+    presetColorUndoStack.push(entry);
+    if (presetColorUndoStack.length > PRESET_COLOR_HISTORY_LIMIT) presetColorUndoStack.shift();
+  }
+  syncPresetColorHistoryControls();
+}
+
+undoPresetColorsBtn?.addEventListener('click', undoPresetColorChange);
+redoPresetColorsBtn?.addEventListener('click', redoPresetColorChange);
+
 function repairDefaultPresetMirrorsIfNeeded(rawSettings) {
   if (!rawSettings) return;
   const defaultPreset = getDefaultPreset(rawSettings.presets);
@@ -1831,36 +1918,44 @@ function deriveLightFromDark(hex) {
   return hslToHex(h, 52, 85);
 }
 
-function autoMatchRowLightToDark(presetId) {
+function autoMatchRowLightToDark(presetId, { recordHistory = true } = {}) {
   if (!pendingSettings) return;
   const row = presetRows.find(item => item.presetId === presetId);
   if (!row || !row.light || !row.dark || !row.darkHex) return;
-  lastChangedSideByPreset.set(presetId, 'light');
-  syncPresetMatchButton(row);
-  const light = row.light.value;
-  if (!isValidHex(light)) return;
-  const dark = deriveDarkFromLight(light);
-  row.dark.value = dark;
-  row.darkHex.value = dark.toUpperCase();
-  updatePendingPreset(presetId, preset => {
-    preset.colorDark = dark;
-  });
+  const applyMatch = () => {
+    lastChangedSideByPreset.set(presetId, 'light');
+    syncPresetMatchButton(row);
+    const light = row.light.value;
+    if (!isValidHex(light)) return;
+    const dark = deriveDarkFromLight(light);
+    row.dark.value = dark;
+    row.darkHex.value = dark.toUpperCase();
+    updatePendingPreset(presetId, preset => {
+      preset.colorDark = dark;
+    });
+  };
+  if (recordHistory) recordPresetColorMutation(applyMatch);
+  else applyMatch();
 }
 
-function autoMatchRowDarkToLight(presetId) {
+function autoMatchRowDarkToLight(presetId, { recordHistory = true } = {}) {
   if (!pendingSettings) return;
   const row = presetRows.find(item => item.presetId === presetId);
   if (!row || !row.light || !row.lightHex || !row.dark) return;
-  lastChangedSideByPreset.set(presetId, 'dark');
-  syncPresetMatchButton(row);
-  const dark = row.dark.value;
-  if (!isValidHex(dark)) return;
-  const light = deriveLightFromDark(dark);
-  row.light.value = light;
-  row.lightHex.value = light.toUpperCase();
-  updatePendingPreset(presetId, preset => {
-    preset.colorLight = light;
-  });
+  const applyMatch = () => {
+    lastChangedSideByPreset.set(presetId, 'dark');
+    syncPresetMatchButton(row);
+    const dark = row.dark.value;
+    if (!isValidHex(dark)) return;
+    const light = deriveLightFromDark(dark);
+    row.light.value = light;
+    row.lightHex.value = light.toUpperCase();
+    updatePendingPreset(presetId, preset => {
+      preset.colorLight = light;
+    });
+  };
+  if (recordHistory) recordPresetColorMutation(applyMatch);
+  else applyMatch();
 }
 
 function autoMatchRow(presetId) {
@@ -1891,6 +1986,7 @@ function isValidHex(str) {
 
 function updateAppearanceDefaultColors(light, dark) {
   if (!pendingSettings || !isValidHex(light) || !isValidHex(dark)) return;
+  clearPresetColorHistory();
   const presets = normalizePresets(pendingSettings.presets);
   const defaultPreset = presets.find(preset => preset.id === 'preset1');
   if (!defaultPreset) return;
@@ -1963,8 +2059,10 @@ function bindPresetRow(row) {
     lastChangedSideByPreset.set(presetId, 'light');
     syncPresetMatchButton(row);
     row.lightHex.value = hex.toUpperCase();
-    updatePendingPreset(presetId, preset => {
-      preset.colorLight = hex;
+    recordPresetColorMutation(() => {
+      updatePendingPreset(presetId, preset => {
+        preset.colorLight = hex;
+      });
     });
   });
 
@@ -1973,8 +2071,10 @@ function bindPresetRow(row) {
     lastChangedSideByPreset.set(presetId, 'dark');
     syncPresetMatchButton(row);
     row.darkHex.value = hex.toUpperCase();
-    updatePendingPreset(presetId, preset => {
-      preset.colorDark = hex;
+    recordPresetColorMutation(() => {
+      updatePendingPreset(presetId, preset => {
+        preset.colorDark = hex;
+      });
     });
   });
 
@@ -1985,8 +2085,10 @@ function bindPresetRow(row) {
     lastChangedSideByPreset.set(presetId, 'light');
     syncPresetMatchButton(row);
     row.light.value = val;
-    updatePendingPreset(presetId, preset => {
-      preset.colorLight = val;
+    recordPresetColorMutation(() => {
+      updatePendingPreset(presetId, preset => {
+        preset.colorLight = val;
+      });
     });
   });
 
@@ -1997,8 +2099,10 @@ function bindPresetRow(row) {
     lastChangedSideByPreset.set(presetId, 'dark');
     syncPresetMatchButton(row);
     row.dark.value = val;
-    updatePendingPreset(presetId, preset => {
-      preset.colorDark = val;
+    recordPresetColorMutation(() => {
+      updatePendingPreset(presetId, preset => {
+        preset.colorDark = val;
+      });
     });
   });
 
@@ -2020,6 +2124,7 @@ function bindPresetRow(row) {
 if (addTagPresetBtn) {
   addTagPresetBtn.addEventListener('click', () => {
     if (!pendingSettings) return;
+    clearPresetColorHistory();
     const presets = normalizePresets(pendingSettings.presets);
     const colorLight = '#E2D5FF';
     presets.push({
@@ -2047,6 +2152,7 @@ function removeTagPreset(presetId) {
   const presets = normalizePresets(pendingSettings.presets);
   const removedPreset = presets.find(preset => preset.id === presetId);
   if (!removedPreset) return;
+  clearPresetColorHistory();
 
   const nextPresets = presets.filter(preset => preset.id !== presetId);
   pendingSettings.presets = nextPresets;
@@ -2076,13 +2182,17 @@ if (deleteTagPresetBtn) {
 
 if (autoMatchAllLightToDarkBtn) {
   autoMatchAllLightToDarkBtn.addEventListener('click', () => {
-    presetRows.forEach(row => autoMatchRowLightToDark(row.presetId));
+    recordPresetColorMutation(() => {
+      presetRows.forEach(row => autoMatchRowLightToDark(row.presetId, { recordHistory: false }));
+    });
   });
 }
 
 if (autoMatchAllDarkToLightBtn) {
   autoMatchAllDarkToLightBtn.addEventListener('click', () => {
-    presetRows.forEach(row => autoMatchRowDarkToLight(row.presetId));
+    recordPresetColorMutation(() => {
+      presetRows.forEach(row => autoMatchRowDarkToLight(row.presetId, { recordHistory: false }));
+    });
   });
 }
 
@@ -2104,6 +2214,7 @@ function loadSettings() {
   chrome.storage.local.get('highlightSettings', (result) => {
     const s = result.highlightSettings || DEFAULTS;
 
+    clearPresetColorHistory();
     setPending(s);
     showFabToggle.checked = pendingSettings.showFab !== undefined ? pendingSettings.showFab : DEFAULTS.showFab;
     syncAppearanceFromPresets(pendingSettings.presets || DEFAULTS.presets);
@@ -2116,6 +2227,7 @@ function loadSettings() {
 }
 
 function resetSettings() {
+  clearPresetColorHistory();
   cancelScopedSettingsAutosave();
   selfPersistedSettingsSignatures.clear();
   const resetSettingsValue = cloneDefaults();
@@ -2539,6 +2651,7 @@ async function importPendingBackup() {
       isRecognizedBackupStorageKey(key) && !Object.prototype.hasOwnProperty.call(payload, key)
     ));
     await storageRemove(staleKeys);
+    clearPresetColorHistory();
     pendingBackupImport = null;
     backupImportDialog?.close('imported');
     showToast('Backup imported');
