@@ -5621,8 +5621,20 @@ function deleteHighlight(url, highlightId) {
       chrome.storage.local.set({ [key]: highlights, [RECENTLY_DELETED_KEY]: trash }, refreshLibrary);
     } else {
       delete index[url];
-      chrome.storage.local.remove(key, () => {
-        chrome.storage.local.set({ highlightIndex: index, [RECENTLY_DELETED_KEY]: trash }, refreshLibrary);
+      // Persist the recoverable copy before clearing the final active record.
+      chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: trash }, () => {
+        if (chrome.runtime.lastError) {
+          refreshLibrary();
+          return;
+        }
+        chrome.storage.local.set({ [key]: [], highlightIndex: index }, () => {
+          if (chrome.runtime.lastError) {
+            refreshLibrary();
+            return;
+          }
+          // Keep the successful result's storage shape unchanged when cleanup succeeds.
+          chrome.storage.local.remove(key, refreshLibrary);
+        });
       });
     }
   });
@@ -5654,8 +5666,20 @@ function deletePageHighlights(url) {
     }
 
     delete index[url];
-    chrome.storage.local.remove(key, () => {
-      chrome.storage.local.set({ highlightIndex: index, [RECENTLY_DELETED_KEY]: trash }, refreshLibrary);
+    // Persist all recoverable copies before clearing active page data.
+    chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: trash }, () => {
+      if (chrome.runtime.lastError) {
+        refreshLibrary();
+        return;
+      }
+      chrome.storage.local.set({ [key]: [], highlightIndex: index }, () => {
+        if (chrome.runtime.lastError) {
+          refreshLibrary();
+          return;
+        }
+        // Keep the successful result's storage shape unchanged when cleanup succeeds.
+        chrome.storage.local.remove(key, refreshLibrary);
+      });
     });
   });
 }
