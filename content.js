@@ -633,7 +633,15 @@ function saveHighlights({ favoriteOverrides = new Map() } = {}) {
   });
 }
 
-function patchStoredHighlight(highlightId, patch, { updateIndex = true } = {}) {
+// Page-record writers must read storage only after earlier mutations finish.
+let highlightMutationQueue = Promise.resolve();
+
+function queueHighlightMutation(task) {
+  highlightMutationQueue = highlightMutationQueue.catch(() => undefined).then(task);
+  return highlightMutationQueue;
+}
+
+function writePatchedHighlight(highlightId, patch, { updateIndex = true } = {}) {
   const key = getStorageKey();
   const url = window.location.href;
   return new Promise((resolve) => {
@@ -692,6 +700,10 @@ function patchStoredHighlight(highlightId, patch, { updateIndex = true } = {}) {
       resolve(null);
     }
   });
+}
+
+function patchStoredHighlight(highlightId, patch, options = {}) {
+  return queueHighlightMutation(() => writePatchedHighlight(highlightId, patch, options));
 }
 
 async function updateHighlightPreset(highlightId, presetId) {
@@ -823,9 +835,9 @@ async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {
     mark.addEventListener('click', handleHighlightClick);
     
     selection.removeAllRanges();
-    const saved = await saveHighlights({
+    const saved = await queueHighlightMutation(() => saveHighlights({
       favoriteOverrides: favorited ? new Map([[highlightId, true]]) : new Map()
-    });
+    }));
     return saved ? { highlightId, presetId, favorited } : null;
   } catch (e) {
     // surroundContents fails if selection crosses element boundaries
@@ -865,9 +877,9 @@ async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {
 
       if (createdPartCount === 0) return null;
       selection.removeAllRanges();
-      const saved = await saveHighlights({
+      const saved = await queueHighlightMutation(() => saveHighlights({
         favoriteOverrides: favorited ? new Map([[highlightId, true]]) : new Map()
-      });
+      }));
       return saved ? { highlightId, presetId, favorited } : null;
     } catch (e2) {
       console.error('Could not highlight selection:', e2);
@@ -1016,7 +1028,7 @@ function handleHighlightClick(e) {
 }
 
 // Remove a highlight (and all parts if it spans multiple elements)
-function removeHighlight(mark) {
+function removeHighlightNow(mark) {
   if (!mark.classList.contains('text-highlighter-mark')) {
     mark = mark.closest('.text-highlighter-mark');
   }
@@ -1104,6 +1116,10 @@ function removeHighlight(mark) {
   });
 }
 
+function removeHighlight(mark) {
+  return queueHighlightMutation(() => removeHighlightNow(mark));
+}
+
 // Only an unselected extension highlight owns the no-selection context menu.
 document.addEventListener('contextmenu', event => {
   const mark = getHighlightMark(event.target);
@@ -1150,7 +1166,7 @@ function removeAllHighlightMarks() {
 }
 
 // Clear all highlights on the page after confirmation and report the persisted result.
-function clearAllHighlights() {
+function clearAllHighlightsNow() {
   const key = getStorageKey();
   const url = window.location.href;
 
@@ -1207,6 +1223,10 @@ function clearAllHighlights() {
       resolve({ status: 'error', count: 0 });
     }
   });
+}
+
+function clearAllHighlights() {
+  return queueHighlightMutation(() => clearAllHighlightsNow());
 }
 
 function showPageNotice(message) {
@@ -1707,7 +1727,7 @@ function positionHighlightFabFolderPopover(popover, anchor) {
   popover.classList.toggle('opens-up', useAbove);
 }
 
-function patchStoredHighlightFolder(highlightId, requestedFolderId, createName = '') {
+function writePatchedHighlightFolder(highlightId, requestedFolderId, createName = '') {
   const key = getStorageKey();
   return new Promise(resolve => {
     if (!highlightId || !isExtensionContextValid()) {
@@ -1751,6 +1771,12 @@ function patchStoredHighlightFolder(highlightId, requestedFolderId, createName =
       });
     });
   });
+}
+
+function patchStoredHighlightFolder(highlightId, requestedFolderId, createName = '') {
+  return queueHighlightMutation(() => (
+    writePatchedHighlightFolder(highlightId, requestedFolderId, createName)
+  ));
 }
 
 function createContentFolderPickerOption(folder, currentFolderId) {

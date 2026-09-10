@@ -3966,6 +3966,7 @@ function restorePendingLibraryCommentFocus() {
 }
 
 function queueLibraryHighlightMutation(task) {
+  // Serialize full-array Library writes so each task reads the prior task's result.
   libraryHighlightWriteQueue = libraryHighlightWriteQueue.catch(() => undefined).then(task);
   return libraryHighlightWriteQueue;
 }
@@ -4775,7 +4776,7 @@ function openFolderDeleteDialog(folderId, highlightCountForFolder, trigger = nul
 }
 
 function deleteFolder(folderId, mode) {
-  queueFolderMutation(() => new Promise((resolve, reject) => {
+  return queueLibraryHighlightMutation(() => queueFolderMutation(() => new Promise((resolve, reject) => {
     chrome.storage.local.get(null, all => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
@@ -4852,7 +4853,7 @@ function deleteFolder(folderId, mode) {
         else finish();
       });
     });
-  })).then(folder => {
+  }))).then(folder => {
     if (!folder) return;
     if (currentFolderId === folder.id) currentFolderId = null;
     folderDeleteTargetId = null;
@@ -5245,7 +5246,7 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
       restoreBtn.innerHTML = libraryIconMarkup('restore');
       restoreBtn.title = 'Restore highlight';
       restoreBtn.setAttribute('aria-label', 'Restore highlight');
-      restoreBtn.addEventListener('click', () => restoreFromTrash(entry.trashId));
+      restoreBtn.addEventListener('click', () => queueLibraryHighlightMutation(() => restoreFromTrash(entry.trashId)));
 
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
@@ -5379,10 +5380,13 @@ emptyTrashDialog?.addEventListener('close', () => {
 });
 
 function restoreFromTrash(trashId) {
-  chrome.storage.local.get([RECENTLY_DELETED_KEY, 'highlightIndex', FOLDERS_KEY], (result) => {
+  return new Promise(resolve => chrome.storage.local.get([RECENTLY_DELETED_KEY, 'highlightIndex', FOLDERS_KEY], (result) => {
     const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
     const entry = trash.find(t => t.trashId === trashId);
-    if (!entry || !entry.highlight) return;
+    if (!entry || !entry.highlight) {
+      resolve(false);
+      return;
+    }
 
     const restoredHighlight = { ...entry.highlight };
     const folders = normalizeFolders(result[FOLDERS_KEY]);
@@ -5398,7 +5402,10 @@ function restoreFromTrash(trashId) {
       let highlights = r2[key] || [];
       const newTrash = trash.filter(t => t.trashId !== trashId);
       if (highlights.some(h => h.id === restoredHighlight.id)) {
-        chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: newTrash }, refreshLibrary);
+        chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: newTrash }, () => {
+          refreshLibrary();
+          resolve(!chrome.runtime.lastError);
+        });
         return;
       }
       highlights = highlights.concat([restoredHighlight]);
@@ -5411,9 +5418,12 @@ function restoreFromTrash(trashId) {
         [key]: highlights,
         highlightIndex: index,
         [RECENTLY_DELETED_KEY]: newTrash
-      }, refreshLibrary);
+      }, () => {
+        refreshLibrary();
+        resolve(!chrome.runtime.lastError);
+      });
     });
-  });
+  }));
 }
 
 function deleteForeverFromTrash(trashId) {
@@ -5539,7 +5549,7 @@ function renderHighlights(pages, totalCount, options = {}) {
     clearBtn.type = 'button';
     clearBtn.className = 'page-clear-btn';
     clearBtn.textContent = 'Clear all';
-    clearBtn.addEventListener('click', () => deletePageHighlights(page.url));
+    clearBtn.addEventListener('click', () => queueLibraryHighlightMutation(() => deletePageHighlights(page.url)));
 
     header.appendChild(info);
     if (options.allowPageClear !== false) header.appendChild(clearBtn);
@@ -5568,7 +5578,7 @@ function renderHighlights(pages, totalCount, options = {}) {
       del.innerHTML = libraryIconMarkup('trash');
       del.title = 'Delete highlight';
       del.setAttribute('aria-label', 'Delete highlight');
-      del.addEventListener('click', () => deleteHighlight(page.url, hl.id));
+      del.addEventListener('click', () => queueLibraryHighlightMutation(() => deleteHighlight(page.url, hl.id)));
 
       const rowActions = document.createElement('div');
       rowActions.className = 'snippet-item-actions';
@@ -5596,11 +5606,12 @@ function renderHighlights(pages, totalCount, options = {}) {
 function deleteHighlight(url, highlightId) {
   const key = 'highlights_' + url;
 
-  chrome.storage.local.get([key, 'highlightIndex', RECENTLY_DELETED_KEY], (result) => {
+  return new Promise(resolve => chrome.storage.local.get([key, 'highlightIndex', RECENTLY_DELETED_KEY], (result) => {
     let highlights = result[key] || [];
     const removed = highlights.find(h => h.id === highlightId);
     if (!removed) {
       refreshLibrary();
+      resolve(false);
       return;
     }
 
@@ -5618,36 +5629,45 @@ function deleteHighlight(url, highlightId) {
     highlights = highlights.filter(h => h.id !== highlightId);
 
     if (highlights.length > 0) {
-      chrome.storage.local.set({ [key]: highlights, [RECENTLY_DELETED_KEY]: trash }, refreshLibrary);
+      chrome.storage.local.set({ [key]: highlights, [RECENTLY_DELETED_KEY]: trash }, () => {
+        refreshLibrary();
+        resolve(!chrome.runtime.lastError);
+      });
     } else {
       delete index[url];
       // Persist the recoverable copy before clearing the final active record.
       chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: trash }, () => {
         if (chrome.runtime.lastError) {
           refreshLibrary();
+          resolve(false);
           return;
         }
         chrome.storage.local.set({ [key]: [], highlightIndex: index }, () => {
           if (chrome.runtime.lastError) {
             refreshLibrary();
+            resolve(false);
             return;
           }
           // Keep the successful result's storage shape unchanged when cleanup succeeds.
-          chrome.storage.local.remove(key, refreshLibrary);
+          chrome.storage.local.remove(key, () => {
+            refreshLibrary();
+            resolve(!chrome.runtime.lastError);
+          });
         });
       });
     }
-  });
+  }));
 }
 
 // Delete all highlights for a page (soft-delete into Recently Deleted)
 function deletePageHighlights(url) {
   const key = 'highlights_' + url;
 
-  chrome.storage.local.get([key, 'highlightIndex', RECENTLY_DELETED_KEY], (result) => {
+  return new Promise(resolve => chrome.storage.local.get([key, 'highlightIndex', RECENTLY_DELETED_KEY], (result) => {
     const highlights = result[key] || [];
     if (highlights.length === 0) {
       refreshLibrary();
+      resolve({ status: 'empty', count: 0 });
       return;
     }
 
@@ -5670,18 +5690,23 @@ function deletePageHighlights(url) {
     chrome.storage.local.set({ [RECENTLY_DELETED_KEY]: trash }, () => {
       if (chrome.runtime.lastError) {
         refreshLibrary();
+        resolve({ status: 'error', count: 0 });
         return;
       }
       chrome.storage.local.set({ [key]: [], highlightIndex: index }, () => {
         if (chrome.runtime.lastError) {
           refreshLibrary();
+          resolve({ status: 'error', count: 0 });
           return;
         }
         // Keep the successful result's storage shape unchanged when cleanup succeeds.
-        chrome.storage.local.remove(key, refreshLibrary);
+        chrome.storage.local.remove(key, () => {
+          refreshLibrary();
+          resolve(chrome.runtime.lastError ? { status: 'error', count: 0 } : { status: 'cleared', count: highlights.length });
+        });
       });
     });
-  });
+  }));
 }
 
 function isLibraryTabActive() {
