@@ -588,30 +588,29 @@ function saveHighlights({ favoriteOverrides = new Map() } = {}) {
         }
 
         const oldHighlights = Array.isArray(result[key]) ? result[key] : [];
-        const oldById = new Map(oldHighlights.map(highlight => [highlight.id, highlight]));
+        const existingIds = new Set(
+          oldHighlights
+            .map(highlight => highlight?.id)
+            .filter(id => typeof id === 'string' && id)
+        );
+        const newHighlights = highlights.filter(highlight => !existingIds.has(highlight.id));
 
-        highlights.forEach(highlight => {
-          const oldHighlight = oldById.get(highlight.id);
-          highlight.createdAt = oldHighlight?.createdAt || Date.now();
-          if (typeof oldHighlight?.folderId === 'string' && oldHighlight.folderId) {
-            highlight.folderId = oldHighlight.folderId;
-          }
-          const oldComment = normalizeComment(oldHighlight?.comment);
-          if (oldComment) highlight.comment = oldComment;
-          if (favoriteOverrides.has(highlight.id)) {
-            if (favoriteOverrides.get(highlight.id) === true) highlight.favorited = true;
-          } else if (oldHighlight?.favorited === true) {
+        newHighlights.forEach(highlight => {
+          highlight.createdAt = Date.now();
+          if (favoriteOverrides.get(highlight.id) === true) {
             highlight.favorited = true;
           }
         });
 
+        const mergedHighlights = [...oldHighlights, ...newHighlights];
+
         const index = result.highlightIndex || {};
-        if (highlights.length > 0) {
+        if (mergedHighlights.length > 0) {
           index[url] = {
             title: document.title || url,
             lastUpdated: Date.now()
           };
-          chrome.storage.local.set({ [key]: highlights, highlightIndex: index }, () => {
+          chrome.storage.local.set({ [key]: mergedHighlights, highlightIndex: index }, () => {
             resolve(!chrome.runtime.lastError);
           });
           return;
