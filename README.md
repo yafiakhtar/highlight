@@ -103,6 +103,12 @@ During import, Highlight pauses pending writes from the Settings page, verifies 
 - **Indexed Library** — page titles and last-updated timestamps support fast rendering and ordering
 - **Self-healing records** — duplicate highlight IDs are merged and malformed data is normalized on read
 
+### Permissions
+
+- **Storage** — saves highlights, folders, tags, preferences, and extension UI state in the current browser profile
+- **Context menus** — adds the right-click actions for highlighting selected text and removing a selected highlight
+- **Webpage access** — the statically registered content script runs on supported webpages so highlights can be created, restored, edited, and removed
+
 ---
 
 Built by [yafiakhtar.me](https://www.yafiakhtar.me/) · Version 1.0.1
