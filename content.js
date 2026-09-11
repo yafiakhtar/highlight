@@ -1147,6 +1147,7 @@ function removeHighlight(mark) {
 document.addEventListener('contextmenu', event => {
   const mark = getHighlightMark(event.target);
   if (!mark || hasMeaningfulSelection()) return;
+  if (!isTrustedExtensionControlEvent(event)) return;
   event.preventDefault();
   event.stopPropagation();
   hideHighlightFab();
@@ -1252,6 +1253,18 @@ function clearAllHighlights() {
   return queueHighlightMutation(() => clearAllHighlightsNow());
 }
 
+function isTrustedExtensionControlEvent(event) {
+  // Host pages share this DOM, so only browser-generated user events may enter persistent controls.
+  return event?.isTrusted === true;
+}
+
+function addTrustedExtensionClickListener(control, handler) {
+  control.addEventListener('click', event => {
+    if (!isTrustedExtensionControlEvent(event)) return;
+    handler(event);
+  });
+}
+
 function showPageNotice(message) {
   if (pageNoticeTimer !== null) {
     clearTimeout(pageNoticeTimer);
@@ -1338,7 +1351,7 @@ function ensureClearHighlightsDialog() {
       }
     });
   });
-  confirm.addEventListener('click', async () => {
+  addTrustedExtensionClickListener(confirm, async () => {
     if (clearHighlightsPending) return;
     setClearHighlightsDialogBusy(dialog, true);
     const result = await clearAllHighlights();
@@ -1824,7 +1837,7 @@ function createContentFolderPickerOption(folder, currentFolderId) {
     event.preventDefault();
     event.stopPropagation();
   });
-  button.addEventListener('click', event => {
+  addTrustedExtensionClickListener(button, event => {
     event.preventDefault();
     event.stopPropagation();
     assignFabHighlightToFolder(folder.id);
@@ -1854,7 +1867,7 @@ function renderContentFolderPickerResults(list, query, folders, currentFolderId)
       event.preventDefault();
       event.stopPropagation();
     });
-    create.addEventListener('click', event => {
+    addTrustedExtensionClickListener(create, event => {
       event.preventDefault();
       event.stopPropagation();
       assignFabHighlightToFolder(null, normalizedQuery);
@@ -2101,12 +2114,13 @@ function openHighlightFabCommentPopover(anchor) {
     textarea.addEventListener('input', updateCounter);
     textarea.addEventListener('keydown', event => {
       if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        if (!isTrustedExtensionControlEvent(event)) return;
         event.preventDefault();
         saveFabComment(popover, textarea);
       }
     });
     cancel.addEventListener('click', () => closeHighlightFabCommentPopover({ restoreFocus: true }));
-    save.addEventListener('click', () => saveFabComment(popover, textarea));
+    addTrustedExtensionClickListener(save, () => saveFabComment(popover, textarea));
     popover.addEventListener('mousedown', event => event.stopPropagation());
     popover.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
@@ -2293,7 +2307,7 @@ function buildFabButtonsInto(container) {
       event.preventDefault();
       event.stopPropagation();
     });
-    btn.addEventListener('click', (event) => {
+    addTrustedExtensionClickListener(btn, (event) => {
       event.preventDefault();
       event.stopPropagation();
       handleFabFavoriteAction();
@@ -2318,7 +2332,7 @@ function buildFabButtonsInto(container) {
       event.preventDefault();
       event.stopPropagation();
     });
-    btn.addEventListener('click', event => {
+    addTrustedExtensionClickListener(btn, event => {
       event.preventDefault();
       event.stopPropagation();
       handleFabFolderAction(btn);
@@ -2352,7 +2366,7 @@ function buildFabButtonsInto(container) {
       event.preventDefault();
       event.stopPropagation();
     });
-    btn.addEventListener('click', event => {
+    addTrustedExtensionClickListener(btn, event => {
       event.preventDefault();
       event.stopPropagation();
       hideHighlightFab();
@@ -2377,7 +2391,7 @@ function buildFabButtonsInto(container) {
       event.preventDefault();
       event.stopPropagation();
     });
-    btn.addEventListener('click', event => {
+    addTrustedExtensionClickListener(btn, event => {
       event.preventDefault();
       event.stopPropagation();
       handleFabCommentAction(btn);
@@ -2412,7 +2426,7 @@ function buildFabButtonsInto(container) {
         e.stopPropagation();
       });
 
-      btn.addEventListener('click', (e) => {
+      addTrustedExtensionClickListener(btn, (e) => {
         e.preventDefault();
         e.stopPropagation();
         handleFabPresetAction(preset.id);
