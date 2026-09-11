@@ -21,6 +21,7 @@ document.getElementById('optionsThemeToggle').addEventListener('click', () => {
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
+  if (backupReplacementPending) return;
   const hasFabLayoutChange = Object.prototype.hasOwnProperty.call(changes, FAB_LAYOUT_KEY);
   if (changes.popupTheme) {
     const theme = changes.popupTheme.newValue;
@@ -2283,6 +2284,7 @@ const BACKUP_CORE_KEYS = [
 const DEFAULT_POPUP_BUTTON_ORDER = ['trash', 'theme', 'settings', 'fab-toggle', 'home'];
 let pendingBackupImport = null;
 let backupOperationPending = false;
+let backupReplacementPending = false;
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -2757,6 +2759,91 @@ function isRecognizedBackupStorageKey(key) {
   return BACKUP_CORE_KEYS.includes(key) || key.startsWith('highlights_');
 }
 
+function getRecognizedBackupStorage(storage) {
+  return Object.fromEntries(
+    Object.entries(storage || {}).filter(([key]) => isRecognizedBackupStorageKey(key))
+  );
+}
+
+function backupStorageValuesEqual(first, second) {
+  if (Object.is(first, second)) return true;
+  if (Array.isArray(first) || Array.isArray(second)) {
+    return Array.isArray(first)
+      && Array.isArray(second)
+      && first.length === second.length
+      && first.every((value, index) => backupStorageValuesEqual(value, second[index]));
+  }
+  if (!isPlainObject(first) || !isPlainObject(second)) return false;
+  const firstKeys = Object.keys(first).sort();
+  const secondKeys = Object.keys(second).sort();
+  return firstKeys.length === secondKeys.length
+    && firstKeys.every((key, index) => (
+      key === secondKeys[index] && backupStorageValuesEqual(first[key], second[key])
+    ));
+}
+
+function assertBackupStorageMatches(actual, expected) {
+  const actualKeys = Object.keys(actual).sort();
+  const expectedKeys = Object.keys(expected).sort();
+  if (
+    actualKeys.length !== expectedKeys.length
+    || actualKeys.some((key, index) => key !== expectedKeys[index])
+  ) {
+    throw new Error('Storage changed while the backup was being replaced.');
+  }
+  if (!backupStorageValuesEqual(actual, expected)) {
+    throw new Error('The final storage state does not match the selected backup.');
+  }
+}
+
+async function writeExactBackupStorage(expected, { replaceAll = false } = {}) {
+  const before = await storageGet(null);
+  const keysToRemove = Object.keys(before).filter(key => replaceAll || isRecognizedBackupStorageKey(key));
+  await storageRemove(keysToRemove);
+  const payload = replaceAll ? expected : getRecognizedBackupStorage(expected);
+  if (Object.keys(payload).length > 0) await storageSet(payload);
+  const after = await storageGet(null);
+  assertBackupStorageMatches(after, expected);
+}
+
+async function replaceBackupStorage(payload) {
+  const originalSnapshot = await storageGet(null);
+  const preservedStorage = Object.fromEntries(
+    Object.entries(originalSnapshot).filter(([key]) => !isRecognizedBackupStorageKey(key))
+  );
+  const expectedImportedState = { ...preservedStorage, ...payload };
+
+  try {
+    // Remove replaceable keys first so importing does not temporarily require space for both datasets.
+    await writeExactBackupStorage(expectedImportedState);
+  } catch (importError) {
+    try {
+      // Rollback replaces the complete snapshot so a partial import cannot survive recovery.
+      await writeExactBackupStorage(originalSnapshot, { replaceAll: true });
+    } catch (rollbackError) {
+      const criticalError = new Error('Import failed and your previous data could not be fully restored.');
+      criticalError.rollbackFailed = true;
+      criticalError.importError = importError;
+      criticalError.rollbackError = rollbackError;
+      throw criticalError;
+    }
+    throw importError;
+  }
+}
+
+async function waitForBackupWritersIdle() {
+  await waitForScopedSettingsIdle({ discardPending: true });
+  while (true) {
+    const highlightQueue = libraryHighlightWriteQueue;
+    const folderQueue = folderMutationQueue;
+    await Promise.all([
+      highlightQueue.catch(() => undefined),
+      folderQueue.catch(() => undefined)
+    ]);
+    if (highlightQueue === libraryHighlightWriteQueue && folderQueue === folderMutationQueue) return;
+  }
+}
+
 function setBackupControlsBusy(isBusy) {
   backupOperationPending = isBusy;
   if (exportBackupBtn) exportBackupBtn.disabled = isBusy;
@@ -2839,46 +2926,31 @@ async function readBackupFile(file) {
   return normalizeBackupDocument(parsed);
 }
 
-async function restoreStorageSnapshot(snapshot) {
-  const current = await storageGet(null);
-  const currentRecognized = Object.keys(current).filter(isRecognizedBackupStorageKey);
-  const snapshotRecognized = Object.fromEntries(
-    Object.entries(snapshot).filter(([key]) => isRecognizedBackupStorageKey(key))
-  );
-  await storageSet(snapshotRecognized);
-  await storageRemove(currentRecognized.filter(key => !Object.prototype.hasOwnProperty.call(snapshotRecognized, key)));
-}
-
 async function importPendingBackup() {
   if (!pendingBackupImport || backupOperationPending) return;
   setBackupControlsBusy(true);
+  backupReplacementPending = true;
   if (backupImportError) backupImportError.textContent = '';
-  let snapshot = null;
   try {
-    await waitForScopedSettingsIdle({ discardPending: true });
-    snapshot = await storageGet(null);
+    await waitForBackupWritersIdle();
     const payload = backupDocumentToStorage(pendingBackupImport);
-    await storageSet(payload);
-    const currentAfterWrite = await storageGet(null);
-    const staleKeys = Object.keys(currentAfterWrite).filter(key => (
-      isRecognizedBackupStorageKey(key) && !Object.prototype.hasOwnProperty.call(payload, key)
-    ));
-    await storageRemove(staleKeys);
+    await replaceBackupStorage(payload);
     clearPresetColorHistory();
     pendingBackupImport = null;
     backupImportDialog?.close('imported');
     showToast('Backup imported');
     setTimeout(() => window.location.reload(), 450);
-  } catch {
-    if (snapshot) {
-      try {
-        await restoreStorageSnapshot(snapshot);
-      } catch {
-        // The original error remains the most useful message for the user.
-      }
+  } catch (error) {
+    const rollbackFailed = error && error.rollbackFailed === true;
+    if (backupImportError) {
+      backupImportError.textContent = rollbackFailed
+        ? 'Critical error: the import failed and your previous data could not be fully restored. Your stored data may be incomplete.'
+        : 'Could not replace your data. Your previous data was restored.';
     }
-    if (backupImportError) backupImportError.textContent = 'Could not replace your data. Your previous data was restored when possible.';
+    showToast(rollbackFailed ? 'Critical storage recovery failure' : 'Backup import failed');
     setBackupControlsBusy(false);
+  } finally {
+    backupReplacementPending = false;
   }
 }
 
@@ -5942,6 +6014,7 @@ function isLibraryTabActive() {
 // Live-update when highlights or trash change from another tab
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
+  if (backupReplacementPending) return;
 
   const hasHighlightChange = Object.keys(changes).some(
     k => k === 'highlightIndex' || k.startsWith('highlights_')
