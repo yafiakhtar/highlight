@@ -3037,7 +3037,7 @@ showFabToggle.addEventListener('change', () => {
 });
 
 openShortcuts.addEventListener('click', () => {
-  // chrome:// URLs can't be opened directly; copy the URL for the user instead
+  // Open the browser-managed extension shortcut page in a new tab.
   try {
     chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
   } catch {

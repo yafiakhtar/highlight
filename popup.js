@@ -1,6 +1,55 @@
-// Platform detection: show ⌘ on Mac, Ctrl on others
-const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
-document.getElementById('modifierKey').textContent = isMac ? '⌘' : 'Ctrl';
+// Show the browser's current command instead of assuming the suggested default is still assigned.
+const popupShortcut = document.getElementById('popupShortcut');
+
+function renderPopupShortcut(shortcut) {
+  if (!popupShortcut) return;
+  const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent);
+  const macLabels = {
+    command: '⌘',
+    meta: '⌘',
+    shift: '⇧',
+    option: '⌥',
+    alt: '⌥',
+    control: '⌃',
+    ctrl: '⌃'
+  };
+  const tokens = typeof shortcut === 'string'
+    ? shortcut.split('+').map(token => token.trim()).filter(Boolean)
+    : [];
+  const labels = tokens.map(token => {
+    const normalized = token.toLowerCase();
+    if (isMac && macLabels[normalized]) return macLabels[normalized];
+    return token.length === 1 ? token.toUpperCase() : token;
+  });
+
+  if (labels.length === 0) {
+    popupShortcut.textContent = 'Not set';
+    popupShortcut.setAttribute('aria-label', 'Keyboard shortcut: Not set');
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  labels.forEach((label, index) => {
+    if (index > 0) {
+      const separator = document.createElement('span');
+      separator.className = 'kbd-plus';
+      separator.textContent = '+';
+      separator.setAttribute('aria-hidden', 'true');
+      fragment.appendChild(separator);
+    }
+    const key = document.createElement('kbd');
+    key.textContent = label;
+    key.setAttribute('aria-hidden', 'true');
+    fragment.appendChild(key);
+  });
+  popupShortcut.replaceChildren(fragment);
+  popupShortcut.setAttribute('aria-label', `Keyboard shortcut: ${shortcut}`);
+}
+
+chrome.commands.getAll(commands => {
+  const highlightCommand = commands.find(command => command.name === 'highlight-selection');
+  renderPopupShortcut(highlightCommand?.shortcut || '');
+});
 
 // Theme: load saved preference
 chrome.storage.local.get('popupTheme', (data) => {
