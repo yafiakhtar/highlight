@@ -177,6 +177,14 @@ function normalizeFolders(rawFolders) {
   return folders;
 }
 
+function isValidPresetHex(value) {
+  return typeof value === 'string' && /^#[0-9A-Fa-f]{6}$/.test(value);
+}
+
+function getBuiltInDefaultPreset() {
+  return DEFAULT_SETTINGS.presets.find(preset => preset.id === 'preset1');
+}
+
 function normalizePresets(presets) {
   const defaults = DEFAULT_SETTINGS.presets.map(p => ({ ...p }));
   const source = Array.isArray(presets) && presets.length > 0 ? presets : defaults;
@@ -185,19 +193,21 @@ function normalizePresets(presets) {
 
   source.forEach((raw, index) => {
     if (!raw || typeof raw !== 'object') return;
-    const fallback = defaults.find(p => p.id === raw.id) || defaults[index] || defaults[0];
-    const id = typeof raw.id === 'string' && raw.id.trim() !== '' ? raw.id.trim() : fallback.id;
+    const rawId = typeof raw.id === 'string' ? raw.id.trim() : '';
+    const fallback = defaults.find(p => p.id === rawId) || defaults[index] || getBuiltInDefaultPreset();
+    const id = rawId || (index < defaults.length ? fallback.id : '');
+    if (!id) return;
     if (seen.has(id)) return;
     seen.add(id);
     normalized.push({
       id,
       name: typeof raw.name === 'string' ? raw.name : fallback.name,
-      colorLight: typeof raw.colorLight === 'string' ? raw.colorLight : fallback.colorLight,
-      colorDark: typeof raw.colorDark === 'string' ? raw.colorDark : fallback.colorDark
+      colorLight: isValidPresetHex(raw.colorLight) ? raw.colorLight : fallback.colorLight,
+      colorDark: isValidPresetHex(raw.colorDark) ? raw.colorDark : fallback.colorDark
     });
   });
 
-  const defaultPreset = defaults.find(preset => preset.id === 'preset1') || defaults[0];
+  const defaultPreset = getBuiltInDefaultPreset();
   if (!seen.has(defaultPreset.id)) normalized.push({ ...defaultPreset });
   return normalized.length > 0 ? normalized : defaults;
 }
@@ -210,7 +220,7 @@ function getPresetById(presetId) {
   const presets = getPresets();
   return presets.find(preset => preset.id === presetId)
     || presets.find(preset => preset.id === 'preset1')
-    || DEFAULT_SETTINGS.presets[0];
+    || getBuiltInDefaultPreset();
 }
 
 function getPresetColor(presetId, theme = getPageTheme()) {
@@ -365,7 +375,9 @@ function applyCustomColors() {
     if (!btn) return;
     if (btn.dataset.fabKind !== 'preset') return;
     const presetId = btn.dataset.presetId;
-    const preset = (presetId ? presets.find(p => p && p.id === presetId) : null) || presets[0];
+    const preset = (presetId ? presets.find(p => p && p.id === presetId) : null)
+      || presets.find(p => p && p.id === 'preset1')
+      || getBuiltInDefaultPreset();
     const color = isDark
       ? (preset.colorDark || userSettings.colorDark)
       : (preset.colorLight || userSettings.colorLight);
@@ -499,7 +511,7 @@ function normalizeStoredHighlights(raw) {
     const comment = items.map(it => normalizeComment(it?.comment)).find(Boolean) || '';
     const rawPresetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
       || base.presetId
-      || DEFAULT_SETTINGS.presets[0].id;
+      || getBuiltInDefaultPreset().id;
     const presetId = getPresetById(rawPresetId).id;
 
     const firstPart = parts[0] || { xpath: base.xpath || '', offset: base.offset || 0 };
@@ -558,7 +570,7 @@ function saveHighlights({ favoriteOverrides = new Map() } = {}) {
 
     const collapsed = collapseWhitespace(parts.map(p => p.text).join(' '));
     const combinedText = parts.length > 1 ? tightenPunctuation(collapsed) : collapsed;
-    const presetId = first.dataset.presetId || DEFAULT_SETTINGS.presets[0].id;
+    const presetId = first.dataset.presetId || getBuiltInDefaultPreset().id;
 
     // Keep xpath/offset for older readers; points at first part.
     const firstPart = parts[0] || { xpath: '', offset: 0, text: '' };
@@ -840,7 +852,7 @@ function rollbackCreatedHighlightMarks(createdMarks) {
   parents.forEach(parent => parent.normalize());
 }
 
-async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {}) {
+async function highlightSelection(presetIdOrIndex = 'preset1', { favorited = false } = {}) {
   await loadUserSettings();
   const selection = window.getSelection();
   
@@ -863,9 +875,10 @@ async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {
   const theme = getPageTheme();
   const themeClass = theme === 'dark' ? 'hl-dark' : 'hl-light';
   const presets = getPresets();
+  const defaultPreset = presets.find(item => item.id === 'preset1') || getBuiltInDefaultPreset();
   const preset = typeof presetIdOrIndex === 'string'
-    ? (presets.find(item => item.id === presetIdOrIndex) || presets[0])
-    : (presets[presetIdOrIndex] || presets[0]);
+    ? (presets.find(item => item.id === presetIdOrIndex) || defaultPreset)
+    : (presets[presetIdOrIndex] || defaultPreset);
   const presetId = preset && typeof preset.id === 'string' ? preset.id : null;
   const appliedColor = theme === 'dark'
     ? (preset.colorDark || userSettings.colorDark)

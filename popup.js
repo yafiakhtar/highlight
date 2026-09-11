@@ -102,7 +102,10 @@ function isValidHex(str) {
 function applyFabColorsFromState(settings, lastUsedPresetId) {
   const presets = Array.isArray(settings && settings.presets) ? settings.presets : [];
   const safeId = typeof lastUsedPresetId === 'string' ? lastUsedPresetId.trim() : '';
-  const preset = (safeId ? presets.find(p => p && p.id === safeId) : null) || presets[0] || null;
+  // A valid explicit choice wins; otherwise the permanent default is preset1, not array position.
+  const preset = (safeId ? presets.find(p => p && p.id === safeId) : null)
+    || presets.find(p => p && p.id === 'preset1')
+    || { colorLight: FAB_COLOR_LIGHT_DEFAULT, colorDark: FAB_COLOR_DARK_DEFAULT };
 
   const light =
     (preset && isValidHex(preset.colorLight) ? preset.colorLight : null) ||

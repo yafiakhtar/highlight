@@ -711,7 +711,7 @@ function getPresetColorsForId(presetId) {
   const presets = pendingSettings && Array.isArray(pendingSettings.presets)
     ? normalizePresets(pendingSettings.presets)
     : DEFAULTS.presets;
-  const p = presets.find(preset => preset.id === presetId) || presets[0] || {};
+  const p = presets.find(preset => preset.id === presetId) || getDefaultPreset(presets) || {};
   return {
     light: p.colorLight || DEFAULTS.colorLight,
     dark: p.colorDark || DEFAULTS.colorDark,
@@ -1502,14 +1502,14 @@ function normalizePresets(presets) {
   const source = Array.isArray(presets) && presets.length > 0 ? presets : base;
   const seen = new Set();
   const normalized = [];
+  const defaultPreset = base.find(def => def.id === 'preset1');
 
   source.forEach((raw, idx) => {
     if (!raw || typeof raw !== 'object') return;
-    const matchingDefault = base.find(def => def.id === raw.id) || base[idx] || base[0];
-    let id = typeof raw.id === 'string' && raw.id.trim() !== ''
-      ? raw.id.trim()
-      : (idx < base.length ? base[idx].id : generatePresetId());
-    if (seen.has(id)) id = generatePresetId();
+    const rawId = typeof raw.id === 'string' ? raw.id.trim() : '';
+    const matchingDefault = base.find(def => def.id === rawId) || base[idx] || defaultPreset;
+    const id = rawId || (idx < base.length ? matchingDefault.id : '');
+    if (!id || seen.has(id)) return;
     seen.add(id);
     normalized.push({
       id,
@@ -1521,7 +1521,6 @@ function normalizePresets(presets) {
 
   // preset1 is the permanent default and must never disappear. Other built-in
   // presets may be removed by the user and return only after a full reset.
-  const defaultPreset = base.find(def => def.id === 'preset1') || base[0];
   if (!seen.has(defaultPreset.id)) normalized.push({ ...defaultPreset });
 
   return normalized.length > 0 ? normalized : base;
@@ -3458,7 +3457,7 @@ function normalizeStoredHighlights(raw) {
     const comment = items.map(it => normalizeComment(it?.comment)).find(Boolean) || '';
     const rawPresetId = items.find(it => typeof it.presetId === 'string' && it.presetId.trim() !== '')?.presetId
       || base.presetId
-      || DEFAULTS.presets[0].id;
+      || getDefaultPreset(DEFAULTS.presets).id;
     const presetId = normalizeLibraryPresetId(rawPresetId);
 
     const firstPart = parts[0] || { xpath: base.xpath || '', offset: base.offset || 0 };
@@ -3539,7 +3538,7 @@ let activeLibraryPresets = DEFAULTS.presets.map(p => ({ ...p }));
 
 function normalizeLibraryPresetId(presetId) {
   const match = activeLibraryPresets.find(p => p.id === presetId);
-  const defaultPreset = activeLibraryPresets.find(p => p.id === 'preset1') || DEFAULTS.presets[0];
+  const defaultPreset = activeLibraryPresets.find(p => p.id === 'preset1') || getDefaultPreset(DEFAULTS.presets);
   return match ? match.id : defaultPreset.id;
 }
 
@@ -3551,7 +3550,7 @@ function getLibraryPresetForHighlight(hl) {
   const presetId = getHighlightPresetId(hl);
   return activeLibraryPresets.find(p => p.id === presetId)
     || activeLibraryPresets.find(p => p.id === 'preset1')
-    || DEFAULTS.presets[0];
+    || getDefaultPreset(DEFAULTS.presets);
 }
 
 function getLibraryHighlightColor(hl) {
@@ -3640,7 +3639,7 @@ function patchStoredHighlightPreset(pageUrl, highlightId, requestedPresetId) {
 
       const storedSettings = result.highlightSettings || DEFAULTS;
       const presets = normalizePresets(storedSettings.presets);
-      const fallbackPreset = presets.find(preset => preset.id === 'preset1') || presets[0];
+      const fallbackPreset = getDefaultPreset(presets);
       const targetPreset = presets.find(preset => preset.id === requestedPresetId) || fallbackPreset;
       const highlights = result[key];
       if (!Array.isArray(highlights) || !targetPreset) {
@@ -4640,7 +4639,7 @@ function loadTagHighlights(presetId, requestVersion) {
     const settings = all.highlightSettings || DEFAULTS;
     const presets = getTagPresetDefinitions(settings);
     activeLibraryPresets = presets;
-    const preset = presets.find(p => p.id === presetId) || presets[0];
+    const preset = presets.find(p => p.id === presetId) || getDefaultPreset(presets);
     const storageFixups = {};
     const tokens = normalizeQuery(libraryQuery);
 
