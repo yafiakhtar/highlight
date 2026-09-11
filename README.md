@@ -72,6 +72,7 @@ A full-page options view (`options.html`) with a collapsible sidebar and several
 - **Reset settings** — restore the built-in presets, appearance, FAB visibility, and default FAB layout without deleting saved highlights or Library records
 
 Backup files contain saved text and webpage URLs. Treat them as private data and store or share them carefully.
+During import, Highlight pauses pending writes from the Settings page, verifies the completed replacement, and restores the previous snapshot if replacement fails. Browser storage does not provide a transaction across extension tabs, so avoid creating or editing highlights in another tab until the import finishes.
 
 ### Guide
 
