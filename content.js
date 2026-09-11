@@ -728,6 +728,13 @@ async function updateHighlightPreset(highlightId, presetId) {
   return updated;
 }
 
+function toXPathLiteral(value) {
+  const text = String(value);
+  if (!text.includes('"')) return `"${text}"`;
+  if (!text.includes("'")) return `'${text}'`;
+  return `concat(${text.split('"').map(part => `"${part}"`).join(', \'"\', ')})`;
+}
+
 // Get XPath for an element
 function getXPath(element) {
   if (!element || element.nodeType !== Node.ELEMENT_NODE) {
@@ -735,7 +742,7 @@ function getXPath(element) {
   }
   
   if (element.id) {
-    return `//*[@id="${element.id}"]`;
+    return `//*[@id=${toXPathLiteral(element.id)}]`;
   }
   
   if (element === document.body) {
@@ -777,12 +784,45 @@ function getTextOffset(mark) {
   return offset;
 }
 
+function parsePageBackgroundColor(value) {
+  if (!value || value === 'transparent') return { r: 0, g: 0, b: 0, a: 0 };
+  const channels = String(value).match(/[\d.]+/g)?.map(Number);
+  if (!channels || channels.length < 3 || channels.slice(0, 3).some(channel => !Number.isFinite(channel))) {
+    return { r: 0, g: 0, b: 0, a: 0 };
+  }
+  return {
+    r: channels[0],
+    g: channels[1],
+    b: channels[2],
+    a: Number.isFinite(channels[3]) ? Math.min(1, Math.max(0, channels[3])) : 1
+  };
+}
+
+function compositePageBackground(foreground, background) {
+  const alpha = foreground.a;
+  return {
+    r: foreground.r * alpha + background.r * (1 - alpha),
+    g: foreground.g * alpha + background.g * (1 - alpha),
+    b: foreground.b * alpha + background.b * (1 - alpha),
+    a: 1
+  };
+}
+
+function getEffectivePageBackground() {
+  const canvas = { r: 255, g: 255, b: 255, a: 1 };
+  const transparent = { r: 0, g: 0, b: 0, a: 0 };
+  const root = document.documentElement
+    ? parsePageBackgroundColor(getComputedStyle(document.documentElement).backgroundColor)
+    : transparent;
+  const body = document.body
+    ? parsePageBackgroundColor(getComputedStyle(document.body).backgroundColor)
+    : transparent;
+  return compositePageBackground(body, compositePageBackground(root, canvas));
+}
+
 // Detect if page has dark or light background
 function getPageTheme() {
-  const bg = getComputedStyle(document.body).backgroundColor;
-  const rgb = bg.match(/\d+/g);
-  if (!rgb || rgb.length < 3) return 'light'; // fallback
-  const [r, g, b] = rgb.map(Number);
+  const { r, g, b } = getEffectivePageBackground();
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance < 0.25 ? 'dark' : 'light';
 }
@@ -1434,6 +1474,29 @@ function requestClearAllHighlights() {
   });
 }
 
+function getHighlightPartKey(part) {
+  return JSON.stringify([part.xpath || '', part.offset || 0, part.text || '']);
+}
+
+function getMissingHighlightParts(parts, existingMarks) {
+  const representedParts = new Set(existingMarks.map(mark => getHighlightPartKey({
+    xpath: getXPath(mark.parentNode),
+    offset: getTextOffset(mark),
+    text: mark.textContent || ''
+  })));
+  return parts.filter(part => {
+    const key = getHighlightPartKey(part);
+    if (representedParts.has(key)) return false;
+    representedParts.add(key);
+    return true;
+  });
+}
+
+function scheduleDelayedHighlightRestoration() {
+  // Bounded retries cover common delayed rendering without continuous page observation.
+  [500, 2000].forEach(delay => setTimeout(restoreHighlights, delay));
+}
+
 // Restore highlights from storage
 function restoreHighlights() {
   const key = getStorageKey();
@@ -1461,17 +1524,17 @@ function restoreHighlights() {
     const themeClass = theme === 'dark' ? 'hl-dark' : 'hl-light';
     highlights.forEach(highlight => {
       try {
-        if (document.querySelector(`.text-highlighter-mark[data-highlight-id="${highlight.id}"]`)) {
-          return;
-        }
         const parts = Array.isArray(highlight.parts) && highlight.parts.length > 0
           ? highlight.parts
           : [{ xpath: highlight.xpath, offset: highlight.offset, text: highlight.text }];
+        const existingMarks = Array.from(document.querySelectorAll('.text-highlighter-mark'))
+          .filter(mark => mark.dataset.highlightId === highlight.id);
+        const missingParts = getMissingHighlightParts(parts, existingMarks);
 
         const preset = getPresetById(highlight.presetId);
         const appliedColor = getPresetColor(preset.id, theme);
 
-        parts.forEach(part => {
+        missingParts.forEach(part => {
           if (!part || !part.xpath) return;
 
           // Find the element using XPath
@@ -2540,11 +2603,12 @@ function createHighlightFab() {
 }
 
 async function showHighlightFab(x, y) {
+  // Capture intent before awaiting so dismissal or a newer open invalidates this request.
+  const openVersion = ++fabInteractionVersion;
   await loadUserSettings();
-  if (!userSettings.showFab) return;
+  if (openVersion !== fabInteractionVersion || !userSettings.showFab) return;
   if (!highlightFab) createHighlightFab();
 
-  fabInteractionVersion++;
   clearFabPostState();
   hideHighlightFabStatus();
   if (fabHideTimeout !== null) {
@@ -2756,6 +2820,7 @@ async function init() {
   await loadUserSettings();
   await loadFabLayoutV1();
   restoreHighlights();
+  scheduleDelayedHighlightRestoration();
 }
 
 if (document.readyState === 'loading') {

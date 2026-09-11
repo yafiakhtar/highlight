@@ -244,6 +244,7 @@ function activateMainTab(tabName) {
     else resetSidebarForTab(tabName);
     return;
   }
+  if (currentTab === 'library') beginLibraryLoad();
   if (currentTab === 'settings') captureSettingsScrollPosition();
 
   document.querySelectorAll('.tab-btn').forEach(button => button.classList.remove('active'));
@@ -3473,23 +3474,36 @@ function normalizeStoredHighlights(raw) {
   return { highlights: merged, changed };
 }
 
+let libraryLoadVersion = 0;
+
+function beginLibraryLoad() {
+  // Every refresh invalidates callbacks that were started for an older Library state.
+  libraryLoadVersion += 1;
+  return libraryLoadVersion;
+}
+
+function isCurrentLibraryLoad(requestVersion) {
+  return requestVersion === libraryLoadVersion;
+}
+
 function refreshLibrary() {
+  const requestVersion = beginLibraryLoad();
   closeLibraryTagPopover({ immediate: true });
   closeLibraryFolderPopover({ immediate: true });
   closeLibraryCommentPopover({ immediate: true });
   syncLibraryViewHeader();
   if (currentLibraryView === 'recently-deleted') {
-    loadRecentlyDeleted();
+    loadRecentlyDeleted(requestVersion);
   } else if (currentLibraryView === 'folders') {
-    loadFoldersView();
+    loadFoldersView(requestVersion);
   } else if (currentLibraryView === 'tags') {
-    loadTagsView();
+    loadTagsView(requestVersion);
   } else if (currentLibraryView === 'comments') {
-    loadCommentHighlights();
+    loadCommentHighlights(requestVersion);
   } else if (currentLibraryView === 'favorites') {
-    loadFavoriteHighlights();
+    loadFavoriteHighlights(requestVersion);
   } else {
-    loadAllHighlights();
+    loadAllHighlights(requestVersion);
   }
 }
 
@@ -4488,11 +4502,11 @@ commentDeleteDialog?.addEventListener('close', () => {
   if (shouldRestore && trigger?.isConnected) trigger.focus({ preventScroll: true });
 });
 
-function loadTagsView() {
+function loadTagsView(requestVersion) {
   if (currentTagPresetId) {
-    loadTagHighlights(currentTagPresetId);
+    loadTagHighlights(currentTagPresetId, requestVersion);
   } else {
-    loadTagFolders();
+    loadTagFolders(requestVersion);
   }
 }
 
@@ -4505,8 +4519,9 @@ function getTagPresetDefinitions(storageHighlightSettings) {
   return normalizePresets(s.presets);
 }
 
-function loadTagFolders() {
+function loadTagFolders(requestVersion) {
   chrome.storage.local.get(null, (all) => {
+    if (!isCurrentLibraryLoad(requestVersion)) return;
     const settings = all.highlightSettings || DEFAULTS;
     const presets = getTagPresetDefinitions(settings);
     activeLibraryPresets = presets;
@@ -4582,7 +4597,7 @@ function renderTagFolders(presets, counts) {
     btn.className = 'tag-folder';
     btn.addEventListener('click', () => {
       currentTagPresetId = p.id;
-      loadTagsView();
+      refreshLibrary();
     });
 
     const dot = document.createElement('span');
@@ -4607,8 +4622,9 @@ function renderTagFolders(presets, counts) {
   highlightsContainer.appendChild(wrap);
 }
 
-function loadTagHighlights(presetId) {
+function loadTagHighlights(presetId, requestVersion) {
   chrome.storage.local.get(null, (all) => {
+    if (!isCurrentLibraryLoad(requestVersion)) return;
     const settings = all.highlightSettings || DEFAULTS;
     const presets = getTagPresetDefinitions(settings);
     activeLibraryPresets = presets;
@@ -4718,7 +4734,7 @@ function createTagsToolbar(preset) {
   backBtn.setAttribute('aria-label', 'Back to all tags');
   backBtn.addEventListener('click', () => {
     currentTagPresetId = null;
-    loadTagsView();
+    refreshLibrary();
   });
 
   const title = document.createElement('div');
@@ -4827,8 +4843,9 @@ function countHighlightsByFolder(all, folders) {
   return counts;
 }
 
-function loadFoldersView() {
+function loadFoldersView(requestVersion) {
   chrome.storage.local.get(null, all => {
+    if (!isCurrentLibraryLoad(requestVersion)) return;
     setActiveLibraryPresets(all.highlightSettings);
     activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
     if (activeLibraryFolders.length === 0) folderDeleteMode = false;
@@ -5184,8 +5201,9 @@ folderDeleteDialog?.addEventListener('cancel', () => {
 });
 
 // Load all highlights from storage and render them
-function loadAllHighlights() {
+function loadAllHighlights(requestVersion) {
   chrome.storage.local.get(null, (all) => {
+    if (!isCurrentLibraryLoad(requestVersion)) return;
     setActiveLibraryPresets(all.highlightSettings);
     activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
     renderLibraryFolderChildren(activeLibraryFolders);
@@ -5265,8 +5283,9 @@ function loadAllHighlights() {
   });
 }
 
-function loadFavoriteHighlights() {
+function loadFavoriteHighlights(requestVersion) {
   chrome.storage.local.get(null, (all) => {
+    if (!isCurrentLibraryLoad(requestVersion)) return;
     setActiveLibraryPresets(all.highlightSettings);
     activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
     renderLibraryFolderChildren(activeLibraryFolders);
@@ -5329,8 +5348,9 @@ function loadFavoriteHighlights() {
   });
 }
 
-function loadCommentHighlights() {
+function loadCommentHighlights(requestVersion) {
   chrome.storage.local.get(null, all => {
+    if (!isCurrentLibraryLoad(requestVersion)) return;
     setActiveLibraryPresets(all.highlightSettings);
     activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
     renderLibraryFolderChildren(activeLibraryFolders);
@@ -5394,8 +5414,9 @@ function renderEmptyFavorites() {
   `;
 }
 
-function loadRecentlyDeleted() {
+function loadRecentlyDeleted(requestVersion) {
   chrome.storage.local.get([RECENTLY_DELETED_KEY, 'highlightSettings'], (result) => {
+    if (!isCurrentLibraryLoad(requestVersion)) return;
     setActiveLibraryPresets(result.highlightSettings);
     const rawTrash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
     let trashChanged = false;
