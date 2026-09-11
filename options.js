@@ -661,8 +661,7 @@ function getFabButtonDefs() {
   const presetDefs = presets.map((preset, presetIndex) => ({
     id: preset.id,
     label: preset.name || `Tag ${presetIndex + 1}`,
-    type: 'preset',
-    presetIndex
+    type: 'preset'
   }));
   return [...presetDefs, ...FAB_ACTION_DEFS];
 }
@@ -837,7 +836,7 @@ function createFabPopoverOption({ label, icon, iconName, color, danger = false, 
   return option;
 }
 
-function createFabPickerGroup(title, defs, badgeText = '') {
+function createFabPickerGroup(title, defs) {
   const group = document.createElement('div');
   group.className = 'fab-popover-group';
 
@@ -846,12 +845,6 @@ function createFabPickerGroup(title, defs, badgeText = '') {
   const headingText = document.createElement('span');
   headingText.textContent = title;
   heading.appendChild(headingText);
-
-  if (badgeText) {
-    const badge = document.createElement('span');
-    badge.textContent = badgeText;
-    heading.appendChild(badge);
-  }
 
   group.appendChild(heading);
   defs.forEach(def => {
@@ -994,7 +987,7 @@ function endFabDrag() {
   setFabDragMode(null);
 }
 
-function createFabToolboxGroup(title, defs, badgeText = '') {
+function createFabToolboxGroup(title, defs) {
   const group = document.createElement('section');
   group.className = 'fab-toolbox-group';
 
@@ -1005,13 +998,6 @@ function createFabToolboxGroup(title, defs, badgeText = '') {
   heading.className = 'fab-toolbox-group-title';
   heading.textContent = title;
   header.appendChild(heading);
-
-  if (badgeText) {
-    const badge = document.createElement('span');
-    badge.className = 'fab-toolbox-badge';
-    badge.textContent = badgeText;
-    header.appendChild(badge);
-  }
 
   const list = document.createElement('div');
   list.className = 'fab-toolbox-list';
@@ -4662,8 +4648,6 @@ function loadTagHighlights(presetId, requestVersion) {
 
     const index = all.highlightIndex || {};
     const pages = [];
-    let totalCount = 0;
-
     for (const storageKey of Object.keys(all)) {
       if (!storageKey.startsWith('highlights_')) continue;
 
@@ -5272,7 +5256,6 @@ function loadAllHighlights(requestVersion) {
         indexNeedsUpdate[url] = { title: url, lastUpdated };
       }
 
-      totalCount += highlights.length;
       pages.push({
         url,
         title,
@@ -5324,7 +5307,6 @@ function loadFavoriteHighlights(requestVersion) {
     renderLibraryFolderChildren(activeLibraryFolders);
     const index = all.highlightIndex || {};
     const pages = [];
-    let totalCount = 0;
     const storageFixups = {};
 
     for (const storageKey of Object.keys(all)) {
@@ -5345,7 +5327,6 @@ function loadFavoriteHighlights(requestVersion) {
       if (favs.length === 0) continue;
 
       const meta = index[url] || {};
-      totalCount += favs.length;
       pages.push({
         url,
         title: meta.title || url,
@@ -6070,11 +6051,6 @@ function deletePageHighlights(url) {
       });
     });
   }));
-}
-
-function isLibraryTabActive() {
-  const panel = document.getElementById('tab-library');
-  return panel && panel.classList.contains('active');
 }
 
 // Live-update when highlights or trash change from another tab
