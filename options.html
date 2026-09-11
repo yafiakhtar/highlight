@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>HIGHLIGHT</title>
@@ -1500,8 +1500,8 @@
     .presets-editor .text-input:focus,
     .presets-editor .text-input:focus-visible {
       background: transparent;
-      box-shadow: none;
       outline: none;
+      box-shadow: inset 0 -2px var(--opt-accent);
     }
 
     .preset-color-control {
@@ -3539,7 +3539,7 @@
     .folder-name-input:focus,
     .folder-name-input:focus-visible {
       outline: none;
-      box-shadow: none;
+      box-shadow: inset 0 -2px var(--opt-accent);
     }
 
     .folder-view-back {
@@ -4163,6 +4163,7 @@
 
     #tab-library .folder-name-input:focus-visible {
       outline: none;
+      box-shadow: inset 0 -2px var(--opt-accent);
     }
 
     #tab-library .tag-folder:focus-visible {
@@ -4401,16 +4402,17 @@
 
     #tab-settings .presets-editor .text-input:focus-visible {
       outline: none;
+      box-shadow: inset 0 -2px var(--opt-accent);
     }
 
     .btn-danger {
       border: 1px solid color-mix(in srgb, var(--opt-danger) 75%, #000000);
-      background: var(--opt-danger);
+      background: #c93636;
       color: #ffffff;
     }
 
     .btn-danger:hover {
-      opacity: 0.9;
+      background: #b92f2f;
     }
 
     .reset-dialog {
@@ -4738,7 +4740,7 @@
       </div>
       <div class="navbar-center">
         <div class="navbar-tabs">
-          <button type="button" class="tab-btn active" data-tab="library">Library</button>
+          <button type="button" class="tab-btn active" data-tab="library" aria-current="page">Library</button>
           <button type="button" class="tab-btn" data-tab="settings">Settings</button>
           <button type="button" class="tab-btn" data-tab="guide">Guide</button>
           <button type="button" class="tab-btn" data-tab="about">About</button>
@@ -5024,7 +5026,7 @@
                     <span>Appears when text is selected</span>
                   </div>
                   <label class="toggle">
-                    <input type="checkbox" id="showFab" checked>
+                    <input type="checkbox" id="showFab" aria-label="Show highlight button" checked>
                     <span class="toggle-slider"></span>
                   </label>
                 </div>

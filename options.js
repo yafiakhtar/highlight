@@ -11,7 +11,12 @@ chrome.storage.local.get('popupTheme', (data) => {
 document.getElementById('optionsThemeToggle').addEventListener('click', () => {
   document.body.classList.toggle('dark');
   const isDark = document.body.classList.contains('dark');
-  chrome.storage.local.set({ popupTheme: isDark ? 'dark' : 'light' });
+  chrome.storage.local.set({ popupTheme: isDark ? 'dark' : 'light' }, () => {
+    if (!chrome.runtime.lastError) return;
+    document.body.classList.toggle('dark', !isDark);
+    showToast('Could not save theme');
+    rerenderFabBuilder();
+  });
   if (pendingSettings) {
     syncAppearanceFromPresets(pendingSettings.presets || DEFAULTS.presets);
   }
@@ -252,9 +257,13 @@ function activateMainTab(tabName) {
   if (currentTab === 'library') beginLibraryLoad();
   if (currentTab === 'settings') captureSettingsScrollPosition();
 
-  document.querySelectorAll('.tab-btn').forEach(button => button.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(button => {
+    button.classList.remove('active');
+    button.removeAttribute('aria-current');
+  });
   document.querySelectorAll('.tab-panel').forEach(tabPanel => tabPanel.classList.remove('active'));
   tabBtn.classList.add('active');
+  tabBtn.setAttribute('aria-current', 'page');
   panel.classList.add('active');
 
   if (tabName === 'settings') restoreSettingsScrollPosition();
@@ -405,7 +414,11 @@ function setFoldersExpanded(expanded, { persist = false } = {}) {
   toggle.setAttribute('aria-label', isExpanded ? 'Collapse folders' : 'Expand folders');
   toggle.title = isExpanded ? 'Collapse folders' : 'Expand folders';
   children.hidden = !isExpanded;
-  if (persist) chrome.storage.local.set({ [FOLDERS_EXPANDED_KEY]: foldersExpandedPreference });
+  if (persist) {
+    chrome.storage.local.set({ [FOLDERS_EXPANDED_KEY]: foldersExpandedPreference }, () => {
+      if (chrome.runtime.lastError) showToast('Could not save folder navigation');
+    });
+  }
 }
 
 function renderLibraryFolderChildren(folders = activeLibraryFolders) {
@@ -721,7 +734,10 @@ function getPresetColorsForId(presetId) {
 
 function persistFabLayout() {
   if (!fabLayoutState) return;
-  chrome.storage.local.set({ [FAB_LAYOUT_KEY]: fabLayoutState });
+  setAppearanceSaveStatus('saving');
+  chrome.storage.local.set({ [FAB_LAYOUT_KEY]: fabLayoutState }, () => {
+    setAppearanceSaveStatus(chrome.runtime.lastError ? 'error' : 'saved');
+  });
 }
 
 function prefersReducedFabMotion() {
@@ -1004,10 +1020,8 @@ function createFabToolboxGroup(title, defs, badgeText = '') {
     const item = document.createElement('div');
     item.className = 'fab-toolbox-item';
     item.draggable = true;
-    item.tabIndex = 0;
     item.dataset.fabButtonId = def.id;
-    item.setAttribute('role', 'button');
-    item.setAttribute('aria-label', `Drag ${def.label} into the FAB layout`);
+    item.setAttribute('aria-label', `Drag ${def.label} into the FAB layout with a pointer`);
 
     const swatch = document.createElement('span');
     swatch.className = 'fab-toolbox-swatch';
@@ -1131,11 +1145,8 @@ function renderFabGrid() {
       const btn = document.createElement('div');
       btn.className = 'fab-slot-btn';
       btn.draggable = true;
-      btn.tabIndex = 0;
       btn.dataset.fabButtonId = slotId;
       btn.title = def.label;
-      btn.setAttribute('role', 'button');
-      btn.setAttribute('aria-label', `${def.label}, position ${idx + 1}. Drag to reorder or remove.`);
 
       const visual = document.createElement('span');
       visual.className = 'fab-slot-visual';
@@ -1587,6 +1598,12 @@ function flushScopedSettingsPatch() {
   scopedSettingsWriteInFlight = true;
 
   chrome.storage.local.get('highlightSettings', (result) => {
+    if (chrome.runtime.lastError) {
+      scopedSettingsWriteInFlight = false;
+      setAppearanceSaveStatus('error');
+      pumpScopedSettingsWork();
+      return;
+    }
     const next = normalizeScopedSettingsWrite(result.highlightSettings, patch);
     const signature = getHighlightSettingsSignature(next);
     // A no-op produces no onChanged event, so never create a marker that cannot be consumed.
@@ -2183,7 +2200,6 @@ function removeTagPreset(presetId) {
   rerenderFabBuilder();
   refreshTagsLibraryIfLive();
   schedulePresetSettingsSave();
-  showToast(`${removedPreset.name || 'Tag'} deleted`);
 }
 
 if (deleteTagPresetBtn) {
@@ -2257,8 +2273,9 @@ function resetSettings() {
       highlightSettings: resetSettingsValue,
       [FAB_LAYOUT_KEY]: resetFabLayout
     }, () => {
-      showToast('Reset to defaults');
-      setAppearanceSaveStatus('saved');
+      const failed = !!chrome.runtime.lastError;
+      showToast(failed ? 'Could not reset settings' : 'Reset to defaults');
+      setAppearanceSaveStatus(failed ? 'error' : 'saved');
       done();
     });
   });
@@ -5174,7 +5191,12 @@ function deleteFolder(folderId, mode) {
           return;
         }
         const finish = () => resolve(folder);
-        if (emptyKeys.length > 0) chrome.storage.local.remove(emptyKeys, finish);
+        if (emptyKeys.length > 0) {
+          chrome.storage.local.remove(emptyKeys, () => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else finish();
+          });
+        }
         else finish();
       });
     });
@@ -5575,7 +5597,11 @@ function renderRecentlyDeleted(pages, totalTrashCount) {
       restoreBtn.innerHTML = libraryIconMarkup('restore');
       restoreBtn.title = 'Restore highlight';
       restoreBtn.setAttribute('aria-label', 'Restore highlight');
-      restoreBtn.addEventListener('click', () => queueLibraryHighlightMutation(() => restoreFromTrash(entry.trashId)));
+      restoreBtn.addEventListener('click', () => {
+        queueLibraryHighlightMutation(() => restoreFromTrash(entry.trashId)).then(restored => {
+          if (!restored) showToast('Could not restore highlight');
+        });
+      });
 
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
@@ -5710,6 +5736,10 @@ emptyTrashDialog?.addEventListener('close', () => {
 
 function restoreFromTrash(trashId) {
   return new Promise(resolve => chrome.storage.local.get([RECENTLY_DELETED_KEY, 'highlightIndex', FOLDERS_KEY], (result) => {
+    if (chrome.runtime.lastError) {
+      resolve(false);
+      return;
+    }
     const trash = Array.isArray(result[RECENTLY_DELETED_KEY]) ? result[RECENTLY_DELETED_KEY] : [];
     const entry = trash.find(t => t.trashId === trashId);
     if (!entry || !entry.highlight) {
@@ -5728,6 +5758,10 @@ function restoreFromTrash(trashId) {
 
     const key = 'highlights_' + entry.pageUrl;
     chrome.storage.local.get(key, (r2) => {
+      if (chrome.runtime.lastError) {
+        resolve(false);
+        return;
+      }
       let highlights = r2[key] || [];
       const newTrash = trash.filter(t => t.trashId !== trashId);
       if (highlights.some(h => h.id === restoredHighlight.id)) {
@@ -6111,7 +6145,9 @@ function loadSidebarCollapsedState() {
 }
 
 function saveSidebarCollapsedState(collapsed) {
-  chrome.storage.local.set({ [SIDEBAR_COLLAPSED_KEY]: collapsed });
+  chrome.storage.local.set({ [SIDEBAR_COLLAPSED_KEY]: collapsed }, () => {
+    if (chrome.runtime.lastError) showToast('Could not save sidebar preference');
+  });
 }
 
 function initSidebarCollapseToggle() {

@@ -13,7 +13,11 @@ chrome.storage.local.get('popupTheme', (data) => {
 document.getElementById('theme').addEventListener('click', () => {
   document.body.classList.toggle('dark');
   const isDark = document.body.classList.contains('dark');
-  chrome.storage.local.set({ popupTheme: isDark ? 'dark' : 'light' });
+  chrome.storage.local.set({ popupTheme: isDark ? 'dark' : 'light' }, () => {
+    if (!chrome.runtime.lastError) return;
+    document.body.classList.toggle('dark', !isDark);
+    showPopupStatus('Could not save theme.');
+  });
 });
 
 // Live sync when theme or highlight settings change
@@ -132,19 +136,26 @@ chrome.storage.local.get(['highlightSettings', 'lastUsedPresetId'], (data) => {
 
 fabToggleBtn.addEventListener('click', () => {
   chrome.storage.local.get('highlightSettings', (data) => {
+    if (chrome.runtime.lastError) {
+      showPopupStatus('Could not read FAB settings.');
+      return;
+    }
     const settings = data.highlightSettings || {};
     const newFabState = settings.showFab !== false ? false : true;
-    
     settings.showFab = newFabState;
-    chrome.storage.local.set({ highlightSettings: settings });
-    
-    if (newFabState) {
-      fabToggleBtn.classList.remove('fab-disabled');
-      fabToggleBtn.title = 'Disable FAB';
-    } else {
-      fabToggleBtn.classList.add('fab-disabled');
-      fabToggleBtn.title = 'Enable FAB';
-    }
+    fabToggleBtn.disabled = true;
+    fabToggleBtn.setAttribute('aria-busy', 'true');
+    chrome.storage.local.set({ highlightSettings: settings }, () => {
+      fabToggleBtn.disabled = false;
+      fabToggleBtn.removeAttribute('aria-busy');
+      if (chrome.runtime.lastError) {
+        showPopupStatus('Could not save FAB setting.');
+        return;
+      }
+      fabToggleBtn.classList.toggle('fab-disabled', !newFabState);
+      fabToggleBtn.title = newFabState ? 'Disable FAB' : 'Enable FAB';
+      showPopupStatus('');
+    });
   });
 });
 
@@ -158,7 +169,9 @@ function getButtons() {
 
 function saveOrder() {
   const order = getButtons().map(btn => btn.id);
-  chrome.storage.local.set({ popupButtonOrder: order });
+  chrome.storage.local.set({ popupButtonOrder: order }, () => {
+    if (chrome.runtime.lastError) showPopupStatus('Could not save toolbar order.');
+  });
 }
 
 function restoreOrder(order) {
@@ -175,7 +188,9 @@ function mergeNewButtons(order) {
   if (!hasAllButtons) {
     const missingButtons = defaultOrder.filter(id => !order.includes(id));
     order = [...order, ...missingButtons];
-    chrome.storage.local.set({ popupButtonOrder: order });
+    chrome.storage.local.set({ popupButtonOrder: order }, () => {
+      if (chrome.runtime.lastError) showPopupStatus('Could not update toolbar order.');
+    });
   }
   return order;
 }
