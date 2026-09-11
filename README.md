@@ -38,7 +38,7 @@ Four named presets — **General, Important, Reference, Question** — are inclu
 - **Custom tags** — add, rename, recolor, and delete tags from Settings
 - **Theme-aware colors** — assign separate light and dark colors or derive one from the other
 - **Automatic propagation** — names and colors update across Settings, the FAB, Library, open webpages, and pages loaded later
-- **Safe default** — `preset1` can be renamed or recolored but is always retained as the fallback tag
+- **Safe default** — `preset1` is identified by its stable ID regardless of palette order; it can be renamed or recolored but is always retained as the fallback tag
 
 ### Library
 
