@@ -13,8 +13,10 @@
 - **Multi-part highlights** — selections that span across DOM elements are handled gracefully, stored as a unified highlight with multiple parts
 - **Persistence safety** — a highlight is considered created only after it saves successfully; temporary webpage styling is removed if saving fails
 - **Trusted webpage controls** — FAB mutations and webpage deletion controls require genuine browser-generated mouse or keyboard activation
-- **Highlight restoration** — highlights are re-applied automatically when you revisit a page
+- **Highlight restoration** — highlights are re-applied when you revisit a page, with bounded retries for content that appears shortly after load
 - **Light & dark mode aware** — highlight colors adapt to the page's background theme
+
+Pages that insert matching text substantially later than the bounded restoration retries may require another visit before those highlights reappear.
 
 ### Floating Action Button (FAB)
 
