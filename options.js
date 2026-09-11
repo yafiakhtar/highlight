@@ -43,21 +43,26 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         syncAppearanceFromPresets(pendingSettings?.presets || s.presets);
         rerenderFabBuilder();
         if (isLibraryTabActive()) refreshLibrary();
-        return;
-      }
-      clearPresetColorHistory();
-      setPending(s);
-      syncLightColor(pendingSettings.colorLight ?? DEFAULTS.colorLight);
-      syncDarkColor(pendingSettings.colorDark ?? DEFAULTS.colorDark);
-      if (pendingSettings.showFab !== undefined) showFabToggle.checked = pendingSettings.showFab;
-      syncAppearanceFromPresets(pendingSettings.presets || DEFAULTS.presets);
-      syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
-      repairDefaultPresetMirrorsIfNeeded(s);
-      // Keep FAB builder colors in sync with preset edits
-      reconcileCurrentFabLayout(!hasFabLayoutChange);
-      rerenderFabBuilder();
-      if (isLibraryTabActive()) {
-        refreshLibrary();
+      } else {
+        // Color history is invalid only when the preset IDs or colors it targets changed.
+        const presetStateChanged = !presetColorSnapshotsMatch(
+          getPresetColorSnapshot(pendingSettings?.presets),
+          getPresetColorSnapshot(s.presets)
+        );
+        if (presetStateChanged) clearPresetColorHistory();
+        setPending(s);
+        syncLightColor(pendingSettings.colorLight ?? DEFAULTS.colorLight);
+        syncDarkColor(pendingSettings.colorDark ?? DEFAULTS.colorDark);
+        if (pendingSettings.showFab !== undefined) showFabToggle.checked = pendingSettings.showFab;
+        syncAppearanceFromPresets(pendingSettings.presets || DEFAULTS.presets);
+        syncPresetsEditor(pendingSettings.presets || DEFAULTS.presets);
+        repairDefaultPresetMirrorsIfNeeded(s);
+        // Keep FAB builder colors in sync with preset edits
+        reconcileCurrentFabLayout(!hasFabLayoutChange);
+        rerenderFabBuilder();
+        if (isLibraryTabActive()) {
+          refreshLibrary();
+        }
       }
     }
   }
@@ -1585,6 +1590,13 @@ function flushScopedSettingsPatch() {
   chrome.storage.local.get('highlightSettings', (result) => {
     const next = normalizeScopedSettingsWrite(result.highlightSettings, patch);
     const signature = getHighlightSettingsSignature(next);
+    // A no-op produces no onChanged event, so never create a marker that cannot be consumed.
+    if (signature === getHighlightSettingsSignature(result.highlightSettings)) {
+      scopedSettingsWriteInFlight = false;
+      setAppearanceSaveStatus('saved');
+      pumpScopedSettingsWork();
+      return;
+    }
     selfPersistedSettingsSignatures.add(signature);
     chrome.storage.local.set({ highlightSettings: next }, () => {
       scopedSettingsWriteInFlight = false;
