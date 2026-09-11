@@ -3556,6 +3556,24 @@ function normalizeStoredHighlights(raw) {
   return { highlights: merged, changed };
 }
 
+function getNormalizedLibraryPage(all, storageKey, storageFixups) {
+  if (!storageKey.startsWith('highlights_')) return null;
+  const raw = all[storageKey];
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const normalized = normalizeStoredHighlights(raw);
+  if (normalized.highlights.length === 0) return null;
+  if (normalized.changed && storageFixups) storageFixups[storageKey] = normalized.highlights;
+  const url = storageKey.substring('highlights_'.length);
+  const meta = (all.highlightIndex && all.highlightIndex[url]) || {};
+  return {
+    storageKey,
+    url,
+    title: meta.title || url,
+    lastUpdated: meta.lastUpdated || Date.now(),
+    highlights: normalized.highlights
+  };
+}
+
 let libraryLoadVersion = 0;
 
 function beginLibraryLoad() {
@@ -3636,6 +3654,49 @@ function prefersReducedLibraryMotion() {
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+function finishLibraryPopoverClose(popover, anchor, layer, {
+  immediate = false,
+  restoreFocus = false,
+  setCleanupTimer
+} = {}) {
+  if (anchor) anchor.setAttribute('aria-expanded', 'false');
+  if (restoreFocus && anchor?.isConnected) anchor.focus({ preventScroll: true });
+  if (!popover) {
+    if (immediate && layer) layer.innerHTML = '';
+    return;
+  }
+  const remove = () => popover.remove();
+  if (immediate || prefersReducedLibraryMotion()) {
+    remove();
+    return;
+  }
+  popover.classList.remove('is-open');
+  popover.classList.add('is-closing');
+  popover.setAttribute('aria-hidden', 'true');
+  popover.addEventListener('transitionend', remove, { once: true });
+  setCleanupTimer(setTimeout(remove, 220));
+}
+
+function installLibraryPopoverDismissal(getPopover, getAnchor, closePopover) {
+  const dismissOutside = event => {
+    const popover = getPopover();
+    if (!popover || popover.contains(event.target) || getAnchor()?.contains(event.target)) return;
+    closePopover();
+  };
+  document.addEventListener('pointerdown', dismissOutside);
+  document.addEventListener('focusin', dismissOutside);
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !getPopover()) return;
+    event.preventDefault();
+    closePopover({ restoreFocus: true });
+  });
+  window.addEventListener('resize', () => closePopover());
+  window.addEventListener('scroll', event => {
+    const popover = getPopover();
+    if (popover && !popover.contains(event.target)) closePopover();
+  }, true);
+}
+
 function closeLibraryTagPopover({ immediate = false, restoreFocus = false } = {}) {
   if (libraryTagPopoverCleanupTimer) {
     clearTimeout(libraryTagPopoverCleanupTimer);
@@ -3647,30 +3708,11 @@ function closeLibraryTagPopover({ immediate = false, restoreFocus = false } = {}
   currentLibraryTagPopover = null;
   currentLibraryTagPopoverAnchor = null;
 
-  if (anchor) anchor.setAttribute('aria-expanded', 'false');
-  if (restoreFocus && anchor?.isConnected) {
-    anchor.focus({ preventScroll: true });
-  }
-
-  if (!popover) {
-    if (immediate && libraryTagPopoverLayerEl) libraryTagPopoverLayerEl.innerHTML = '';
-    return;
-  }
-
-  const removePopover = () => {
-    if (popover.parentNode) popover.parentNode.removeChild(popover);
-  };
-
-  if (immediate || prefersReducedLibraryMotion()) {
-    removePopover();
-    return;
-  }
-
-  popover.classList.remove('is-open');
-  popover.classList.add('is-closing');
-  popover.setAttribute('aria-hidden', 'true');
-  popover.addEventListener('transitionend', removePopover, { once: true });
-  libraryTagPopoverCleanupTimer = setTimeout(removePopover, 220);
+  finishLibraryPopoverClose(popover, anchor, libraryTagPopoverLayerEl, {
+    immediate,
+    restoreFocus,
+    setCleanupTimer: timer => { libraryTagPopoverCleanupTimer = timer; }
+  });
 }
 
 function positionLibraryTagPopover(popover, anchor) {
@@ -3935,29 +3977,11 @@ function initLibraryTagPopoverInteractions() {
   if (libraryTagPopoverListenersInitialized) return;
   libraryTagPopoverListenersInitialized = true;
 
-  document.addEventListener('pointerdown', event => {
-    if (!currentLibraryTagPopover) return;
-    if (currentLibraryTagPopover.contains(event.target)) return;
-    if (currentLibraryTagPopoverAnchor?.contains(event.target)) return;
-    closeLibraryTagPopover();
-  });
-  document.addEventListener('focusin', event => {
-    if (!currentLibraryTagPopover) return;
-    if (currentLibraryTagPopover.contains(event.target)) return;
-    if (currentLibraryTagPopoverAnchor?.contains(event.target)) return;
-    closeLibraryTagPopover();
-  });
-  document.addEventListener('keydown', event => {
-    if (event.key !== 'Escape' || !currentLibraryTagPopover) return;
-    event.preventDefault();
-    closeLibraryTagPopover({ restoreFocus: true });
-  });
-  window.addEventListener('resize', () => closeLibraryTagPopover());
-  window.addEventListener('scroll', event => {
-    if (currentLibraryTagPopover && !currentLibraryTagPopover.contains(event.target)) {
-      closeLibraryTagPopover();
-    }
-  }, true);
+  installLibraryPopoverDismissal(
+    () => currentLibraryTagPopover,
+    () => currentLibraryTagPopoverAnchor,
+    closeLibraryTagPopover
+  );
 }
 
 function closeLibraryFolderPopover({ immediate = false, restoreFocus = false } = {}) {
@@ -3970,22 +3994,11 @@ function closeLibraryFolderPopover({ immediate = false, restoreFocus = false } =
   const anchor = currentLibraryFolderPopoverAnchor;
   currentLibraryFolderPopover = null;
   currentLibraryFolderPopoverAnchor = null;
-  if (anchor) anchor.setAttribute('aria-expanded', 'false');
-  if (restoreFocus && anchor?.isConnected) anchor.focus({ preventScroll: true });
-  if (!popover) {
-    if (immediate && libraryFolderPopoverLayerEl) libraryFolderPopoverLayerEl.innerHTML = '';
-    return;
-  }
-  const remove = () => popover.remove();
-  if (immediate || prefersReducedLibraryMotion()) {
-    remove();
-    return;
-  }
-  popover.classList.remove('is-open');
-  popover.classList.add('is-closing');
-  popover.setAttribute('aria-hidden', 'true');
-  popover.addEventListener('transitionend', remove, { once: true });
-  libraryFolderPopoverCleanupTimer = setTimeout(remove, 220);
+  finishLibraryPopoverClose(popover, anchor, libraryFolderPopoverLayerEl, {
+    immediate,
+    restoreFocus,
+    setCleanupTimer: timer => { libraryFolderPopoverCleanupTimer = timer; }
+  });
 }
 
 function patchLibraryHighlightFolder(pageUrl, highlightId, requestedFolderId, createName = '') {
@@ -4250,27 +4263,11 @@ function createLibraryFolderSelector(pageUrl, highlight) {
 function initLibraryFolderPopoverInteractions() {
   if (libraryFolderPopoverListenersInitialized) return;
   libraryFolderPopoverListenersInitialized = true;
-  document.addEventListener('pointerdown', event => {
-    if (!currentLibraryFolderPopover) return;
-    if (currentLibraryFolderPopover.contains(event.target)) return;
-    if (currentLibraryFolderPopoverAnchor?.contains(event.target)) return;
-    closeLibraryFolderPopover();
-  });
-  document.addEventListener('focusin', event => {
-    if (!currentLibraryFolderPopover) return;
-    if (currentLibraryFolderPopover.contains(event.target)) return;
-    if (currentLibraryFolderPopoverAnchor?.contains(event.target)) return;
-    closeLibraryFolderPopover();
-  });
-  document.addEventListener('keydown', event => {
-    if (event.key !== 'Escape' || !currentLibraryFolderPopover) return;
-    event.preventDefault();
-    closeLibraryFolderPopover({ restoreFocus: true });
-  });
-  window.addEventListener('resize', () => closeLibraryFolderPopover());
-  window.addEventListener('scroll', event => {
-    if (currentLibraryFolderPopover && !currentLibraryFolderPopover.contains(event.target)) closeLibraryFolderPopover();
-  }, true);
+  installLibraryPopoverDismissal(
+    () => currentLibraryFolderPopover,
+    () => currentLibraryFolderPopoverAnchor,
+    closeLibraryFolderPopover
+  );
 }
 
 function closeLibraryCommentPopover({ immediate = false, restoreFocus = false } = {}) {
@@ -4282,22 +4279,11 @@ function closeLibraryCommentPopover({ immediate = false, restoreFocus = false } 
   const anchor = currentLibraryCommentPopoverAnchor;
   currentLibraryCommentPopover = null;
   currentLibraryCommentPopoverAnchor = null;
-  if (anchor) anchor.setAttribute('aria-expanded', 'false');
-  if (restoreFocus && anchor?.isConnected) anchor.focus({ preventScroll: true });
-  if (!popover) {
-    if (immediate && libraryCommentPopoverLayerEl) libraryCommentPopoverLayerEl.innerHTML = '';
-    return;
-  }
-  const remove = () => popover.remove();
-  if (immediate || prefersReducedLibraryMotion()) {
-    remove();
-    return;
-  }
-  popover.classList.remove('is-open');
-  popover.classList.add('is-closing');
-  popover.setAttribute('aria-hidden', 'true');
-  popover.addEventListener('transitionend', remove, { once: true });
-  libraryCommentPopoverCleanupTimer = setTimeout(remove, 220);
+  finishLibraryPopoverClose(popover, anchor, libraryCommentPopoverLayerEl, {
+    immediate,
+    restoreFocus,
+    setCleanupTimer: timer => { libraryCommentPopoverCleanupTimer = timer; }
+  });
 }
 
 function patchLibraryHighlightComment(pageUrl, highlightId, requestedComment) {
@@ -4545,27 +4531,11 @@ function createLibraryCommentSelector(pageUrl, highlight) {
 function initLibraryCommentPopoverInteractions() {
   if (libraryCommentPopoverListenersInitialized) return;
   libraryCommentPopoverListenersInitialized = true;
-  document.addEventListener('pointerdown', event => {
-    if (!currentLibraryCommentPopover) return;
-    if (currentLibraryCommentPopover.contains(event.target)) return;
-    if (currentLibraryCommentPopoverAnchor?.contains(event.target)) return;
-    closeLibraryCommentPopover();
-  });
-  document.addEventListener('focusin', event => {
-    if (!currentLibraryCommentPopover) return;
-    if (currentLibraryCommentPopover.contains(event.target)) return;
-    if (currentLibraryCommentPopoverAnchor?.contains(event.target)) return;
-    closeLibraryCommentPopover();
-  });
-  document.addEventListener('keydown', event => {
-    if (event.key !== 'Escape' || !currentLibraryCommentPopover) return;
-    event.preventDefault();
-    closeLibraryCommentPopover({ restoreFocus: true });
-  });
-  window.addEventListener('resize', () => closeLibraryCommentPopover());
-  window.addEventListener('scroll', event => {
-    if (currentLibraryCommentPopover && !currentLibraryCommentPopover.contains(event.target)) closeLibraryCommentPopover();
-  }, true);
+  installLibraryPopoverDismissal(
+    () => currentLibraryCommentPopover,
+    () => currentLibraryCommentPopoverAnchor,
+    closeLibraryCommentPopover
+  );
 }
 
 cancelCommentDeleteBtn?.addEventListener('click', () => commentDeleteDialog?.close('cancel'));
@@ -4613,28 +4583,21 @@ function loadTagFolders(requestVersion) {
     const counts = {};
     let total = 0;
     const tagHasMatch = {};
+    const tagNameMatches = new Set(
+      tokens.length > 0
+        ? presets.filter(preset => matchesTokens(preset.name || '', tokens)).map(preset => preset.id)
+        : []
+    );
 
     for (const storageKey of Object.keys(all)) {
-      if (!storageKey.startsWith('highlights_')) continue;
-      const raw = all[storageKey];
-      if (!Array.isArray(raw) || raw.length === 0) continue;
+      const page = getNormalizedLibraryPage(all, storageKey, storageFixups);
+      if (!page) continue;
+      const pageMatch = tokens.length > 0 ? pageMatchesQuery(page.title, page.url, tokens) : false;
 
-      const normalized = normalizeStoredHighlights(raw);
-      const highlights = normalized.highlights;
-      if (!Array.isArray(highlights) || highlights.length === 0) continue;
-      if (normalized.changed) {
-        storageFixups[storageKey] = highlights;
-      }
-
-      const url = storageKey.substring('highlights_'.length);
-      const meta = (all.highlightIndex && all.highlightIndex[url]) || {};
-      const pageTitle = meta.title || url;
-      const pageMatch = tokens.length > 0 ? pageMatchesQuery(pageTitle, url, tokens) : false;
-
-      for (const hl of highlights) {
+      for (const hl of page.highlights) {
         const pid = getHighlightPresetId(hl);
         const hlMatch = tokens.length > 0 ? highlightMatchesQuery(hl.text, tokens) : true;
-        const isMatch = tokens.length === 0 ? true : (pageMatch || hlMatch);
+        const isMatch = tokens.length === 0 ? true : (tagNameMatches.has(pid) || pageMatch || hlMatch);
         if (!isMatch) continue;
 
         counts[pid] = (counts[pid] || 0) + 1;
@@ -4648,7 +4611,11 @@ function loadTagFolders(requestVersion) {
     }
 
     highlightCount.textContent = total > 0 ? `${total} saved` : '';
-    if (tokens.length > 0 && total === 0) {
+    const filteredPresets = tokens.length === 0
+      ? presets
+      : presets.filter(p => tagNameMatches.has(p.id) || tagHasMatch[p.id]);
+
+    if (tokens.length > 0 && filteredPresets.length === 0) {
       highlightCount.textContent = '';
       highlightsContainer.innerHTML = `
         <div class="empty-state">
@@ -4658,10 +4625,6 @@ function loadTagFolders(requestVersion) {
       `;
       return;
     }
-
-    const filteredPresets = tokens.length === 0
-      ? presets
-      : presets.filter(p => matchesTokens(p.name || '', tokens) || tagHasMatch[p.id]);
 
     renderTagFolders(filteredPresets, counts);
   });
@@ -4714,28 +4677,16 @@ function loadTagHighlights(presetId, requestVersion) {
     const storageFixups = {};
     const tokens = normalizeQuery(libraryQuery);
 
-    const index = all.highlightIndex || {};
     const pages = [];
+    let totalCount = 0;
     for (const storageKey of Object.keys(all)) {
-      if (!storageKey.startsWith('highlights_')) continue;
+      const page = getNormalizedLibraryPage(all, storageKey, storageFixups);
+      if (!page) continue;
 
-      const url = storageKey.substring('highlights_'.length);
-      const raw = all[storageKey];
-      if (!Array.isArray(raw) || raw.length === 0) continue;
-
-      const normalized = normalizeStoredHighlights(raw);
-      const highlights = normalized.highlights;
-      if (!Array.isArray(highlights) || highlights.length === 0) continue;
-      if (normalized.changed) {
-        storageFixups[storageKey] = highlights;
-      }
-
-      const inTag = highlights.filter(h => getHighlightPresetId(h) === presetId);
+      const inTag = page.highlights.filter(h => getHighlightPresetId(h) === presetId);
       if (inTag.length === 0) continue;
 
-      const meta = index[url] || {};
-      const pageTitle = meta.title || url;
-      const pageMatch = tokens.length > 0 ? pageMatchesQuery(pageTitle, url, tokens) : false;
+      const pageMatch = tokens.length > 0 ? pageMatchesQuery(page.title, page.url, tokens) : false;
       const filtered = tokens.length === 0
         ? inTag
         : (pageMatch ? inTag : inTag.filter(h => highlightMatchesQuery(h.text, tokens)));
@@ -4743,9 +4694,9 @@ function loadTagHighlights(presetId, requestVersion) {
 
       totalCount += filtered.length;
       pages.push({
-        url,
-        title: pageTitle,
-        lastUpdated: meta.lastUpdated || Date.now(),
+        url: page.url,
+        title: page.title,
+        lastUpdated: page.lastUpdated,
         highlights: filtered.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
       });
     }
@@ -4927,6 +4878,12 @@ function loadFoldersView(requestVersion) {
   chrome.storage.local.get(null, all => {
     if (!isCurrentLibraryLoad(requestVersion)) return;
     setActiveLibraryPresets(all.highlightSettings);
+    const storageFixups = {};
+    Object.keys(all).forEach(storageKey => {
+      const page = getNormalizedLibraryPage(all, storageKey, storageFixups);
+      if (page) all[storageKey] = page.highlights;
+    });
+    if (Object.keys(storageFixups).length > 0) chrome.storage.local.set(storageFixups);
     activeLibraryFolders = normalizeFolders(all[FOLDERS_KEY]);
     if (activeLibraryFolders.length === 0) folderDeleteMode = false;
     renderLibraryFolderChildren(activeLibraryFolders);
