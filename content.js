@@ -788,6 +788,18 @@ function getPageTheme() {
 }
 
 // Highlight the current selection and resolve with its persisted identity.
+function rollbackCreatedHighlightMarks(createdMarks) {
+  const parents = new Set();
+  createdMarks.forEach(mark => {
+    const parent = mark?.parentNode;
+    if (!parent) return;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    parent.removeChild(mark);
+    parents.add(parent);
+  });
+  parents.forEach(parent => parent.normalize());
+}
+
 async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {}) {
   await loadUserSettings();
   const selection = window.getSelection();
@@ -818,6 +830,7 @@ async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {
   const appliedColor = theme === 'dark'
     ? (preset.colorDark || userSettings.colorDark)
     : (preset.colorLight || userSettings.colorLight);
+  const createdMarks = [];
   
   try {
     const mark = document.createElement('mark');
@@ -830,6 +843,7 @@ async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {
     
     // Use surroundContents for simple selections
     range.surroundContents(mark);
+    createdMarks.push(mark);
     
     // A click reopens this saved highlight in the FAB.
     mark.addEventListener('click', handleHighlightClick);
@@ -838,8 +852,14 @@ async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {
     const saved = await queueHighlightMutation(() => saveHighlights({
       favoriteOverrides: favorited ? new Map([[highlightId, true]]) : new Map()
     }));
+    // A visible highlight must not outlive a failed persistence attempt.
+    if (!saved) rollbackCreatedHighlightMarks(createdMarks);
     return saved ? { highlightId, presetId, favorited } : null;
   } catch (e) {
+    if (createdMarks.length > 0) {
+      rollbackCreatedHighlightMarks(createdMarks);
+      return null;
+    }
     // surroundContents fails if selection crosses element boundaries
     // Wrap each text node individually to preserve DOM structure
     try {
@@ -868,6 +888,7 @@ async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {
         
         try {
           nodeRange.surroundContents(mark);
+          createdMarks.push(mark);
           mark.addEventListener('click', handleHighlightClick);
           createdPartCount++;
         } catch (err) {
@@ -880,8 +901,10 @@ async function highlightSelection(presetIdOrIndex = 0, { favorited = false } = {
       const saved = await queueHighlightMutation(() => saveHighlights({
         favoriteOverrides: favorited ? new Map([[highlightId, true]]) : new Map()
       }));
+      if (!saved) rollbackCreatedHighlightMarks(createdMarks);
       return saved ? { highlightId, presetId, favorited } : null;
     } catch (e2) {
+      rollbackCreatedHighlightMarks(createdMarks);
       console.error('Could not highlight selection:', e2);
       return null;
     }
