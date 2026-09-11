@@ -2254,6 +2254,17 @@ function resetSettings() {
 const BACKUP_FORMAT = 'highlight-backup';
 const BACKUP_SCHEMA_VERSION = 1;
 const MAX_BACKUP_FILE_BYTES = 25 * 1024 * 1024;
+const BACKUP_REQUIRED_DATA_KEYS = [
+  'settings',
+  'fabLayout',
+  'folders',
+  'recentlyDeleted',
+  'highlightIndex',
+  'highlightsByUrl',
+  'preferences'
+];
+const BACKUP_PAGE_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'ftp:']);
+const BACKUP_SAFE_ID_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
 const BACKUP_PREFERENCE_KEYS = [
   'popupTheme',
   'popupButtonOrder',
@@ -2377,6 +2388,210 @@ function normalizeBackupFabLayout(raw, presets) {
   return { rows: base.rows, cols: base.cols, slots };
 }
 
+function requireBackupId(value, label) {
+  if (typeof value !== 'string' || !BACKUP_SAFE_ID_PATTERN.test(value)) {
+    throw new Error(`This backup contains a malformed ${label}.`);
+  }
+}
+
+function requireBackupPageUrl(value) {
+  if (typeof value !== 'string' || !value || value.length > 8192) {
+    throw new Error('This backup contains an unsupported page URL.');
+  }
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('This backup contains an unsupported page URL.');
+  }
+  if (!BACKUP_PAGE_PROTOCOLS.has(parsed.protocol) || (parsed.protocol !== 'file:' && !parsed.hostname)) {
+    throw new Error('This backup contains an unsupported page URL.');
+  }
+}
+
+function validateBackupHighlightPart(part) {
+  if (
+    !isPlainObject(part)
+    || typeof part.xpath !== 'string'
+    || !part.xpath
+    || !Number.isInteger(part.offset)
+    || part.offset < 0
+    || typeof part.text !== 'string'
+    || !part.text
+  ) {
+    throw new Error('This backup contains malformed multipart highlight data.');
+  }
+}
+
+function validateBackupHighlight(highlight) {
+  if (!isPlainObject(highlight)) throw new Error('This backup contains a malformed highlight record.');
+  requireBackupId(highlight.id, 'highlight ID');
+  if (Object.prototype.hasOwnProperty.call(highlight, 'presetId')) requireBackupId(highlight.presetId, 'tag ID');
+  if (Object.prototype.hasOwnProperty.call(highlight, 'folderId')) requireBackupId(highlight.folderId, 'folder ID');
+  if (Object.prototype.hasOwnProperty.call(highlight, 'favorited') && typeof highlight.favorited !== 'boolean') {
+    throw new Error('This backup contains a malformed highlight record.');
+  }
+  if (Object.prototype.hasOwnProperty.call(highlight, 'comment') && typeof highlight.comment !== 'string') {
+    throw new Error('This backup contains a malformed highlight record.');
+  }
+  if (typeof highlight.comment === 'string' && highlight.comment.length > 500) {
+    throw new Error('This backup contains a malformed highlight record.');
+  }
+  if (Object.prototype.hasOwnProperty.call(highlight, 'createdAt') && !Number.isFinite(highlight.createdAt)) {
+    throw new Error('This backup contains a malformed highlight record.');
+  }
+  if (Object.prototype.hasOwnProperty.call(highlight, 'text') && typeof highlight.text !== 'string') {
+    throw new Error('This backup contains a malformed highlight record.');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(highlight, 'parts')) {
+    if (!Array.isArray(highlight.parts) || highlight.parts.length === 0) {
+      throw new Error('This backup contains malformed multipart highlight data.');
+    }
+    highlight.parts.forEach(validateBackupHighlightPart);
+    return;
+  }
+
+  if (
+    typeof highlight.xpath !== 'string'
+    || !highlight.xpath
+    || !Number.isInteger(highlight.offset)
+    || highlight.offset < 0
+    || typeof highlight.text !== 'string'
+    || !highlight.text
+  ) {
+    throw new Error('This backup contains a malformed highlight record.');
+  }
+}
+
+function validateBackupSettings(settings) {
+  if (!isPlainObject(settings) || !Array.isArray(settings.presets) || settings.presets.length === 0) {
+    throw new Error('This backup contains malformed settings data.');
+  }
+  const presetIds = new Set();
+  settings.presets.forEach(preset => {
+    if (!isPlainObject(preset)) throw new Error('This backup contains malformed tag data.');
+    requireBackupId(preset.id, 'tag ID');
+    if (presetIds.has(preset.id)) throw new Error('This backup contains duplicate tag IDs.');
+    presetIds.add(preset.id);
+    if (
+      typeof preset.name !== 'string'
+      || !isValidHex(preset.colorLight)
+      || !isValidHex(preset.colorDark)
+    ) {
+      throw new Error('This backup contains malformed tag data.');
+    }
+  });
+  if (Object.prototype.hasOwnProperty.call(settings, 'showFab') && typeof settings.showFab !== 'boolean') {
+    throw new Error('This backup contains malformed settings data.');
+  }
+}
+
+function validateBackupData(data) {
+  const missing = BACKUP_REQUIRED_DATA_KEYS.filter(key => !Object.prototype.hasOwnProperty.call(data, key));
+  if (missing.length > 0) {
+    throw new Error(`This backup is incomplete: missing ${missing.join(', ')}.`);
+  }
+  if (
+    !isPlainObject(data.settings)
+    || !isPlainObject(data.fabLayout)
+    || !Array.isArray(data.folders)
+    || !Array.isArray(data.recentlyDeleted)
+    || !isPlainObject(data.highlightIndex)
+    || !isPlainObject(data.highlightsByUrl)
+    || !isPlainObject(data.preferences)
+  ) {
+    throw new Error('This backup contains malformed core data.');
+  }
+
+  validateBackupSettings(data.settings);
+  const presetIds = new Set(data.settings.presets.map(preset => preset.id));
+  const allowedFabIds = new Set([
+    ...presetIds,
+    ...FAB_ACTION_DEFS.map(action => action.id),
+    ...RETIRED_FAB_ACTION_IDS
+  ]);
+  if (
+    data.fabLayout.rows !== 2
+    || data.fabLayout.cols !== 4
+    || !Array.isArray(data.fabLayout.slots)
+    || data.fabLayout.slots.length !== 8
+    || data.fabLayout.slots.some(slot => slot !== null && (
+      typeof slot !== 'string'
+      || !BACKUP_SAFE_ID_PATTERN.test(slot)
+      || !allowedFabIds.has(slot)
+    ))
+  ) {
+    throw new Error('This backup contains malformed FAB layout data.');
+  }
+
+  const folderIds = new Set();
+  const folderNames = new Set();
+  data.folders.forEach(folder => {
+    if (!isPlainObject(folder)) throw new Error('This backup contains malformed folder data.');
+    requireBackupId(folder.id, 'folder ID');
+    const name = typeof folder.name === 'string' ? folder.name.trim() : '';
+    const foldedName = name.toLocaleLowerCase();
+    if (!name || name.length > 60 || folderIds.has(folder.id) || folderNames.has(foldedName)) {
+      throw new Error('This backup contains malformed folder data.');
+    }
+    if (Object.prototype.hasOwnProperty.call(folder, 'createdAt') && !Number.isFinite(folder.createdAt)) {
+      throw new Error('This backup contains malformed folder data.');
+    }
+    if (Object.prototype.hasOwnProperty.call(folder, 'lastUsedAt') && !Number.isFinite(folder.lastUsedAt)) {
+      throw new Error('This backup contains malformed folder data.');
+    }
+    folderIds.add(folder.id);
+    folderNames.add(foldedName);
+  });
+
+  Object.entries(data.highlightsByUrl).forEach(([url, highlights]) => {
+    requireBackupPageUrl(url);
+    if (!Array.isArray(highlights)) throw new Error('This backup contains malformed highlight page data.');
+    highlights.forEach(highlight => {
+      validateBackupHighlight(highlight);
+      if (highlight.presetId && !presetIds.has(highlight.presetId)) {
+        throw new Error('This backup contains a highlight with an unknown tag ID.');
+      }
+      if (highlight.folderId && !folderIds.has(highlight.folderId)) {
+        throw new Error('This backup contains a highlight with an unknown folder ID.');
+      }
+    });
+  });
+
+  Object.entries(data.highlightIndex).forEach(([url, metadata]) => {
+    requireBackupPageUrl(url);
+    if (
+      !isPlainObject(metadata)
+      || (Object.prototype.hasOwnProperty.call(metadata, 'title') && typeof metadata.title !== 'string')
+      || (Object.prototype.hasOwnProperty.call(metadata, 'lastUpdated') && !Number.isFinite(metadata.lastUpdated))
+    ) {
+      throw new Error('This backup contains malformed page index data.');
+    }
+  });
+
+  data.recentlyDeleted.forEach(entry => {
+    if (!isPlainObject(entry) || !isPlainObject(entry.highlight)) {
+      throw new Error('This backup contains a malformed Recently Deleted record.');
+    }
+    requireBackupPageUrl(entry.pageUrl);
+    if (Object.prototype.hasOwnProperty.call(entry, 'trashId')) requireBackupId(entry.trashId, 'Recently Deleted ID');
+    if (Object.prototype.hasOwnProperty.call(entry, 'pageTitle') && typeof entry.pageTitle !== 'string') {
+      throw new Error('This backup contains a malformed Recently Deleted record.');
+    }
+    if (Object.prototype.hasOwnProperty.call(entry, 'deletedAt') && !Number.isFinite(entry.deletedAt)) {
+      throw new Error('This backup contains a malformed Recently Deleted record.');
+    }
+    validateBackupHighlight(entry.highlight);
+    if (entry.highlight.presetId && !presetIds.has(entry.highlight.presetId)) {
+      throw new Error('This backup contains a Recently Deleted highlight with an unknown tag ID.');
+    }
+    if (entry.highlight.folderId && !folderIds.has(entry.highlight.folderId)) {
+      throw new Error('This backup contains a Recently Deleted highlight with an unknown folder ID.');
+    }
+  });
+}
+
 function normalizeBackupHighlightList(raw, settings, folderIds) {
   const previousPresets = activeLibraryPresets;
   try {
@@ -2402,10 +2617,8 @@ function normalizeBackupDocument(raw) {
   if (raw.schemaVersion !== BACKUP_SCHEMA_VERSION || !isPlainObject(raw.data)) {
     throw new Error('This backup format is not supported.');
   }
-  const recognizedDataKeys = ['settings', 'fabLayout', 'folders', 'recentlyDeleted', 'highlightIndex', 'highlightsByUrl', 'preferences'];
-  if (!recognizedDataKeys.some(key => Object.prototype.hasOwnProperty.call(raw.data, key))) {
-    throw new Error('This backup does not contain recognizable Highlight data.');
-  }
+  // Validate the complete replacement contract before normalization can hide corrupt input.
+  validateBackupData(raw.data);
 
   const parsedDate = new Date(raw.exportedAt);
   if (!Number.isFinite(parsedDate.getTime())) throw new Error('The backup creation date is invalid.');
@@ -4371,12 +4584,11 @@ function loadTagHighlights(presetId) {
 
     if (pages.length === 0) {
       highlightCount.textContent = '';
-      highlightsContainer.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-title">${tokens.length > 0 ? 'No results' : `No highlights in ${preset.name || 'this tag'}`}</div>
-          ${tokens.length > 0 ? 'Try a different keyword.' : 'Highlights you create with this preset will appear here.'}
-        </div>
-      `;
+      const emptyTitle = tokens.length > 0 ? 'No results' : `No highlights in ${preset.name || 'this tag'}`;
+      const emptyMessage = tokens.length > 0
+        ? 'Try a different keyword.'
+        : 'Highlights you create with this preset will appear here.';
+      renderTagEmptyState(highlightsContainer, emptyTitle, emptyMessage);
       const toolbar = createTagsToolbar(preset);
       highlightsContainer.prepend(toolbar);
       return;
@@ -4390,6 +4602,19 @@ function loadTagHighlights(presetId) {
     renderHighlights(pages, totalCount, { countLabel: 'saved' });
     highlightsContainer.prepend(createTagsToolbar(preset));
   });
+}
+
+function renderTagEmptyState(container, titleText, messageText) {
+  // Tag names can come from users or imports, so insert them as text rather than HTML.
+  container.replaceChildren();
+  const empty = document.createElement('div');
+  empty.className = 'empty-state';
+  const title = document.createElement('div');
+  title.className = 'empty-state-title';
+  title.textContent = titleText;
+  empty.appendChild(title);
+  empty.appendChild(document.createTextNode(messageText));
+  container.appendChild(empty);
 }
 
 function libraryIconMarkup(iconName) {
