@@ -70,8 +70,9 @@ A full-page options view (`options.html`) with a collapsible sidebar and several
 - **Unified layout** — a single scrollable page with a desktop section index and automatic saving
 - **Appearance** — edit the default tag's linked light/dark colors and preview any tag in compact Light and Dark rows
 - **Tag Presets** — add, rename, recolor, or delete custom presets; matching controls derive a harmonious paired theme color using HSL math
+- **Color Undo/Redo** — step backward or forward through tag color changes made during the current Settings session
 - **FAB Builder** — toggle the floating button, click or drag items into the 2×4 layout, swap/reorder/remove buttons, and review a centered compact preview
-- **Shortcuts** — display the detected Chrome shortcut as individual keyboard keycaps and open the browser's shortcut settings
+- **Shortcuts** — display the detected browser shortcut as individual keyboard keycaps and open the browser's shortcut settings
 - **Data & Backup** — export highlights, folders, tags, notes, Recently Deleted, FAB configuration, and preferences to one JSON file; imports must pass complete structure, record, and supported webpage URL validation before preview or replacement
 - **Reset settings** — restore the built-in presets, appearance, FAB visibility, and default FAB layout without deleting saved highlights or Library records
 
@@ -100,7 +101,7 @@ During import, Highlight pauses pending writes from the Settings page, verifies 
 ### Storage & Data
 
 - **Local-first storage** — highlight data remains in `chrome.storage.local` and is not transmitted to an external service by the extension
-- **Indexed Library** — page titles and last-updated timestamps support fast rendering and ordering
+- **Library metadata** — the Library scans stored highlight records and uses indexed page titles and last-updated timestamps for labels and ordering
 - **Self-healing records** — duplicate highlight IDs are merged and malformed data is normalized on read
 
 ### Permissions
