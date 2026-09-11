@@ -356,11 +356,14 @@ function applyCustomColors() {
   const theme = getPageTheme();
   const isDark = theme === 'dark';
   const presets = getPresets();
+  const presetsById = new Map(presets.map(preset => [preset.id, preset]));
+  const defaultPreset = presetsById.get('preset1') || getBuiltInDefaultPreset();
+  const resolvePreset = presetId => presetsById.get(presetId) || defaultPreset;
   if (highlightFab) highlightFab.classList.toggle('is-dark-page', isDark);
 
   // Preset IDs are authoritative: recolor every existing mark immediately.
   document.querySelectorAll('.text-highlighter-mark').forEach(mark => {
-    const preset = getPresetById(mark.dataset.presetId);
+    const preset = resolvePreset(mark.dataset.presetId);
     mark.dataset.presetId = preset.id;
     mark.classList.toggle('hl-dark', isDark);
     mark.classList.toggle('hl-light', !isDark);
@@ -375,9 +378,7 @@ function applyCustomColors() {
     if (!btn) return;
     if (btn.dataset.fabKind !== 'preset') return;
     const presetId = btn.dataset.presetId;
-    const preset = (presetId ? presets.find(p => p && p.id === presetId) : null)
-      || presets.find(p => p && p.id === 'preset1')
-      || getBuiltInDefaultPreset();
+    const preset = resolvePreset(presetId);
     const color = isDark
       ? (preset.colorDark || userSettings.colorDark)
       : (preset.colorLight || userSettings.colorLight);

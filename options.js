@@ -472,9 +472,7 @@ function initLibraryFoldersNavigation() {
       setFoldersExpanded(expanded, { persist: true });
     });
   }
-  chrome.storage.local.get([FOLDERS_KEY, FOLDERS_EXPANDED_KEY], result => {
-    activeLibraryFolders = normalizeFolders(result[FOLDERS_KEY]);
-    renderLibraryFolderChildren();
+  chrome.storage.local.get(FOLDERS_EXPANDED_KEY, result => {
     setFoldersExpanded(result[FOLDERS_EXPANDED_KEY] === true);
   });
 }
@@ -848,13 +846,15 @@ function createFabPickerGroup(title, defs) {
 
   group.appendChild(heading);
   defs.forEach(def => {
-    group.appendChild(createFabPopoverOption({
+    const option = createFabPopoverOption({
       label: def.label,
       icon: def.paletteGlyph || def.glyph,
       iconName: def.icon,
       color: def.type === 'preset' ? getPresetColorsForId(def.id).current : '',
       onSelect: () => placeFabItemInSlot(activeFabSlotIndex, def.id)
-    }));
+    });
+    option.dataset.fabButtonId = def.id;
+    group.appendChild(option);
   });
   return group;
 }
@@ -1230,6 +1230,7 @@ function renderFabPreview() {
 
     const btn = document.createElement('span');
     btn.className = 'fab-preview-btn';
+    btn.dataset.fabButtonId = slotId;
     btn.title = def.label;
     btn.setAttribute('role', 'img');
     btn.setAttribute('aria-label', def.label);
@@ -1751,7 +1752,45 @@ function repairDefaultPresetMirrorsIfNeeded(rawSettings) {
   });
 }
 
-function updatePendingPreset(presetId, update) {
+function updatePresetNameSurfaces(presetId, name) {
+  const label = name || 'Untitled';
+  const presetIndex = pendingSettings?.presets?.findIndex(item => item.id === presetId) ?? -1;
+  const fabLabel = name || `Tag ${presetIndex >= 0 ? presetIndex + 1 : 1}`;
+  const escapedPresetId = CSS.escape(presetId);
+  const paletteItem = appearancePresetSummaryEl
+    ?.querySelector(`.appearance-palette-item[data-preset-id="${escapedPresetId}"]`);
+  paletteItem?.querySelector('.appearance-palette-name')?.replaceChildren(label);
+  if (paletteItem) {
+    const preset = pendingSettings?.presets?.find(item => item.id === presetId);
+    paletteItem.title = preset
+      ? `${label}: ${preset.colorLight.toUpperCase()} / ${preset.colorDark.toUpperCase()}`
+      : label;
+    paletteItem.setAttribute('aria-label', `Preview ${label} colors`);
+  }
+  if (selectedAppearancePreviewPresetId === presetId) {
+    if (defaultPresetNameLightEl) defaultPresetNameLightEl.textContent = label;
+    if (defaultPresetNameDarkEl) defaultPresetNameDarkEl.textContent = label;
+  }
+  document.querySelectorAll(`[data-fab-button-id="${escapedPresetId}"]`).forEach(element => {
+    const text = element.querySelector('.fab-toolbox-label, .fab-slot-label, .fab-popover-option-label');
+    if (text) text.textContent = fabLabel;
+    if (element.classList.contains('fab-toolbox-item')) {
+      element.setAttribute('aria-label', `Drag ${fabLabel} into the FAB layout with a pointer`);
+    }
+    if (element.classList.contains('fab-slot-btn')) element.title = fabLabel;
+    const menuButton = element.closest('.fab-slot')?.querySelector('.fab-slot-menu-btn');
+    if (menuButton) {
+      menuButton.title = `${fabLabel} options`;
+      menuButton.setAttribute('aria-label', `${fabLabel} options`);
+    }
+    if (element.classList.contains('fab-preview-btn')) {
+      element.title = fabLabel;
+      element.setAttribute('aria-label', fabLabel);
+    }
+  });
+}
+
+function updatePendingPreset(presetId, update, { nameOnly = false } = {}) {
   if (!pendingSettings) return null;
   const presets = normalizePresets(pendingSettings.presets);
   const preset = presets.find(p => p.id === presetId);
@@ -1763,8 +1802,11 @@ function updatePendingPreset(presetId, update) {
     pendingSettings.colorLight = defaultPreset.colorLight;
     pendingSettings.colorDark = defaultPreset.colorDark;
   }
-  syncAppearanceFromPresets(presets);
-  rerenderFabBuilder();
+  if (nameOnly) updatePresetNameSurfaces(presetId, preset.name);
+  else {
+    syncAppearanceFromPresets(presets);
+    rerenderFabBuilder();
+  }
   refreshTagsLibraryIfLive();
   schedulePresetSettingsSave();
   return preset;
@@ -2067,7 +2109,7 @@ function bindPresetRow(row) {
   row.name.addEventListener('input', (e) => {
     updatePendingPreset(presetId, preset => {
       preset.name = (e.target.value || '').toString();
-    });
+    }, { nameOnly: true });
   });
 
   row.light.addEventListener('input', (e) => {
@@ -2198,7 +2240,20 @@ if (deleteTagPresetBtn) {
 if (autoMatchAllLightToDarkBtn) {
   autoMatchAllLightToDarkBtn.addEventListener('click', () => {
     recordPresetColorMutation(() => {
-      presetRows.forEach(row => autoMatchRowLightToDark(row.presetId, { recordHistory: false }));
+      const presets = normalizePresets(pendingSettings?.presets);
+      presets.forEach(preset => {
+        preset.colorDark = deriveDarkFromLight(preset.colorLight);
+        lastChangedSideByPreset.set(preset.id, 'light');
+      });
+      pendingSettings.presets = presets;
+      const defaultPreset = getDefaultPreset(presets);
+      pendingSettings.colorLight = defaultPreset.colorLight;
+      pendingSettings.colorDark = defaultPreset.colorDark;
+      syncAppearanceFromPresets(presets);
+      syncPresetsEditor(presets);
+      rerenderFabBuilder();
+      refreshTagsLibraryIfLive();
+      schedulePresetSettingsSave();
     });
   });
 }
@@ -2206,7 +2261,20 @@ if (autoMatchAllLightToDarkBtn) {
 if (autoMatchAllDarkToLightBtn) {
   autoMatchAllDarkToLightBtn.addEventListener('click', () => {
     recordPresetColorMutation(() => {
-      presetRows.forEach(row => autoMatchRowDarkToLight(row.presetId, { recordHistory: false }));
+      const presets = normalizePresets(pendingSettings?.presets);
+      presets.forEach(preset => {
+        preset.colorLight = deriveLightFromDark(preset.colorDark);
+        lastChangedSideByPreset.set(preset.id, 'dark');
+      });
+      pendingSettings.presets = presets;
+      const defaultPreset = getDefaultPreset(presets);
+      pendingSettings.colorLight = defaultPreset.colorLight;
+      pendingSettings.colorDark = defaultPreset.colorDark;
+      syncAppearanceFromPresets(presets);
+      syncPresetsEditor(presets);
+      rerenderFabBuilder();
+      refreshTagsLibraryIfLive();
+      schedulePresetSettingsSave();
     });
   });
 }
@@ -6069,6 +6137,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     activeLibraryFolders = normalizeFolders(changes[FOLDERS_KEY].newValue);
     if (currentFolderId && !getFolderById(currentFolderId)) currentFolderId = null;
     renderLibraryFolderChildren(activeLibraryFolders);
+    closeLibraryFolderPopover({ immediate: true });
   }
   if (hasFolderExpansionChange) {
     setFoldersExpanded(changes[FOLDERS_EXPANDED_KEY].newValue === true);
@@ -6085,7 +6154,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
   }
 
-  if ((hasHighlightChange || hasTrashChange || hasFolderChange) && isLibraryTabActive()) {
+  const folderChangeAffectsCurrentView = hasFolderChange && currentLibraryView === 'folders';
+  if ((hasHighlightChange || hasTrashChange || folderChangeAffectsCurrentView) && isLibraryTabActive()) {
     refreshLibrary();
   }
 });
@@ -6195,4 +6265,3 @@ const activeTab = document.querySelector('.tab-btn.active');
 if (activeTab && !hasValidTabParam) {
   resetSidebarForTab(activeTab.dataset.tab);
 }
-refreshLibrary();
