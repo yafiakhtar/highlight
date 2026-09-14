@@ -110,6 +110,10 @@ During import, Highlight pauses pending writes from the Settings page, verifies 
 - **Context menus** — adds the right-click actions for highlighting selected text and removing a selected highlight
 - **Webpage access** — the statically registered content script runs on supported webpages so highlights can be created, restored, edited, and removed
 
+## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the extension entry points and Options-page file boundaries.
+
 ---
 
 Built by [yafiakhtar.me](https://www.yafiakhtar.me/) · Version 1.0.1
